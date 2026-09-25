@@ -1,1 +1,2866 @@
-<h1>ConSultar - demo</h1>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ConSultar — Mejora y ejecuta tus consultas con Claude</title>
+<meta name="description" content="ConSultar mejora automáticamente tu consulta y la envía a la IA de Anthropic para obtener una respuesta completa en Markdown." />
+
+<!-- Tipografía: una única familia (Inter) para toda la interfaz, con un stack
+     de monoespaciada de sistema para el código, tal y como recomienda la guía
+     de diseño (una o dos familias tipográficas como máximo). -->
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,400;0,500;0,600;0,700;1,400&display=swap" rel="stylesheet" />
+
+<!-- Favicon simple en línea (evita depender de un archivo externo) -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%232E6DA4'/%3E%3Cpath d='M9 20 L16 9 L23 20' stroke='white' stroke-width='2.4' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Ccircle cx='16' cy='24' r='1.6' fill='white'/%3E%3C/svg%3E" />
+
+<!-- ===================================================================
+     DEPENDENCIAS EXTERNAS (cargadas desde CDNs públicos)
+     - marked      → conversión de Markdown a HTML para mostrar el resultado
+     - DOMPurify   → sanitiza el HTML generado por "marked" antes de insertarlo
+     - jsPDF       → generación de archivos PDF en el navegador
+     - docx        → generación de archivos .docx (Word) en el navegador
+     - PptxGenJS   → generación de presentaciones .pptx en el navegador
+     =================================================================== -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.2.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/3.0.0/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.0.3/build/index.umd.js"></script>
+<script src="https://cdn.jsdelivr.net/gh/gitbrent/pptxgenjs@3.12.0/dist/pptxgen.bundle.js"></script>
+<!-- Extracción de texto de documentos adjuntos (.docx y .pdf) -->
+<script src="https://cdn.jsdelivr.net/npm/mammoth@1.9.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+<script>
+  // El "worker" de pdf.js procesa los PDF en un hilo aparte para no bloquear
+  // la interfaz; se configura en cuanto la librería está disponible.
+  if (typeof pdfjsLib !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js';
+  }
+</script>
+
+<style>
+  /* =====================================================================
+     TOKENS DE DISEÑO
+     Paleta muy clara dominada por el azul, con blanco y gris claro como
+     acompañamiento y acentos azules sutiles para los estados interactivos.
+     ===================================================================== */
+  :root {
+    --color-bg: #F4F9FC;
+    --color-surface: #FFFFFF;
+    --color-surface-alt: #EAF3FB;
+    --color-border: #D8E6F1;
+    --color-border-strong: #BBD4E7;
+
+    --color-primary: #2E6DA4;
+    --color-primary-hover: #24567F;
+    --color-primary-soft: #DCEBF7;
+    --color-primary-contrast: #FFFFFF;
+
+    --color-text: #1E2A38;
+    --color-text-muted: #57708A;
+    --color-text-faint: #8098AE;
+
+    --color-success-bg: #E7F5EC;
+    --color-success-text: #206A44;
+    --color-error-bg: #FCEAEA;
+    --color-error-text: #9A2C24;
+    --color-warning-bg: #FEF6E4;
+    --color-warning-text: #7A5B12;
+
+    --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation Mono', monospace;
+
+    --radius-lg: 16px;
+    --radius-md: 10px;
+    --radius-sm: 6px;
+
+    --shadow-card: 0 1px 2px rgba(30, 64, 102, 0.06), 0 8px 24px rgba(30, 64, 102, 0.05);
+    --max-width: 980px;
+  }
+
+  * { box-sizing: border-box; }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Enlace de "saltar al contenido" para navegación por teclado */
+  .skip-link {
+    position: absolute;
+    left: -999px;
+    top: auto;
+    background: var(--color-primary);
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: var(--radius-sm);
+    z-index: 1000;
+  }
+  .skip-link:focus {
+    left: 16px;
+    top: 16px;
+  }
+
+  /* Estado de foco visible y consistente en toda la aplicación */
+  a:focus-visible,
+  button:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 3px solid #9CC4E4;
+    outline-offset: 2px;
+  }
+
+  .app-shell {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    padding: 0 20px 64px;
+  }
+
+  /* ---------------------------- Cabecera / hero ---------------------------- */
+  header.app-header {
+    background: linear-gradient(180deg, var(--color-surface-alt) 0%, var(--color-bg) 100%);
+    border-bottom: 1px solid var(--color-border);
+    padding: 40px 20px 32px;
+    margin-bottom: 32px;
+  }
+
+  .app-header-inner {
+    max-width: var(--max-width);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .app-logo {
+    flex: 0 0 auto;
+    width: 48px;
+    height: 48px;
+  }
+
+  .app-header-text h1 {
+    margin: 0;
+    font-size: 1.7rem;
+    font-weight: 700;
+    color: var(--color-text);
+    letter-spacing: -0.01em;
+  }
+
+  .app-header-text p {
+    margin: 4px 0 0;
+    color: var(--color-text-muted);
+    font-size: 0.98rem;
+    max-width: 52ch;
+  }
+
+  /* ------------------------------- Tarjetas -------------------------------- */
+  section.card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-card);
+    padding: 24px;
+    margin-bottom: 24px;
+  }
+
+  section.card > h2 {
+    margin: 0 0 4px;
+    font-size: 1.15rem;
+    font-weight: 600;
+  }
+
+  section.card > p.card-subtitle {
+    margin: 0 0 20px;
+    color: var(--color-text-muted);
+    font-size: 0.92rem;
+  }
+
+  /* --------------------------- Campos de formulario ------------------------- */
+  .field {
+    margin-bottom: 18px;
+  }
+  .field:last-child { margin-bottom: 0; }
+
+  .field > label,
+  .field > legend,
+  .field-label-row > label {
+    display: block;
+    font-weight: 600;
+    font-size: 0.93rem;
+    margin-bottom: 6px;
+    color: var(--color-text);
+  }
+
+  .field-label-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .field-label-row > label { margin-bottom: 0; }
+
+  .btn-clear {
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    font-size: 0.82rem;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    padding: 2px 8px;
+    border-radius: var(--radius-sm);
+    flex: 0 0 auto;
+  }
+  .btn-clear:hover { background: var(--color-error-bg); color: var(--color-error-text); }
+  .btn-clear:disabled { color: var(--color-text-faint); cursor: not-allowed; background: none; }
+
+  .field .hint {
+    display: block;
+    font-size: 0.82rem;
+    color: var(--color-text-muted);
+    margin-top: 6px;
+  }
+
+  input[type="text"],
+  input[type="password"],
+  input[type="number"],
+  select,
+  textarea {
+    width: 100%;
+    font-family: inherit;
+    font-size: 0.97rem;
+    color: var(--color-text);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-strong);
+    border-radius: var(--radius-md);
+    padding: 10px 12px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  input:hover, select:hover, textarea:hover { border-color: var(--color-primary); }
+
+  input:focus, select:focus, textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px var(--color-primary-soft);
+  }
+
+  textarea {
+    resize: vertical;
+    min-height: 96px;
+    line-height: 1.5;
+  }
+
+  textarea#consulta-input { min-height: 140px; }
+
+  /* --------------------------- Documentos adjuntos -------------------------- */
+  .file-drop { position: relative; }
+  .file-drop input[type="file"] {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+  .file-drop-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 10px 16px;
+    border: 1px dashed var(--color-border-strong);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-alt);
+    color: var(--color-primary);
+    font-weight: 600;
+    font-size: 0.93rem;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background-color 0.15s ease;
+  }
+  .file-drop-label:hover { border-color: var(--color-primary); background: var(--color-primary-soft); }
+  .file-drop input[type="file"]:focus-visible + .file-drop-label {
+    outline: 3px solid var(--color-primary-soft);
+    outline-offset: 2px;
+  }
+
+  .attachments-list {
+    list-style: none;
+    margin: 12px 0 0;
+    padding: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .attachment-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-surface);
+    font-size: 0.88rem;
+  }
+  .attachment-icon { flex: 0 0 auto; color: var(--color-text-muted); }
+  .attachment-info { flex: 1 1 auto; min-width: 0; }
+  .attachment-name {
+    font-weight: 600;
+    color: var(--color-text);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .attachment-meta { color: var(--color-text-muted); font-size: 0.8rem; }
+  .attachment-meta.attachment-meta-error { color: var(--color-error-text); }
+  .attachment-remove-btn {
+    flex: 0 0 auto;
+    background: transparent;
+    border: none;
+    color: var(--color-text-faint);
+    cursor: pointer;
+    padding: 4px 8px;
+    border-radius: var(--radius-sm);
+    font-size: 0.85rem;
+  }
+  .attachment-remove-btn:hover { background: var(--color-error-bg); color: var(--color-error-text); }
+  .attachment-spinner {
+    width: 13px; height: 13px; border-radius: 50%;
+    border: 2px solid var(--color-border-strong);
+    border-top-color: var(--color-primary);
+    animation: spin 0.7s linear infinite;
+    flex: 0 0 auto;
+  }
+
+  .field-invalid {
+    border-color: var(--color-error-text) !important;
+  }
+
+  .error-text {
+    display: block;
+    color: var(--color-error-text);
+    font-size: 0.85rem;
+    margin-top: 6px;
+  }
+
+  /* Fila de campos lado a lado en pantallas anchas */
+  .field-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+  @media (max-width: 560px) {
+    .field-row { grid-template-columns: 1fr; }
+  }
+
+  /* Casilla de verificación */
+  .checkbox-field {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .checkbox-field input[type="checkbox"] {
+    width: 20px;
+    height: 20px;
+    margin-top: 2px;
+    accent-color: var(--color-primary);
+    flex: 0 0 auto;
+  }
+  .checkbox-field label {
+    font-weight: 600;
+    font-size: 0.95rem;
+    cursor: pointer;
+  }
+
+  .export-subfields {
+    margin-top: 16px;
+    padding: 16px;
+    background: var(--color-surface-alt);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+  }
+  .export-subfields[hidden] { display: none; }
+
+  /* Campo de clave de API con botón de mostrar/ocultar */
+  .api-key-field {
+    position: relative;
+  }
+  .api-key-field input {
+    padding-right: 84px;
+  }
+  .toggle-visibility-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: transparent;
+    border: none;
+    color: var(--color-primary);
+    font-size: 0.82rem;
+    font-weight: 600;
+    padding: 6px 8px;
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+  }
+  .toggle-visibility-btn:hover { background: var(--color-primary-soft); }
+
+  .notice {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--color-warning-bg);
+    color: var(--color-warning-text);
+    border: 1px solid #F0DDAE;
+    border-radius: var(--radius-md);
+    padding: 12px 14px;
+    font-size: 0.85rem;
+    margin-top: 10px;
+  }
+  .notice svg { flex: 0 0 auto; margin-top: 1px; }
+
+  /* --------------------------------- Botones -------------------------------- */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    font-family: inherit;
+    font-size: 0.97rem;
+    font-weight: 600;
+    padding: 12px 22px;
+    border-radius: var(--radius-md);
+    border: 1px solid transparent;
+    cursor: pointer;
+    transition: background-color 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  }
+  .btn-primary {
+    background: var(--color-primary);
+    color: var(--color-primary-contrast);
+  }
+  .btn-primary:hover:not(:disabled) { background: var(--color-primary-hover); }
+  .btn-primary:disabled {
+    background: #B7CBDA;
+    cursor: not-allowed;
+  }
+
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-primary);
+    border-color: var(--color-primary);
+  }
+  .btn-secondary:hover:not(:disabled) { background: var(--color-primary-soft); }
+  .btn-secondary:disabled {
+    color: var(--color-text-faint);
+    border-color: var(--color-border-strong);
+    cursor: not-allowed;
+  }
+
+  .btn-row {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+  .btn-row-split {
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .btn-row-left {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .spinner {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    border: 2.5px solid rgba(255, 255, 255, 0.4);
+    border-top-color: #fff;
+    animation: spin 0.7s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .spinner { animation: none; }
+  }
+
+  /* --------------------------- Estado y errores --------------------------- */
+  #status-area {
+    margin-top: 16px;
+    min-height: 0;
+  }
+  .status-message {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    padding: 12px 14px;
+    border-radius: var(--radius-md);
+    font-size: 0.9rem;
+    line-height: 1.4;
+  }
+  .status-message svg { flex: 0 0 auto; margin-top: 2px; }
+  .status-info {
+    background: var(--color-primary-soft);
+    color: var(--color-primary-hover);
+  }
+  .status-error {
+    background: var(--color-error-bg);
+    color: var(--color-error-text);
+  }
+  .status-success {
+    background: var(--color-success-bg);
+    color: var(--color-success-text);
+  }
+
+  /* -------------------------------- Resultado ------------------------------- */
+  #resultado-placeholder {
+    color: var(--color-text-faint);
+    font-size: 0.95rem;
+    padding: 12px 0;
+  }
+
+  #aviso-truncado { margin: 0 0 16px; }
+  #aviso-truncado[hidden] { display: none; }
+
+  #resultado-contenido {
+    font-size: 0.98rem;
+    color: var(--color-text);
+    overflow-wrap: anywhere;
+    max-height: 480px;
+    overflow-y: auto;
+    padding: 16px;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+  }
+  #resultado-contenido:focus-visible {
+    outline: 3px solid var(--color-primary-soft);
+    outline-offset: 2px;
+  }
+  #resultado-contenido[hidden] { display: none; }
+
+
+  #resultado-contenido h1,
+  #resultado-contenido h2,
+  #resultado-contenido h3,
+  #resultado-contenido h4 {
+    line-height: 1.3;
+    margin: 1.3em 0 0.5em;
+  }
+  #resultado-contenido h1:first-child,
+  #resultado-contenido h2:first-child,
+  #resultado-contenido h3:first-child { margin-top: 0; }
+
+  #resultado-contenido p { margin: 0 0 1em; }
+  #resultado-contenido ul, #resultado-contenido ol { margin: 0 0 1em; padding-left: 1.4em; }
+  #resultado-contenido li { margin-bottom: 0.35em; }
+
+  #resultado-contenido a { color: var(--color-primary); }
+
+  #resultado-contenido blockquote {
+    margin: 0 0 1em;
+    padding: 4px 16px;
+    border-left: 3px solid var(--color-primary);
+    background: var(--color-surface-alt);
+    color: var(--color-text-muted);
+    border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  }
+
+  #resultado-contenido code {
+    font-family: var(--font-mono);
+    background: var(--color-surface-alt);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+    font-size: 0.88em;
+  }
+
+  #resultado-contenido pre {
+    background: #F2F6FA;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: 14px 16px;
+    overflow-x: auto;
+    margin: 0 0 1em;
+  }
+  #resultado-contenido pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.87em;
+  }
+
+  #resultado-contenido table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 1em;
+    font-size: 0.92rem;
+  }
+  #resultado-contenido th, #resultado-contenido td {
+    border: 1px solid var(--color-border);
+    padding: 8px 10px;
+    text-align: left;
+  }
+  #resultado-contenido th {
+    background: var(--color-surface-alt);
+  }
+
+  #resultado-contenido hr {
+    border: none;
+    border-top: 1px solid var(--color-border);
+    margin: 1.4em 0;
+  }
+
+  .export-hint {
+    display: block;
+    margin-top: 10px;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+    text-align: right;
+  }
+
+  /* --------------------------------- Footer --------------------------------- */
+  footer.app-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 8px 16px;
+    max-width: var(--max-width);
+    margin: 0 auto;
+    color: var(--color-text-faint);
+    font-size: 0.8rem;
+    padding: 24px 20px 8px;
+  }
+  footer.app-footer a {
+    color: var(--color-text-muted);
+    text-decoration: underline;
+  }
+  footer.app-footer a:hover { color: var(--color-primary); }
+
+  /* Utilidad para texto sólo accesible a lectores de pantalla */
+  .visually-hidden {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+</style>
+</head>
+<body
+  data-app-title="ConSultar"
+  data-app-description="Mejora automáticamente tu consulta y la envía a Claude para obtener una respuesta completa en Markdown, exportable a Word o PDF."
+  data-categories="ia,generacion-contenido,automatizacion"
+  data-tags="Claude,Markdown,Word,PDF,Productividad"
+>
+
+<a class="skip-link" href="#main-content">Saltar al contenido principal</a>
+
+<header class="app-header">
+  <div class="app-header-inner">
+    <svg class="app-logo" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect width="48" height="48" rx="13" fill="#2E6DA4"/>
+      <path d="M13 30 L24 14 L35 30" stroke="#FFFFFF" stroke-width="3.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <circle cx="24" cy="36" r="2.3" fill="#FFFFFF"/>
+    </svg>
+    <div class="app-header-text">
+      <h1>ConSultar</h1>
+      <p>Mejora automáticamente tu consulta y obtén una respuesta completa, generada en dos pasos con la IA de Anthropic.</p>
+    </div>
+  </div>
+</header>
+
+<div class="app-shell" id="main-content">
+
+  <!-- ============================== CONFIGURACIÓN ============================== -->
+  <section class="card" aria-labelledby="config-titulo">
+    <h2 id="config-titulo">Configuración</h2>
+    <p class="card-subtitle">Elige el modelo y ajusta los parámetros de la consulta.</p>
+
+    <div class="field api-key-field">
+      <label for="api-key-input">Clave de API de Anthropic</label>
+      <input type="password" id="api-key-input" name="api-key" autocomplete="off"
+             placeholder="sk-ant-..." aria-describedby="api-key-hint" />
+      <button type="button" class="toggle-visibility-btn" id="toggle-api-key-btn"
+              aria-pressed="false" aria-controls="api-key-input">Mostrar</button>
+      <span class="hint" id="api-key-hint">
+        Tu clave se usa únicamente en este navegador para conectar directamente con la API de Anthropic. No se guarda ni se envía a ningún otro servidor.
+      </span>
+      <div class="notice" role="note">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>La llamada se realiza directamente desde tu navegador a la API de Anthropic. Por motivos de seguridad, esta forma de uso solo es recomendable para pruebas personales, nunca para una aplicación pública con usuarios distintos de ti.</span>
+      </div>
+    </div>
+
+    <div class="field-row">
+      <div class="field">
+        <label for="modelo-select">Elegir Modelo</label>
+        <select id="modelo-select" name="modelo"></select>
+        <span class="hint" id="modelo-hint"></span>
+      </div>
+
+      <div class="field">
+        <label for="tokens-input">Número de tokens</label>
+        <input type="number" id="tokens-input" name="tokens" value="4096" min="1" step="1" aria-describedby="tokens-hint" />
+        <span class="hint" id="tokens-hint"></span>
+      </div>
+    </div>
+
+    <div class="field checkbox-field">
+      <input type="checkbox" id="exportar-checkbox" name="exportar" />
+      <label for="exportar-checkbox">Exportar resultado</label>
+    </div>
+
+    <div class="export-subfields" id="export-subfields" hidden>
+      <div class="field-row">
+        <div class="field">
+          <label for="formato-select">Formato de exportación</label>
+          <select id="formato-select" name="formato">
+            <option value="markdown">Markdown</option>
+            <option value="word">Word</option>
+            <option value="pdf">PDF</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="nombre-archivo-input">Nombre del archivo</label>
+          <input type="text" id="nombre-archivo-input" name="nombre-archivo" value="resultado" aria-describedby="nombre-archivo-hint" />
+          <span class="hint" id="nombre-archivo-hint">La extensión se añade automáticamente según el formato elegido.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================================ CONSULTA ================================= -->
+  <section class="card" aria-labelledby="consulta-titulo">
+    <h2 id="consulta-titulo">Consulta</h2>
+    <p class="card-subtitle">Tu consulta se mejora primero automáticamente y después se envía como pregunta final.</p>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label for="rol-input">Rol del usuario</label>
+        <button type="button" class="btn-clear" id="borrar-rol-btn">Borrar</button>
+      </div>
+      <textarea id="rol-input" name="rol" aria-describedby="rol-hint">Eres un asistente de inteligencia artificial experto y minucioso. Responde a la solicitud del usuario de manera completa y estructurada, utilizando formato Markdown (encabezados, listas, bloques de código, etc.) cuando sea apropiado.</textarea>
+      <span class="hint" id="rol-hint">Instrucciones de sistema para la respuesta final (puedes editarlas libremente).</span>
+    </div>
+
+    <div class="field">
+      <div class="field-label-row">
+        <label for="consulta-input">Consulta</label>
+        <button type="button" class="btn-clear" id="borrar-consulta-btn">Borrar</button>
+      </div>
+      <textarea id="consulta-input" name="consulta" placeholder="Escribe aquí tu consulta, con el detalle que necesites…" aria-describedby="consulta-hint"></textarea>
+      <span class="hint" id="consulta-hint">Este texto se mejora automáticamente antes de enviarse como pregunta final.</span>
+    </div>
+
+    <div class="field">
+      <label for="adjuntos-input">Documentos de referencia (opcional)</label>
+      <div class="file-drop">
+        <input type="file" id="adjuntos-input" name="adjuntos" multiple accept=".txt,.md,.markdown,.docx,.pdf" aria-describedby="adjuntos-hint" />
+        <label for="adjuntos-input" class="file-drop-label">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 16V4m0 0-4 4m4-4 4 4M4 16v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span>Elegir archivos…</span>
+        </label>
+      </div>
+      <span class="hint" id="adjuntos-hint">Sube uno o más archivos (.txt, .md, .docx, .pdf) para que la IA los tenga en cuenta al generar la respuesta. Máximo 10&nbsp;MB por archivo.</span>
+      <ul class="attachments-list" id="adjuntos-lista" aria-live="polite"></ul>
+    </div>
+
+    <div class="field checkbox-field">
+      <input type="checkbox" id="guardar-prompts-checkbox" name="guardar-prompts" />
+      <label for="guardar-prompts-checkbox">Guardar los prompts en un archivo de texto</label>
+    </div>
+
+    <div class="export-subfields" id="guardar-prompts-subfields" hidden>
+      <div class="field">
+        <label for="nombre-archivo-prompts-input">Nombre del archivo</label>
+        <input type="text" id="nombre-archivo-prompts-input" name="nombre-archivo-prompts" value="prompts" aria-describedby="nombre-archivo-prompts-hint" />
+        <span class="hint" id="nombre-archivo-prompts-hint">Se guardará como .txt, con el «Rol del usuario» y la «Consulta» tal como los has escrito.</span>
+      </div>
+    </div>
+
+    <div class="btn-row btn-row-split">
+      <div class="btn-row-left">
+        <button type="button" class="btn btn-secondary" id="guardar-prompts-btn" disabled>Guardar prompts (.txt)</button>
+        <button type="button" class="btn btn-secondary" id="generar-pptx-btn">Generar PowerPoint</button>
+      </div>
+      <button type="button" class="btn btn-primary" id="consultar-btn">
+        <span id="consultar-btn-text">Consultar</span>
+      </button>
+    </div>
+
+    <div id="status-area" role="status" aria-live="polite"></div>
+  </section>
+
+  <!-- =============================== RESULTADO ================================= -->
+  <section class="card" aria-labelledby="resultado-titulo">
+    <h2 id="resultado-titulo">Resultado</h2>
+    <p class="card-subtitle">La respuesta final aparecerá aquí, en formato Markdown.</p>
+
+    <p id="resultado-placeholder">Todavía no se ha generado ninguna respuesta. Escribe tu consulta y pulsa «Consultar».</p>
+
+    <div class="notice" id="aviso-truncado" role="alert" hidden>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 9v4m0 4h.01M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span><strong>Respuesta truncada:</strong> se ha interrumpido porque se ha alcanzado el límite de tokens disponible («Número de tokens» en la configuración). Auméntalo o simplifica la consulta para obtener una respuesta completa.</span>
+    </div>
+
+    <div id="resultado-contenido" tabindex="0" role="region" aria-label="Respuesta generada, con desplazamiento" hidden></div>
+
+    <div class="btn-row btn-row-split">
+      <button type="button" class="btn btn-secondary" id="borrar-resultado-btn" disabled>Borrar resultado</button>
+      <button type="button" class="btn btn-secondary" id="exportar-btn" disabled>Exportar fichero</button>
+    </div>
+    <span class="export-hint" id="exportar-hint">Activa «Exportar resultado» en la configuración para habilitar la exportación.</span>
+  </section>
+
+</div>
+
+<footer class="app-footer">
+  <span>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</span>
+  <span id="fecha-modificacion-footer"></span>
+</footer>
+
+<script>
+'use strict';
+
+/* =========================================================================
+ * CONSULTAR — lógica de la aplicación
+ *
+ * Adaptado del script Python "refinar_y_consultar.py" proporcionado como
+ * referencia. Se conserva el flujo de dos pasos (refinado del prompt +
+ * consulta principal) y el catálogo de modelos tal cual figuraban en el
+ * código original. Todo el estado se mantiene en memoria del navegador;
+ * nada se persiste ni se envía a servidores distintos de la API de
+ * Anthropic.
+ *
+ * Organización del código (siguiendo el pedido explícito de estructura):
+ *   1. Configuración (catálogo de modelos, prompts fijos)
+ *   2. Estado de la aplicación
+ *   3. initializeApp()
+ *   4. Utilidades de validación y estado/errores en la interfaz
+ *   5. Comunicación con la API de Anthropic
+ *   6. Procesamiento del flujo de dos pasos (mejora + consulta final)
+ *   7. Renderizado del resultado (Markdown -> HTML)
+ *   8. Exportación (Markdown / Word / PDF)
+ *   9. Arranque
+ * ========================================================================= */
+
+/* ------------------------------------------------------------------ *
+ * 1. CONFIGURACIÓN
+ * ------------------------------------------------------------------ */
+
+// Catálogo de modelos: traducido directamente de MODELOS_DISPONIBLES en el
+// script Python de referencia (mismo orden, mismos identificadores de API
+// y mismos límites de salida).
+const MODELOS_DISPONIBLES = [
+  {
+    idApi: 'claude-sonnet-5',
+    nombre: 'Claude Sonnet 5',
+    maxOutputTokens: 128000,
+    notas: 'Modelo de gama media más reciente. Mejor equilibrio entre velocidad, coste e inteligencia.'
+  },
+  {
+    idApi: 'claude-haiku-4-5-20251001',
+    nombre: 'Claude Haiku 4.5',
+    maxOutputTokens: 64000,
+    notas: 'Modelo más rápido y económico, con inteligencia cercana a la de los modelos de gama alta.'
+  },
+  {
+    idApi: 'claude-sonnet-4-5-20250929',
+    nombre: 'Claude Sonnet 4.5',
+    maxOutputTokens: 64000,
+    notas: 'Generación anterior a Sonnet 5.'
+  },
+  {
+    idApi: 'claude-opus-4-5-20251101',
+    nombre: 'Claude Opus 4.5',
+    maxOutputTokens: 64000,
+    notas: 'Modelo de gama alta.'
+  },
+  {
+    idApi: 'claude-opus-4-1-20250805',
+    nombre: 'Claude Opus 4.1 (legacy)',
+    maxOutputTokens: 32000,
+    notas: 'Modelo legacy, mantenido por compatibilidad.'
+  }
+];
+
+// Índice seleccionado por defecto: coincide con el valor por defecto de
+// `ConfiguracionModelo.indice_modelo` (2) en el script de referencia,
+// es decir, "Claude Sonnet 4.5".
+const INDICE_MODELO_POR_DEFECTO = 2;
+
+// System prompt del PASO 1 (refinado), copiado tal cual del script Python
+// de referencia: su función es reescribir y traducir al inglés el prompt
+// original del usuario, sin responderlo.
+const SYSTEM_PROMPT_REFINADO =
+  "You are an expert prompt engineer. Your only task is to take the " +
+  "user's original prompt (which may be written in any language) and " +
+  "rewrite it as a single, clear, detailed and unambiguous prompt in " +
+  "English, ready to be sent to an AI assistant. Do not answer the " +
+  "prompt yourself. Do not add explanations, preambles or comments. " +
+  "Reply with ONLY the improved prompt text, nothing else.";
+
+// El script de referencia usa una configuración de modelo aparte para el
+// paso de refinado (siempre max_tokens=1024, independiente del valor que
+// el usuario configure para la consulta final). Como esta aplicación solo
+// expone UN selector de "Número de tokens" —pensado para la consulta
+// final, igual que en el paso 2 del script—, se conserva ese mismo límite
+// fijo y reducido para el paso de refinado, ya que su salida es siempre
+// un único prompt corto.
+const MAX_TOKENS_REFINADO = 1024;
+
+const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
+const ANTHROPIC_VERSION = '2023-06-01';
+
+const EXTENSIONES_EXPORTACION = { markdown: '.md', word: '.docx', pdf: '.pdf' };
+
+// Configuración de los documentos de referencia que se pueden adjuntar a la
+// consulta: extensiones admitidas, tamaño máximo por archivo y volumen
+// total de texto extraído que se enviará como contexto adicional (para no
+// disparar el consumo de tokens de forma descontrolada).
+const ADJUNTOS_EXTENSIONES_PERMITIDAS = ['.txt', '.md', '.markdown', '.docx', '.pdf'];
+const ADJUNTOS_TAMANO_MAXIMO_MB = 10;
+const ADJUNTOS_CARACTERES_MAXIMOS_TOTALES = 60000;
+
+
+/* ------------------------------------------------------------------ *
+ * 2. ESTADO DE LA APLICACIÓN
+ * ------------------------------------------------------------------ */
+
+const estado = {
+  procesando: false,
+  generandoPptx: false, // evita solicitudes de generación de PowerPoint duplicadas/simultáneas
+  ultimoResultadoMarkdown: null, // texto Markdown de la última respuesta final generada
+  ultimaRespuestaTruncada: false, // true si la última respuesta se cortó por el límite de tokens (stop_reason "max_tokens")
+  adjuntos: [] // documentos de referencia adjuntados a la consulta actual
+};
+
+
+/* ------------------------------------------------------------------ *
+ * Referencias a elementos del DOM
+ * ------------------------------------------------------------------ */
+const el = {
+  apiKeyInput: document.getElementById('api-key-input'),
+  toggleApiKeyBtn: document.getElementById('toggle-api-key-btn'),
+  modeloSelect: document.getElementById('modelo-select'),
+  modeloHint: document.getElementById('modelo-hint'),
+  tokensInput: document.getElementById('tokens-input'),
+  tokensHint: document.getElementById('tokens-hint'),
+  exportarCheckbox: document.getElementById('exportar-checkbox'),
+  exportSubfields: document.getElementById('export-subfields'),
+  formatoSelect: document.getElementById('formato-select'),
+  nombreArchivoInput: document.getElementById('nombre-archivo-input'),
+  rolInput: document.getElementById('rol-input'),
+  borrarRolBtn: document.getElementById('borrar-rol-btn'),
+  consultaInput: document.getElementById('consulta-input'),
+  borrarConsultaBtn: document.getElementById('borrar-consulta-btn'),
+  adjuntosInput: document.getElementById('adjuntos-input'),
+  adjuntosLista: document.getElementById('adjuntos-lista'),
+  guardarPromptsCheckbox: document.getElementById('guardar-prompts-checkbox'),
+  guardarPromptsSubfields: document.getElementById('guardar-prompts-subfields'),
+  nombreArchivoPromptsInput: document.getElementById('nombre-archivo-prompts-input'),
+  guardarPromptsBtn: document.getElementById('guardar-prompts-btn'),
+  generarPptxBtn: document.getElementById('generar-pptx-btn'),
+  consultarBtn: document.getElementById('consultar-btn'),
+  consultarBtnText: document.getElementById('consultar-btn-text'),
+  statusArea: document.getElementById('status-area'),
+  resultadoPlaceholder: document.getElementById('resultado-placeholder'),
+  avisoTruncado: document.getElementById('aviso-truncado'),
+  resultadoContenido: document.getElementById('resultado-contenido'),
+  borrarResultadoBtn: document.getElementById('borrar-resultado-btn'),
+  exportarBtn: document.getElementById('exportar-btn'),
+  exportarHint: document.getElementById('exportar-hint')
+};
+
+
+/* ------------------------------------------------------------------ *
+ * 3. initializeApp()
+ * ------------------------------------------------------------------ */
+function initializeApp() {
+  poblarSelectorDeModelos();
+  actualizarLimitesDeTokens();
+  actualizarControlesDeExportacion();
+  actualizarControlesDeGuardarPrompts();
+  mostrarFechaUltimaModificacion();
+
+  el.modeloSelect.addEventListener('change', actualizarLimitesDeTokens);
+  el.tokensInput.addEventListener('input', () => limpiarValidacion(el.tokensInput));
+  el.rolInput.addEventListener('input', () => limpiarValidacion(el.rolInput));
+  el.consultaInput.addEventListener('input', () => limpiarValidacion(el.consultaInput));
+  el.exportarCheckbox.addEventListener('change', actualizarControlesDeExportacion);
+  el.toggleApiKeyBtn.addEventListener('click', alternarVisibilidadClave);
+  el.consultarBtn.addEventListener('click', manejarClicConsultar);
+  el.exportarBtn.addEventListener('click', manejarClicExportar);
+  el.adjuntosInput.addEventListener('change', manejarSeleccionArchivos);
+  el.guardarPromptsCheckbox.addEventListener('change', actualizarControlesDeGuardarPrompts);
+  el.nombreArchivoPromptsInput.addEventListener('input', () => limpiarValidacion(el.nombreArchivoPromptsInput));
+  el.guardarPromptsBtn.addEventListener('click', manejarClicGuardarPrompts);
+  el.generarPptxBtn.addEventListener('click', manejarClicGenerarPptx);
+  el.borrarRolBtn.addEventListener('click', () => borrarCampoTexto(el.rolInput));
+  el.borrarConsultaBtn.addEventListener('click', () => borrarCampoTexto(el.consultaInput));
+  el.borrarResultadoBtn.addEventListener('click', manejarClicBorrarResultado);
+}
+
+// Muestra en el pie de página la fecha de la última modificación del propio
+// archivo HTML, tomada de `document.lastModified` (el navegador la obtiene
+// de los metadatos del archivo al abrirlo, por lo que se actualiza sola
+// cada vez que el fichero se vuelve a guardar, sin tocar el código).
+function mostrarFechaUltimaModificacion() {
+  const contenedor = document.getElementById('fecha-modificacion-footer');
+  if (!contenedor) return;
+
+  const fecha = new Date(document.lastModified);
+  if (Number.isNaN(fecha.getTime())) return;
+
+  const fechaFormateada = new Intl.DateTimeFormat('es-ES', {
+    day: 'numeric', month: 'long', year: 'numeric'
+  }).format(fecha);
+
+  contenedor.textContent = `Última modificación: ${fechaFormateada}`;
+}
+
+function poblarSelectorDeModelos() {
+  el.modeloSelect.innerHTML = '';
+  MODELOS_DISPONIBLES.forEach((modelo, indice) => {
+    const opcion = document.createElement('option');
+    opcion.value = String(indice);
+    opcion.textContent = modelo.nombre;
+    if (indice === INDICE_MODELO_POR_DEFECTO) opcion.selected = true;
+    el.modeloSelect.appendChild(opcion);
+  });
+}
+
+function alternarVisibilidadClave() {
+  const oculto = el.apiKeyInput.type === 'password';
+  el.apiKeyInput.type = oculto ? 'text' : 'password';
+  el.toggleApiKeyBtn.textContent = oculto ? 'Ocultar' : 'Mostrar';
+  el.toggleApiKeyBtn.setAttribute('aria-pressed', oculto ? 'true' : 'false');
+}
+
+
+/* ------------------------------------------------------------------ *
+ * DOCUMENTOS DE REFERENCIA (adjuntos): selección, extracción de texto
+ * (.txt/.md en texto plano, .docx con mammoth.js, .pdf con pdf.js) y
+ * construcción del bloque de contexto que se añade a la consulta final.
+ * ------------------------------------------------------------------ */
+
+let contadorAdjuntos = 0;
+
+function obtenerExtension(nombreArchivo) {
+  const indice = nombreArchivo.lastIndexOf('.');
+  return indice === -1 ? '' : nombreArchivo.slice(indice).toLowerCase();
+}
+
+function formatearTamanoArchivo(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// Se dispara al elegir archivos con el selector. Cada archivo se valida
+// (extensión y tamaño) y se añade de inmediato a la lista con estado
+// "leyendo", para después extraer su texto de forma asíncrona sin bloquear
+// la interfaz ni el resto de archivos.
+function manejarSeleccionArchivos(evento) {
+  const archivos = Array.from(evento.target.files || []);
+  archivos.forEach(archivo => {
+    const id = ++contadorAdjuntos;
+    const extension = obtenerExtension(archivo.name);
+    const item = {
+      id,
+      nombre: archivo.name,
+      tamano: archivo.size,
+      estado: 'leyendo', // 'leyendo' | 'listo' | 'error'
+      contenido: null,
+      mensaje: 'Leyendo…'
+    };
+    estado.adjuntos.push(item);
+
+    if (!ADJUNTOS_EXTENSIONES_PERMITIDAS.includes(extension)) {
+      item.estado = 'error';
+      item.mensaje = `Formato no admitido (${ADJUNTOS_EXTENSIONES_PERMITIDAS.join(', ')}).`;
+    } else if (archivo.size > ADJUNTOS_TAMANO_MAXIMO_MB * 1024 * 1024) {
+      item.estado = 'error';
+      item.mensaje = `Archivo demasiado grande (máx. ${ADJUNTOS_TAMANO_MAXIMO_MB} MB).`;
+    } else {
+      procesarArchivoAdjunto(archivo, extension, item);
+    }
+  });
+
+  renderizarListaAdjuntos();
+  evento.target.value = ''; // permite volver a elegir el mismo archivo si se quita y se re-añade
+}
+
+// Extrae el texto del archivo según su extensión y actualiza el elemento
+// correspondiente de estado.adjuntos cuando termina (con éxito o error).
+async function procesarArchivoAdjunto(archivo, extension, item) {
+  try {
+    let texto = '';
+    if (extension === '.txt' || extension === '.md' || extension === '.markdown') {
+      texto = await archivo.text();
+    } else if (extension === '.docx') {
+      texto = await extraerTextoDocx(archivo);
+    } else if (extension === '.pdf') {
+      texto = await extraerTextoPdf(archivo);
+    }
+
+    texto = (texto || '').trim();
+    if (!texto) {
+      item.estado = 'error';
+      item.mensaje = 'No se ha podido extraer texto de este archivo (¿está vacío o es un PDF escaneado?).';
+    } else {
+      item.estado = 'listo';
+      item.contenido = texto;
+      item.mensaje = `Listo · ${texto.length.toLocaleString('es-ES')} caracteres extraídos.`;
+    }
+  } catch (error) {
+    item.estado = 'error';
+    item.mensaje = 'No se ha podido leer el archivo: ' + (error && error.message ? error.message : 'error desconocido.');
+  }
+  renderizarListaAdjuntos();
+}
+
+function extraerTextoDocx(archivo) {
+  return archivo.arrayBuffer().then(bufferArray => {
+    if (typeof mammoth === 'undefined') {
+      throw new Error('La librería de lectura de documentos Word no está disponible.');
+    }
+    return mammoth.extractRawText({ arrayBuffer: bufferArray }).then(resultado => resultado.value);
+  });
+}
+
+async function extraerTextoPdf(archivo) {
+  if (typeof pdfjsLib === 'undefined') {
+    throw new Error('La librería de lectura de PDF no está disponible.');
+  }
+  const bufferArray = await archivo.arrayBuffer();
+  const documentoPdf = await pdfjsLib.getDocument({ data: bufferArray }).promise;
+  const fragmentos = [];
+  for (let numeroPagina = 1; numeroPagina <= documentoPdf.numPages; numeroPagina++) {
+    const pagina = await documentoPdf.getPage(numeroPagina);
+    const contenido = await pagina.getTextContent();
+    fragmentos.push(contenido.items.map(elemento => elemento.str).join(' '));
+  }
+  return fragmentos.join('\n\n');
+}
+
+function eliminarAdjunto(id) {
+  estado.adjuntos = estado.adjuntos.filter(item => item.id !== id);
+  renderizarListaAdjuntos();
+}
+
+function renderizarListaAdjuntos() {
+  el.adjuntosLista.innerHTML = '';
+  estado.adjuntos.forEach(item => {
+    const li = document.createElement('li');
+    li.className = 'attachment-item';
+
+    const icono = item.estado === 'leyendo'
+      ? '<span class="attachment-spinner" aria-hidden="true"></span>'
+      : (item.estado === 'error'
+        ? '<span class="attachment-icon" aria-hidden="true">' + iconoErrorSvg() + '</span>'
+        : '<span class="attachment-icon" aria-hidden="true">' + iconoExitoSvg() + '</span>');
+
+    const claseMeta = item.estado === 'error' ? 'attachment-meta attachment-meta-error' : 'attachment-meta';
+    const tamanoTexto = formatearTamanoArchivo(item.tamano);
+
+    li.innerHTML = `
+      ${icono}
+      <div class="attachment-info">
+        <div class="attachment-name">${escapeHtml(item.nombre)}</div>
+        <div class="${claseMeta}">${escapeHtml(tamanoTexto)} · ${escapeHtml(item.mensaje)}</div>
+      </div>
+      <button type="button" class="attachment-remove-btn" data-id="${item.id}" aria-label="Quitar ${escapeHtml(item.nombre)}">Quitar</button>
+    `;
+    li.querySelector('.attachment-remove-btn').addEventListener('click', () => eliminarAdjunto(item.id));
+    el.adjuntosLista.appendChild(li);
+  });
+}
+
+// Concatena el texto ya extraído de los adjuntos "listos" en un único
+// bloque delimitado, recortando el total si supera el límite de caracteres
+// configurado para no disparar el consumo de tokens de la consulta final.
+function construirBloqueDocumentosAdjuntos() {
+  const listos = estado.adjuntos.filter(item => item.estado === 'listo' && item.contenido);
+  if (listos.length === 0) return '';
+
+  let restante = ADJUNTOS_CARACTERES_MAXIMOS_TOTALES;
+  const secciones = [];
+  for (const item of listos) {
+    if (restante <= 0) {
+      secciones.push(`### Documento: ${item.nombre}\n\n[Omitido por límite de tamaño total de los documentos adjuntos.]`);
+      continue;
+    }
+    let contenido = item.contenido;
+    if (contenido.length > restante) {
+      contenido = contenido.slice(0, restante) + '\n\n[... contenido truncado por límite de tamaño ...]';
+    }
+    restante -= contenido.length;
+    secciones.push(`### Documento: ${item.nombre}\n\n${contenido}`);
+  }
+
+  return '\n\n--- Documentos de referencia adjuntados por el usuario ---\n\n' + secciones.join('\n\n');
+}
+
+
+/* ------------------------------------------------------------------ *
+ * GUARDAR PROMPTS EN ARCHIVO DE TEXTO (.txt): el "Rol del usuario" y la
+ * "Consulta" tal como los ha escrito la persona, en un único archivo,
+ * independiente del flujo de consulta a la IA.
+ * ------------------------------------------------------------------ */
+
+function actualizarControlesDeGuardarPrompts() {
+  const activo = el.guardarPromptsCheckbox.checked;
+  el.guardarPromptsSubfields.hidden = !activo;
+  el.guardarPromptsBtn.disabled = !activo;
+  if (!activo) limpiarValidacion(el.nombreArchivoPromptsInput);
+}
+
+function construirContenidoPrompts(rolUsuario, consulta) {
+  return `Rol del usuario:\n${rolUsuario}\n\nConsulta:\n${consulta}\n`;
+}
+
+function manejarClicGuardarPrompts() {
+  if (!el.guardarPromptsCheckbox.checked) return;
+
+  if (!el.nombreArchivoPromptsInput.value.trim()) {
+    marcarCampoInvalido(el.nombreArchivoPromptsInput, 'Indica un nombre de archivo para guardar los prompts.');
+    showError('Indica un nombre de archivo para guardar los prompts.');
+    return;
+  }
+  limpiarValidacion(el.nombreArchivoPromptsInput);
+
+  const nombreArchivo = sanitizeFilenameBase(el.nombreArchivoPromptsInput.value) + '.txt';
+  const contenido = construirContenidoPrompts(el.rolInput.value, el.consultaInput.value);
+  const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+  descargarBlob(blob, nombreArchivo);
+  showStatus(`Archivo «${nombreArchivo}» descargado correctamente.`, 'success');
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 4. VALIDACIÓN Y MENSAJES DE ESTADO / ERROR
+ * ------------------------------------------------------------------ */
+
+function getModeloSeleccionado() {
+  const indice = parseInt(el.modeloSelect.value, 10);
+  return MODELOS_DISPONIBLES[indice] || MODELOS_DISPONIBLES[INDICE_MODELO_POR_DEFECTO];
+}
+
+// Ajusta el límite máximo del campo "Número de tokens" y su texto de ayuda
+// según el modelo elegido, tal y como valida `validar_parametros_modelo`
+// en el script de referencia (max_tokens no puede superar max_output_tokens
+// del modelo).
+function actualizarLimitesDeTokens() {
+  const modelo = getModeloSeleccionado();
+  el.tokensInput.max = String(modelo.maxOutputTokens);
+  el.modeloHint.textContent = `Salida máxima admitida: ${modelo.maxOutputTokens.toLocaleString('es-ES')} tokens.`;
+
+  const valorActual = parseInt(el.tokensInput.value, 10);
+  if (!Number.isNaN(valorActual) && valorActual > modelo.maxOutputTokens) {
+    el.tokensInput.value = String(modelo.maxOutputTokens);
+  }
+  el.tokensHint.textContent = `Debe ser un entero entre 1 y ${modelo.maxOutputTokens.toLocaleString('es-ES')}.`;
+  limpiarValidacion(el.tokensInput);
+}
+
+function actualizarControlesDeExportacion() {
+  const activo = el.exportarCheckbox.checked;
+  el.exportSubfields.hidden = !activo;
+  actualizarEstadoBotonExportar();
+}
+
+function marcarCampoInvalido(campo, mensaje) {
+  campo.classList.add('field-invalid');
+  campo.setAttribute('aria-invalid', 'true');
+  let errorEl = campo.parentElement.querySelector('.error-text');
+  if (!errorEl) {
+    errorEl = document.createElement('span');
+    errorEl.className = 'error-text';
+    campo.parentElement.appendChild(errorEl);
+  }
+  errorEl.textContent = mensaje;
+}
+
+function limpiarValidacion(campo) {
+  campo.classList.remove('field-invalid');
+  campo.removeAttribute('aria-invalid');
+  const errorEl = campo.parentElement.querySelector('.error-text');
+  if (errorEl) errorEl.remove();
+}
+
+// Vacía un campo de texto (usado por los botones "Borrar" de "Rol del
+// usuario" y "Consulta"), limpia cualquier marca de validación pendiente
+// y devuelve el foco al propio campo para seguir escribiendo.
+function borrarCampoTexto(campo) {
+  campo.value = '';
+  limpiarValidacion(campo);
+  campo.focus();
+}
+
+// Valida todos los campos requeridos antes de lanzar el flujo de consulta.
+// Devuelve true si todo es correcto; si no, marca los campos y muestra un
+// mensaje de error general.
+function validateForm() {
+  let esValido = true;
+  const modelo = getModeloSeleccionado();
+
+  if (!el.apiKeyInput.value.trim()) {
+    marcarCampoInvalido(el.apiKeyInput, 'Introduce tu clave de API de Anthropic.');
+    esValido = false;
+  } else {
+    limpiarValidacion(el.apiKeyInput);
+  }
+
+  const tokens = parseInt(el.tokensInput.value, 10);
+  if (!Number.isInteger(tokens) || tokens < 1) {
+    marcarCampoInvalido(el.tokensInput, 'Introduce un número entero positivo de tokens.');
+    esValido = false;
+  } else if (tokens > modelo.maxOutputTokens) {
+    marcarCampoInvalido(el.tokensInput, `El modelo «${modelo.nombre}» admite como máximo ${modelo.maxOutputTokens.toLocaleString('es-ES')} tokens de salida.`);
+    esValido = false;
+  } else {
+    limpiarValidacion(el.tokensInput);
+  }
+
+  if (!el.rolInput.value.trim()) {
+    marcarCampoInvalido(el.rolInput, 'Describe el rol o las instrucciones de sistema para la respuesta final.');
+    esValido = false;
+  } else {
+    limpiarValidacion(el.rolInput);
+  }
+
+  if (!el.consultaInput.value.trim()) {
+    marcarCampoInvalido(el.consultaInput, 'Escribe tu consulta antes de continuar.');
+    esValido = false;
+  } else {
+    limpiarValidacion(el.consultaInput);
+  }
+
+  if (el.exportarCheckbox.checked && !el.nombreArchivoInput.value.trim()) {
+    marcarCampoInvalido(el.nombreArchivoInput, 'Indica un nombre de archivo para la exportación.');
+    esValido = false;
+  } else {
+    limpiarValidacion(el.nombreArchivoInput);
+  }
+
+  if (!esValido) {
+    showError('Revisa los campos marcados en rojo antes de continuar.');
+  } else if (estado.adjuntos.some(item => item.estado === 'leyendo')) {
+    showError('Espera a que terminen de procesarse los documentos adjuntos antes de consultar.');
+    esValido = false;
+  }
+
+  return esValido;
+}
+
+function iconoInfoSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 11v5m0-8h.01" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+}
+function iconoErrorSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M15 9l-6 6m0-6 6 6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>';
+}
+function iconoExitoSvg() {
+  return '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M8 12.5l2.5 2.5L16 9.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+}
+
+function showStatus(mensaje, tipo) {
+  tipo = tipo || 'info';
+  const claseTipo = tipo === 'error' ? 'status-error' : (tipo === 'success' ? 'status-success' : 'status-info');
+  const icono = tipo === 'error' ? iconoErrorSvg() : (tipo === 'success' ? iconoExitoSvg() : iconoInfoSvg());
+  el.statusArea.innerHTML = `<div class="status-message ${claseTipo}">${icono}<span>${escapeHtml(mensaje)}</span></div>`;
+}
+
+function showError(mensaje) {
+  showStatus(mensaje, 'error');
+}
+
+function limpiarEstado() {
+  el.statusArea.innerHTML = '';
+}
+
+function escapeHtml(texto) {
+  const div = document.createElement('div');
+  div.textContent = texto;
+  return div.innerHTML;
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 5. COMUNICACIÓN CON LA API DE ANTHROPIC
+ * ------------------------------------------------------------------ */
+
+// Equivalente en el navegador de `llamar_a_claude()` del script Python:
+// realiza una única llamada a la API de Mensajes y devuelve el texto de
+// la respuesta. Traduce los mismos casos de error que el script original
+// (autenticación, modelo no encontrado, límite de peticiones, conexión,
+// otros errores de la API) a mensajes en español.
+async function llamarAClaude({ apiKey, modeloIdApi, maxTokens, systemPrompt, userPrompt }) {
+  let respuesta;
+  try {
+    respuesta = await fetch(ANTHROPIC_API_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+        // Necesario para permitir llamadas directas desde el navegador.
+        'anthropic-dangerous-direct-browser-access': 'true'
+      },
+      body: JSON.stringify({
+        model: modeloIdApi,
+        max_tokens: maxTokens,
+        system: systemPrompt,
+        messages: [{ role: 'user', content: userPrompt }]
+      })
+    });
+  } catch (excepcionRed) {
+    throw new Error('No se ha podido conectar con la API de Anthropic. Comprueba tu conexión a internet.');
+  }
+
+  if (!respuesta.ok) {
+    let detalle = '';
+    try {
+      const cuerpoError = await respuesta.json();
+      detalle = (cuerpoError && cuerpoError.error && cuerpoError.error.message) || '';
+    } catch (e) { /* el cuerpo del error no era JSON válido; se ignora */ }
+
+    if (respuesta.status === 401) {
+      throw new Error('Clave de API inválida o no autorizada. Comprueba que la has copiado correctamente.');
+    }
+    if (respuesta.status === 404) {
+      throw new Error(`Modelo no encontrado (${detalle || 'comprueba que el identificador del modelo sigue vigente'}).`);
+    }
+    if (respuesta.status === 429) {
+      throw new Error('Se ha superado el límite de peticiones a la API. Inténtalo de nuevo en unos instantes.');
+    }
+    if (respuesta.status >= 500) {
+      throw new Error('La API de Anthropic no está disponible en este momento. Inténtalo de nuevo más tarde.');
+    }
+    throw new Error(`La API ha devuelto un error (código ${respuesta.status})${detalle ? ': ' + detalle : '.'}`);
+  }
+
+  let datos;
+  try {
+    datos = await respuesta.json();
+  } catch (e) {
+    throw new Error('La API ha devuelto una respuesta que no se pudo interpretar.');
+  }
+
+  // El campo "content" es una lista de bloques; se concatenan los de tipo
+  // "text" por si la respuesta viniera fragmentada en varios bloques
+  // (igual que en el script de referencia).
+  const fragmentosTexto = (datos.content || [])
+    .filter(bloque => bloque.type === 'text')
+    .map(bloque => bloque.text);
+  const texto = fragmentosTexto.join('').trim();
+
+  if (!texto) {
+    throw new Error('La respuesta generada está vacía.');
+  }
+
+  // "stop_reason" es el campo oficial de la API de Anthropic que indica por
+  // qué ha terminado la generación. Cuando vale "max_tokens", la respuesta
+  // se ha cortado por alcanzar el límite configurado, no porque el modelo
+  // haya terminado de responder por sí mismo. Se usa este campo (y no una
+  // deducción a partir del propio texto) porque es la señal fiable que
+  // proporciona la propia API para detectar este caso.
+  const truncadaPorLimiteDeTokens = datos.stop_reason === 'max_tokens';
+
+  return { texto, truncada: truncadaPorLimiteDeTokens };
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 6. FLUJO DE DOS PASOS: MEJORA DEL PROMPT + CONSULTA FINAL
+ * ------------------------------------------------------------------ */
+
+// PASO 1: envía la consulta original para obtener una versión mejorada
+// (y traducida al inglés), igual que `refinar_prompt()` en Python.
+async function improvePrompt({ apiKey, modeloIdApi, consultaOriginal }) {
+  return llamarAClaude({
+    apiKey,
+    modeloIdApi,
+    maxTokens: MAX_TOKENS_REFINADO,
+    systemPrompt: SYSTEM_PROMPT_REFINADO,
+    userPrompt: consultaOriginal
+  });
+}
+
+// PASO 2: envía el prompt ya mejorado como consulta final, usando el "Rol
+// del usuario" como system prompt, igual que `consultar_con_prompt_mejorado()`.
+async function executeFinalQuery({ apiKey, modeloIdApi, maxTokens, rolUsuario, promptMejorado }) {
+  const bloqueAdjuntos = construirBloqueDocumentosAdjuntos();
+  return llamarAClaude({
+    apiKey,
+    modeloIdApi,
+    maxTokens,
+    systemPrompt: rolUsuario,
+    userPrompt: promptMejorado + bloqueAdjuntos
+  });
+}
+
+async function manejarClicConsultar() {
+  if (estado.procesando) return;
+  limpiarEstado();
+
+  if (!validateForm()) return;
+
+  const apiKey = el.apiKeyInput.value.trim();
+  const modelo = getModeloSeleccionado();
+  const maxTokens = parseInt(el.tokensInput.value, 10);
+  const rolUsuario = el.rolInput.value.trim();
+  const consultaOriginal = el.consultaInput.value.trim();
+
+  ponerCargando(true, 'Paso 1 de 2: mejorando tu consulta…');
+
+  try {
+    const resultadoMejora = await improvePrompt({
+      apiKey,
+      modeloIdApi: modelo.idApi,
+      consultaOriginal
+    });
+    const promptMejorado = resultadoMejora.texto;
+
+    ponerCargando(true, 'Paso 2 de 2: generando la respuesta final…');
+
+    const resultadoFinal = await executeFinalQuery({
+      apiKey,
+      modeloIdApi: modelo.idApi,
+      maxTokens,
+      rolUsuario,
+      promptMejorado
+    });
+
+    renderResult(resultadoFinal.texto, resultadoFinal.truncada);
+    if (resultadoFinal.truncada) {
+      showStatus('Respuesta generada, pero truncada por el límite de tokens (ver aviso junto al resultado).', 'info');
+    } else {
+      showStatus('Respuesta generada correctamente.', 'success');
+    }
+  } catch (error) {
+    showError(error && error.message ? error.message : 'Ha ocurrido un error inesperado al procesar la consulta.');
+  } finally {
+    ponerCargando(false);
+  }
+}
+
+function ponerCargando(activo, mensaje) {
+  estado.procesando = activo;
+  el.consultarBtn.disabled = activo;
+  el.consultarBtn.setAttribute('aria-busy', activo ? 'true' : 'false');
+
+  if (activo) {
+    el.consultarBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>' + escapeHtml(mensaje || 'Procesando…') + '</span>';
+    showStatus(mensaje || 'Procesando…', 'info');
+  } else {
+    el.consultarBtn.innerHTML = '<span id="consultar-btn-text">Consultar</span>';
+  }
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 7. RENDERIZADO DEL RESULTADO (Markdown -> HTML)
+ * ------------------------------------------------------------------ */
+
+function renderResult(markdownTexto, truncada) {
+  estado.ultimoResultadoMarkdown = markdownTexto;
+  estado.ultimaRespuestaTruncada = !!truncada;
+
+  try {
+    const html = marked.parse(markdownTexto);
+    const htmlSeguro = (typeof DOMPurify !== 'undefined') ? DOMPurify.sanitize(html) : html;
+    el.resultadoContenido.innerHTML = htmlSeguro;
+  } catch (error) {
+    // Si el renderizado de Markdown fallara por cualquier motivo, se
+    // muestra el texto plano para no perder la respuesta obtenida.
+    el.resultadoContenido.textContent = markdownTexto;
+  }
+
+  el.resultadoContenido.hidden = false;
+  el.resultadoPlaceholder.hidden = true;
+  el.avisoTruncado.hidden = !estado.ultimaRespuestaTruncada;
+  actualizarEstadoBotonExportar();
+}
+
+function actualizarEstadoBotonExportar() {
+  const hayResultado = !!estado.ultimoResultadoMarkdown;
+  const exportarActivo = el.exportarCheckbox.checked;
+
+  el.borrarResultadoBtn.disabled = !hayResultado;
+  el.exportarBtn.disabled = !(hayResultado && exportarActivo);
+
+  if (!exportarActivo) {
+    el.exportarHint.textContent = 'Activa «Exportar resultado» en la configuración para habilitar la exportación.';
+    el.exportarHint.style.display = '';
+  } else if (!hayResultado) {
+    el.exportarHint.textContent = 'Genera primero una respuesta para poder exportarla.';
+    el.exportarHint.style.display = '';
+  } else {
+    el.exportarHint.style.display = 'none';
+  }
+}
+
+// Descarta la respuesta mostrada (y su posible aviso de truncamiento),
+// devolviendo la sección "Resultado" a su estado inicial. No afecta a los
+// campos de la consulta ni requiere una nueva llamada a la API.
+function manejarClicBorrarResultado() {
+  estado.ultimoResultadoMarkdown = null;
+  estado.ultimaRespuestaTruncada = false;
+  el.resultadoContenido.innerHTML = '';
+  el.resultadoContenido.hidden = true;
+  el.resultadoPlaceholder.hidden = false;
+  el.avisoTruncado.hidden = true;
+  actualizarEstadoBotonExportar();
+  limpiarEstado();
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 8. EXPORTACIÓN (Markdown / Word / PDF)
+ * ------------------------------------------------------------------ */
+
+function sanitizeFilenameBase(nombre) {
+  let base = (nombre || '').trim();
+  base = base.replace(/\.(md|markdown|docx|pdf|txt)$/i, '');
+  base = base.replace(/[\\/:*?"<>|]+/g, '_');
+  base = base.replace(/\s+/g, ' ').trim();
+  if (!base) base = 'resultado';
+  return base;
+}
+
+function construirNombreArchivo(nombreCrudo, formato) {
+  const extension = EXTENSIONES_EXPORTACION[formato] || '.md';
+  return sanitizeFilenameBase(nombreCrudo) + extension;
+}
+
+function descargarBlob(blob, nombreArchivo) {
+  const url = URL.createObjectURL(blob);
+  const enlace = document.createElement('a');
+  enlace.href = url;
+  enlace.download = nombreArchivo;
+  document.body.appendChild(enlace);
+  enlace.click();
+  document.body.removeChild(enlace);
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+async function manejarClicExportar() {
+  if (!estado.ultimoResultadoMarkdown) {
+    showError('Todavía no hay ningún resultado que exportar.');
+    return;
+  }
+  if (!el.exportarCheckbox.checked) {
+    showError('Activa «Exportar resultado» para poder exportar el fichero.');
+    return;
+  }
+
+  const formato = el.formatoSelect.value;
+  const nombreArchivo = construirNombreArchivo(el.nombreArchivoInput.value, formato);
+
+  try {
+    if (formato === 'markdown') {
+      exportMarkdown(nombreArchivo);
+    } else if (formato === 'word') {
+      await exportWord(nombreArchivo);
+    } else if (formato === 'pdf') {
+      exportPDF(nombreArchivo);
+    }
+    showStatus(`Archivo «${nombreArchivo}» descargado correctamente.`, 'success');
+  } catch (error) {
+    showError('No se ha podido generar el archivo de exportación: ' + (error && error.message ? error.message : 'error desconocido.'));
+  }
+}
+
+function exportMarkdown(nombreArchivo) {
+  const blob = new Blob([estado.ultimoResultadoMarkdown], { type: 'text/markdown;charset=utf-8' });
+  descargarBlob(blob, nombreArchivo);
+}
+
+/* --------------------- Parser de Markdown a bloques --------------------- *
+ * Convierte el texto Markdown en una lista de bloques estructurados
+ * (encabezados, párrafos, listas, citas, código, tablas y líneas
+ * horizontales), que después reutilizan tanto la exportación a Word como
+ * la exportación a PDF. No pretende ser un parser CommonMark completo,
+ * sino cubrir con solidez los elementos que pide la especificación.
+ * ------------------------------------------------------------------------- */
+function parseMarkdownBlocks(markdown) {
+  const lineas = (markdown || '').replace(/\r\n/g, '\n').split('\n');
+  const bloques = [];
+  let i = 0;
+
+  const esSeparadorTabla = (linea) => /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(linea);
+  const dividirFilaTabla = (linea) => {
+    let l = linea.trim();
+    if (l.startsWith('|')) l = l.slice(1);
+    if (l.endsWith('|')) l = l.slice(0, -1);
+    return l.split('|').map(c => c.trim());
+  };
+
+  while (i < lineas.length) {
+    const linea = lineas[i];
+
+    if (linea.trim() === '') { i++; continue; }
+
+    if (/^\s*```/.test(linea)) {
+      const codigoLineas = [];
+      i++;
+      while (i < lineas.length && !/^\s*```/.test(lineas[i])) {
+        codigoLineas.push(lineas[i]);
+        i++;
+      }
+      i++;
+      bloques.push({ tipo: 'code', texto: codigoLineas.join('\n') });
+      continue;
+    }
+
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(linea)) {
+      bloques.push({ tipo: 'hr' });
+      i++;
+      continue;
+    }
+
+    const coincidenciaEncabezado = linea.match(/^(#{1,6})\s+(.*)$/);
+    if (coincidenciaEncabezado) {
+      bloques.push({ tipo: 'heading', nivel: coincidenciaEncabezado[1].length, texto: coincidenciaEncabezado[2].trim() });
+      i++;
+      continue;
+    }
+
+    if (linea.includes('|') && i + 1 < lineas.length && esSeparadorTabla(lineas[i + 1])) {
+      const cabecera = dividirFilaTabla(linea);
+      i += 2;
+      const filas = [];
+      while (i < lineas.length && lineas[i].includes('|') && lineas[i].trim() !== '') {
+        filas.push(dividirFilaTabla(lineas[i]));
+        i++;
+      }
+      bloques.push({ tipo: 'table', cabecera, filas });
+      continue;
+    }
+
+    if (/^\s*>\s?/.test(linea)) {
+      const citaLineas = [];
+      while (i < lineas.length && /^\s*>\s?/.test(lineas[i])) {
+        citaLineas.push(lineas[i].replace(/^\s*>\s?/, ''));
+        i++;
+      }
+      bloques.push({ tipo: 'blockquote', texto: citaLineas.join(' ') });
+      continue;
+    }
+
+    if (/^\s*[-*+]\s+/.test(linea)) {
+      const items = [];
+      while (i < lineas.length && /^\s*[-*+]\s+/.test(lineas[i])) {
+        items.push(lineas[i].replace(/^\s*[-*+]\s+/, ''));
+        i++;
+      }
+      bloques.push({ tipo: 'ul', items });
+      continue;
+    }
+
+    if (/^\s*\d+\.\s+/.test(linea)) {
+      // Se captura el número real de cada elemento (en vez de asumir que
+      // son consecutivos desde 1): si un bloque de código, una cita u otro
+      // contenido interrumpe una lista numerada, el análisis la divide en
+      // varios bloques 'ol' independientes, y sin este dato cada uno
+      // volvería a numerarse desde 1 al dibujarlo (el "1," que aparecía en
+      // viñetas que en realidad eran "2.", "3.", etc.).
+      const items = [];
+      while (i < lineas.length && /^\s*\d+\.\s+/.test(lineas[i])) {
+        const coincidenciaItem = lineas[i].match(/^\s*(\d+)\.\s+(.*)$/);
+        items.push({ numero: parseInt(coincidenciaItem[1], 10), texto: coincidenciaItem[2] });
+        i++;
+      }
+      bloques.push({ tipo: 'ol', items });
+      continue;
+    }
+
+    const parrafoLineas = [];
+    while (i < lineas.length && lineas[i].trim() !== '' &&
+      !/^\s*```/.test(lineas[i]) && !/^(#{1,6})\s+/.test(lineas[i]) &&
+      !/^\s*>\s?/.test(lineas[i]) && !/^\s*[-*+]\s+/.test(lineas[i]) &&
+      !/^\s*\d+\.\s+/.test(lineas[i]) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lineas[i])) {
+      parrafoLineas.push(lineas[i]);
+      i++;
+    }
+    bloques.push({ tipo: 'paragraph', texto: parrafoLineas.join(' ') });
+  }
+
+  return bloques;
+}
+
+// Tokeniza el texto de un bloque en fragmentos con estilo en línea:
+// negrita, cursiva, negrita+cursiva, código y enlaces.
+function tokenizeInline(texto) {
+  const tokens = [];
+  const re = /(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+  let ultimoIndice = 0;
+  let coincidencia;
+  while ((coincidencia = re.exec(texto)) !== null) {
+    if (coincidencia.index > ultimoIndice) {
+      tokens.push({ tipo: 'text', texto: texto.slice(ultimoIndice, coincidencia.index) });
+    }
+    if (coincidencia[1] !== undefined) tokens.push({ tipo: 'boldItalic', texto: coincidencia[2] });
+    else if (coincidencia[3] !== undefined) tokens.push({ tipo: 'bold', texto: coincidencia[4] });
+    else if (coincidencia[5] !== undefined) tokens.push({ tipo: 'bold', texto: coincidencia[6] });
+    else if (coincidencia[7] !== undefined) tokens.push({ tipo: 'italic', texto: coincidencia[8] });
+    else if (coincidencia[9] !== undefined) tokens.push({ tipo: 'italic', texto: coincidencia[10] });
+    else if (coincidencia[11] !== undefined) tokens.push({ tipo: 'code', texto: coincidencia[12] });
+    else if (coincidencia[13] !== undefined) tokens.push({ tipo: 'link', texto: coincidencia[14], url: coincidencia[15] });
+    ultimoIndice = re.lastIndex;
+  }
+  if (ultimoIndice < texto.length) {
+    tokens.push({ tipo: 'text', texto: texto.slice(ultimoIndice) });
+  }
+  return tokens;
+}
+
+/* ------------------------------- Exportar a Word ------------------------------- */
+// Comprueba que el documento .docx generado es realmente un paquete OOXML
+// válido (los .docx son, por dentro, un archivo ZIP) antes de descargarlo,
+// en vez de asumir que la operación fue correcta solo porque Packer.toBlob
+// no lanzó ninguna excepción.
+async function validarPaqueteDocx(blob) {
+  const buffer = await blob.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  const firmaValida = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B; // "PK" (cabecera ZIP/OOXML)
+  if (!firmaValida || bytes.length < 500) {
+    throw new Error('El archivo de Word generado no parece válido. Inténtalo de nuevo.');
+  }
+}
+
+async function exportWord(nombreArchivo) {
+  const { Document, Packer, Paragraph, TextRun, HeadingLevel, ExternalHyperlink,
+          Table, TableRow, TableCell, WidthType, BorderStyle, Footer, PageNumber, AlignmentType } = docx;
+
+  const bloques = parseMarkdownBlocks(estado.ultimoResultadoMarkdown);
+
+  const nivelesEncabezado = {
+    1: HeadingLevel.HEADING_1,
+    2: HeadingLevel.HEADING_2,
+    3: HeadingLevel.HEADING_3,
+    4: HeadingLevel.HEADING_4,
+    5: HeadingLevel.HEADING_5,
+    6: HeadingLevel.HEADING_6
+  };
+
+  // Convierte una lista de tokens en línea en TextRun / ExternalHyperlink,
+  // preservando negrita, cursiva y formato de código.
+  function construirHijosDeTexto(texto) {
+    const tokens = tokenizeInline(texto);
+    return tokens.map(token => {
+      if (token.tipo === 'link') {
+        return new ExternalHyperlink({
+          link: token.url,
+          children: [new TextRun({ text: token.texto, color: '2E6DA4', underline: {} })]
+        });
+      }
+      const opciones = { text: token.texto };
+      if (token.tipo === 'bold') opciones.bold = true;
+      if (token.tipo === 'italic') opciones.italics = true;
+      if (token.tipo === 'boldItalic') { opciones.bold = true; opciones.italics = true; }
+      if (token.tipo === 'code') { opciones.font = 'Consolas'; opciones.size = 20; opciones.shading = { fill: 'EAF3FB' }; }
+      return new TextRun(opciones);
+    });
+  }
+
+  // Variante de lo anterior para el texto de una cita (blockquote): conserva
+  // negrita/código/enlaces del Markdown original, pero además fuerza la
+  // cursiva y un color más suave como tratamiento visual propio de la cita.
+  function construirHijosDeCita(texto) {
+    const tokens = tokenizeInline(texto);
+    return tokens.map(token => {
+      if (token.tipo === 'link') {
+        return new ExternalHyperlink({
+          link: token.url,
+          children: [new TextRun({ text: token.texto, color: '2E6DA4', underline: {}, italics: true })]
+        });
+      }
+      const opciones = { text: token.texto, italics: true, color: '57708A' };
+      if (token.tipo === 'bold' || token.tipo === 'boldItalic') opciones.bold = true;
+      if (token.tipo === 'code') { opciones.font = 'Consolas'; opciones.size = 20; opciones.shading = { fill: 'EAF3FB' }; }
+      return new TextRun(opciones);
+    });
+  }
+
+  const parrafosDocx = [];
+
+  bloques.forEach(bloque => {
+    if (bloque.tipo === 'heading') {
+      parrafosDocx.push(new Paragraph({
+        heading: nivelesEncabezado[bloque.nivel] || HeadingLevel.HEADING_4,
+        children: construirHijosDeTexto(bloque.texto),
+        spacing: { before: 240, after: 120 }
+      }));
+    } else if (bloque.tipo === 'paragraph') {
+      parrafosDocx.push(new Paragraph({
+        children: construirHijosDeTexto(bloque.texto),
+        spacing: { after: 160 }
+      }));
+    } else if (bloque.tipo === 'ul') {
+      bloque.items.forEach(item => {
+        parrafosDocx.push(new Paragraph({
+          bullet: { level: 0 },
+          children: construirHijosDeTexto(item),
+          spacing: { after: 80 }
+        }));
+      });
+    } else if (bloque.tipo === 'ol') {
+      bloque.items.forEach(item => {
+        parrafosDocx.push(new Paragraph({
+          numbering: { reference: 'lista-numerada-consultar', level: 0 },
+          children: construirHijosDeTexto(item.texto),
+          spacing: { after: 80 }
+        }));
+      });
+    } else if (bloque.tipo === 'blockquote') {
+      // Se tokeniza igual que un párrafo normal para conservar negrita,
+      // código y enlaces dentro de la cita, aplicando además la cursiva y
+      // el color suave propios del tratamiento visual de una cita.
+      parrafosDocx.push(new Paragraph({
+        indent: { left: 480 },
+        border: { left: { color: '2E6DA4', space: 8, style: BorderStyle.SINGLE, size: 12 } },
+        children: construirHijosDeCita(bloque.texto),
+        spacing: { after: 160 }
+      }));
+    } else if (bloque.tipo === 'code') {
+      bloque.texto.split('\n').forEach(linea => {
+        parrafosDocx.push(new Paragraph({
+          children: [new TextRun({ text: linea || ' ', font: 'Consolas', size: 18 })],
+          shading: { fill: 'F2F6FA' },
+          spacing: { after: 0 }
+        }));
+      });
+      // Un párrafo vacío tras el bloque de código, con una altura de línea
+      // completa (240 = una línea en blanco a 12pt), para que quede
+      // claramente separado del elemento siguiente sin excederse.
+      parrafosDocx.push(new Paragraph({ text: '', spacing: { after: 240 } }));
+    } else if (bloque.tipo === 'hr') {
+      parrafosDocx.push(new Paragraph({
+        border: { bottom: { color: 'D8E6F1', space: 1, style: BorderStyle.SINGLE, size: 6 } },
+        spacing: { after: 200 }
+      }));
+    } else if (bloque.tipo === 'table') {
+      const filaCabecera = new TableRow({
+        children: bloque.cabecera.map(texto => new TableCell({
+          shading: { fill: 'EAF3FB' },
+          children: [new Paragraph({ children: [new TextRun({ text: texto, bold: true })] })]
+        }))
+      });
+      const filasDatos = bloque.filas.map(fila => new TableRow({
+        children: fila.map(texto => new TableCell({
+          children: [new Paragraph({ children: construirHijosDeTexto(texto) })]
+        }))
+      }));
+      parrafosDocx.push(new Table({
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        rows: [filaCabecera, ...filasDatos]
+      }));
+      parrafosDocx.push(new Paragraph({ text: '', spacing: { after: 240 } }));
+    }
+  });
+
+  const documento = new Document({
+    creator: 'ConSultar',
+    title: 'Respuesta generada por ConSultar',
+    description: 'Documento generado automáticamente por la aplicación ConSultar.',
+    styles: {
+      default: {
+        document: { run: { font: 'Calibri', size: 22 } }
+      }
+    },
+    numbering: {
+      config: [{
+        reference: 'lista-numerada-consultar',
+        levels: [{ level: 0, format: 'decimal', text: '%1.', alignment: 'start' }]
+      }]
+    },
+    sections: [{
+      properties: {},
+      // Número de página en la esquina inferior derecha (campos PAGE/NUMPAGES
+      // de Word: se actualizan solos y siempre reflejan el total real).
+      footers: {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              alignment: AlignmentType.RIGHT,
+              children: [
+                new TextRun({ children: ['Página ', PageNumber.CURRENT, ' de ', PageNumber.TOTAL_PAGES], size: 18, color: '788A9C' })
+              ]
+            })
+          ]
+        })
+      },
+      children: parrafosDocx
+    }]
+  });
+
+  const blob = await Packer.toBlob(documento);
+  await validarPaqueteDocx(blob);
+  descargarBlob(blob, nombreArchivo);
+}
+
+/* ------------------------------- Exportar a PDF -------------------------------- */
+// Caracteres que las fuentes estándar de jsPDF (Helvetica/Courier, con
+// codificación WinAnsi) no representan correctamente —flechas, comillas
+// tipográficas, guiones largos, viñetas sueltas, etc.— y que de otro modo
+// aparecerían como símbolos ilegibles en el PDF. Se sustituyen por su
+// equivalente ASCII más cercano SOLO en la exportación a PDF; el
+// Markdown mostrado en pantalla y las exportaciones a Markdown/Word no se
+// ven afectados, ya que trabajan con el texto original sin modificar.
+const SUSTITUCIONES_CARACTERES_PDF = {
+  '\u2192': '->', '\u2190': '<-', '\u2194': '<->',
+  '\u21D2': '=>', '\u21D0': '<=',
+  '\u2018': "'", '\u2019': "'", '\u201C': '"', '\u201D': '"',
+  '\u2013': '-', '\u2014': '-',
+  '\u2026': '...',
+  '\u2022': '-',
+  '\u2713': 'OK', '\u2714': 'OK', '\u2717': 'x', '\u2718': 'x'
+};
+
+function normalizarTextoParaPdf(texto) {
+  let resultado = String(texto || '');
+
+  // Los emoji y pictogramas (✅ ❌ ⚠️ 🚀 ⭐ etc.) no pertenecen al repertorio
+  // Latin-1/WinAnsi de las fuentes estándar de jsPDF: se eliminan en lugar
+  // de sustituirse, ya que no aportan significado textual imprescindible y
+  // de otro modo aparecen como símbolos ilegibles (la causa más habitual
+  // del problema "caracteres corruptos" en listas generadas por una IA).
+  resultado = resultado.replace(/\p{Extended_Pictographic}/gu, '');
+  resultado = resultado.replace(/\uFE0F/g, ''); // selector de variante que a veces sigue a un emoji
+
+  for (const [buscado, reemplazo] of Object.entries(SUSTITUCIONES_CARACTERES_PDF)) {
+    resultado = resultado.split(buscado).join(reemplazo);
+  }
+
+  // Red de seguridad final: cualquier otro carácter fuera de Latin-1 que se
+  // haya escapado de las sustituciones anteriores (símbolos poco comunes,
+  // otros alfabetos, etc.) se elimina para no mostrar nunca un glifo roto.
+  resultado = resultado.replace(/[^\x00-\xFF]/g, '');
+
+  return resultado;
+}
+
+function exportPDF(nombreArchivo) {
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+
+  const margen = 50;
+  const anchoUtil = doc.internal.pageSize.getWidth() - margen * 2;
+  const alturaPagina = doc.internal.pageSize.getHeight();
+  let y = margen;
+
+  // Espacio vertical que se deja tras un elemento "de bloque" (código,
+  // citas, tablas): equivale aproximadamente a una línea en blanco, para
+  // que el documento no quede visualmente apelmazado sin llegar a una
+  // separación excesiva. Los párrafos y listas, que fluyen de forma más
+  // continua, mantienen su espaciado propio y más ajustado.
+  const ESPACIO_TRAS_BLOQUE = 16;
+
+  function saltoDePaginaSiNecesario(alturaNecesaria) {
+    if (y + alturaNecesaria > alturaPagina - margen) {
+      doc.addPage();
+      y = margen;
+    }
+  }
+
+  function aplicarEstiloFuente(estiloToken) {
+    if (estiloToken === 'code') {
+      doc.setFont('courier', 'normal');
+    } else if (estiloToken === 'boldItalic') {
+      doc.setFont('helvetica', 'bolditalic');
+    } else if (estiloToken === 'bold') {
+      doc.setFont('helvetica', 'bold');
+    } else if (estiloToken === 'italic') {
+      doc.setFont('helvetica', 'italic');
+    } else if (estiloToken === 'link') {
+      doc.setFont('helvetica', 'normal');
+    } else {
+      doc.setFont('helvetica', 'normal');
+    }
+  }
+
+  // Dibuja un párrafo con estilos mixtos (negrita/cursiva/código/enlaces),
+  // ajustando el texto a varias líneas dentro de "anchoUtil" y controlando
+  // el salto de página. Devuelve la posición Y final.
+  function dibujarParrafoConEstilo(tokens, x, anchoDisponible, tamanoFuente, interlineado, colorTexto) {
+    doc.setFontSize(tamanoFuente);
+    let cursorX = x;
+    const alturaLinea = tamanoFuente * (interlineado || 1.4);
+
+    tokens.forEach(token => {
+      const palabras = token.texto.split(/(\s+)/).filter(p => p !== '');
+      palabras.forEach(palabra => {
+        aplicarEstiloFuente(token.tipo);
+        doc.setFontSize(tamanoFuente);
+        if (token.tipo === 'link') {
+          doc.setTextColor(46, 109, 164);
+        } else if (colorTexto) {
+          doc.setTextColor.apply(doc, colorTexto);
+        } else {
+          doc.setTextColor(30, 42, 56);
+        }
+
+        const anchoPalabra = doc.getTextWidth(palabra);
+
+        if (palabra.trim() !== '' && cursorX + anchoPalabra > x + anchoDisponible) {
+          cursorX = x;
+          y += alturaLinea;
+          saltoDePaginaSiNecesario(alturaLinea);
+        }
+
+        if (palabra.trim() === '') {
+          cursorX += anchoPalabra;
+          return;
+        }
+
+        if (token.tipo === 'link') {
+          doc.textWithLink(palabra, cursorX, y, { url: token.url });
+        } else {
+          doc.text(palabra, cursorX, y);
+        }
+        cursorX += anchoPalabra;
+      });
+    });
+
+    doc.setTextColor(30, 42, 56);
+    y += alturaLinea;
+    return y;
+  }
+
+  function dibujarBloqueTexto(texto, opciones) {
+    opciones = opciones || {};
+    const x = margen + (opciones.indent || 0);
+    const anchoDisponible = anchoUtil - (opciones.indent || 0);
+    saltoDePaginaSiNecesario((opciones.tamanoFuente || 11) * 1.4);
+    dibujarParrafoConEstilo(tokenizeInline(texto), x, anchoDisponible, opciones.tamanoFuente || 11, 1.45, opciones.color);
+  }
+
+  const bloques = parseMarkdownBlocks(normalizarTextoParaPdf(estado.ultimoResultadoMarkdown));
+  const tamanosEncabezado = { 1: 19, 2: 16, 3: 14, 4: 12.5, 5: 11.5, 6: 11 };
+
+  doc.setProperties({ title: 'Respuesta generada por ConSultar' });
+
+  bloques.forEach(bloque => {
+    if (bloque.tipo === 'heading') {
+      y += 10;
+      saltoDePaginaSiNecesario(30);
+      doc.setFont('helvetica', 'bold');
+      dibujarBloqueTexto(bloque.texto, { tamanoFuente: tamanosEncabezado[bloque.nivel] || 12 });
+      y += 4;
+    } else if (bloque.tipo === 'paragraph') {
+      dibujarBloqueTexto(bloque.texto, { tamanoFuente: 11 });
+      y += 6;
+    } else if (bloque.tipo === 'ul') {
+      bloque.items.forEach(item => {
+        saltoDePaginaSiNecesario(16);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 42, 56);
+        doc.text('•', margen + 4, y);
+        dibujarBloqueTexto(item, { tamanoFuente: 11, indent: 18 });
+      });
+      y += 4;
+    } else if (bloque.tipo === 'ol') {
+      bloque.items.forEach(item => {
+        saltoDePaginaSiNecesario(16);
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(11);
+        doc.setTextColor(30, 42, 56);
+        doc.text(String(item.numero) + '.', margen, y);
+        dibujarBloqueTexto(item.texto, { tamanoFuente: 11, indent: 18 });
+      });
+      y += 4;
+    } else if (bloque.tipo === 'blockquote') {
+      saltoDePaginaSiNecesario(20);
+      const yInicial = y;
+      dibujarBloqueTexto(bloque.texto, { tamanoFuente: 11, indent: 16, color: [87, 112, 138] });
+      doc.setDrawColor(46, 109, 164);
+      doc.setLineWidth(2);
+      doc.line(margen + 4, yInicial - 12, margen + 4, y - 8);
+      y += ESPACIO_TRAS_BLOQUE;
+    } else if (bloque.tipo === 'code') {
+      // Cada línea se ajusta al ancho disponible (splitTextToSize) para que
+      // ninguna línea larga de código se salga de la página, y el bloque se
+      // reparte entre páginas si no cabe entero en el espacio restante.
+      doc.setFont('courier', 'normal');
+      doc.setFontSize(9.5);
+      const anchoInteriorCodigo = anchoUtil - 16;
+      const lineasEnvueltas = [];
+      bloque.texto.split('\n').forEach(linea => {
+        const partes = doc.splitTextToSize(linea === '' ? ' ' : linea, anchoInteriorCodigo);
+        partes.forEach(parte => lineasEnvueltas.push(parte));
+      });
+
+      const alturaLineaCodigo = 13;
+      let indiceLinea = 0;
+      while (indiceLinea < lineasEnvueltas.length) {
+        if (y + alturaLineaCodigo + 12 > alturaPagina - margen) {
+          doc.addPage();
+          y = margen;
+        }
+        const espacioDisponible = (alturaPagina - margen) - y - 12;
+        const lineasPorTanda = Math.max(1, Math.floor(espacioDisponible / alturaLineaCodigo));
+        const tanda = lineasEnvueltas.slice(indiceLinea, indiceLinea + lineasPorTanda);
+
+        const alturaBloque = tanda.length * alturaLineaCodigo + 12;
+        doc.setFillColor(242, 246, 250);
+        doc.rect(margen, y - 10, anchoUtil, alturaBloque, 'F');
+        let yCodigo = y + 4;
+        tanda.forEach(linea => {
+          doc.setFont('courier', 'normal');
+          doc.setFontSize(9.5);
+          doc.setTextColor(30, 42, 56);
+          doc.text(linea, margen + 8, yCodigo);
+          yCodigo += alturaLineaCodigo;
+        });
+        y = yCodigo + ESPACIO_TRAS_BLOQUE;
+        indiceLinea += tanda.length;
+      }
+    } else if (bloque.tipo === 'hr') {
+      saltoDePaginaSiNecesario(16);
+      doc.setDrawColor(216, 230, 241);
+      doc.line(margen, y, margen + anchoUtil, y);
+      y += 16;
+    } else if (bloque.tipo === 'table') {
+      const columnas = bloque.cabecera.length || 1;
+      const anchoColumna = anchoUtil / columnas;
+      const anchoInteriorCelda = anchoColumna - 12;
+      const tamanoFuenteTabla = 10;
+      const alturaLineaTabla = 13;
+
+      // Ajusta el texto de una celda (con sus posibles negrita/cursiva/
+      // código en línea) a varias líneas dentro del ancho de la columna,
+      // devolviendo cada línea como una lista de palabras con su estilo.
+      function envolverCeldaEnLineas(texto) {
+        doc.setFontSize(tamanoFuenteTabla);
+        const tokens = tokenizeInline(String(texto));
+        const lineas = [[]];
+        let anchoLineaActual = 0;
+        tokens.forEach(token => {
+          const palabras = token.texto.split(/(\s+)/).filter(p => p !== '');
+          palabras.forEach(palabra => {
+            aplicarEstiloFuente(token.tipo);
+            doc.setFontSize(tamanoFuenteTabla);
+            const anchoPalabra = doc.getTextWidth(palabra);
+            const lineaActual = lineas[lineas.length - 1];
+            if (palabra.trim() !== '' && anchoLineaActual + anchoPalabra > anchoInteriorCelda && lineaActual.length > 0) {
+              lineas.push([]);
+              anchoLineaActual = 0;
+            }
+            lineas[lineas.length - 1].push({ texto: palabra, tipo: token.tipo });
+            anchoLineaActual += anchoPalabra;
+          });
+        });
+        return lineas;
+      }
+
+      function dibujarLineasCelda(lineas, x, yInicio, forzarNegrita) {
+        lineas.forEach((linea, indiceLinea) => {
+          let cursorX = x;
+          const yLinea = yInicio + indiceLinea * alturaLineaTabla;
+          linea.forEach(palabra => {
+            const tipoEfectivo = forzarNegrita && palabra.tipo === 'text' ? 'bold' : palabra.tipo;
+            aplicarEstiloFuente(tipoEfectivo);
+            doc.setFontSize(tamanoFuenteTabla);
+            if (palabra.tipo === 'link') doc.setTextColor(46, 109, 164);
+            else doc.setTextColor(30, 42, 56);
+            if (palabra.texto.trim() !== '') doc.text(palabra.texto, cursorX, yLinea);
+            cursorX += doc.getTextWidth(palabra.texto);
+          });
+        });
+        doc.setTextColor(30, 42, 56);
+      }
+
+      function dibujarFila(fila, esCabecera) {
+        const lineasPorCelda = fila.map(celda => envolverCeldaEnLineas(celda));
+        const maxLineas = Math.max(1, ...lineasPorCelda.map(l => l.length));
+        const alto = maxLineas * alturaLineaTabla + 10;
+        saltoDePaginaSiNecesario(alto);
+        if (esCabecera) {
+          doc.setFillColor(234, 243, 251);
+          doc.rect(margen, y - 10, anchoUtil, alto, 'F');
+        }
+        doc.setDrawColor(216, 230, 241);
+        doc.rect(margen, y - 10, anchoUtil, alto);
+        lineasPorCelda.forEach((lineas, indiceColumna) => {
+          const xCelda = margen + indiceColumna * anchoColumna;
+          doc.rect(xCelda, y - 10, anchoColumna, alto);
+          dibujarLineasCelda(lineas, xCelda + 6, y + 2, esCabecera);
+        });
+        y += alto;
+      }
+
+      dibujarFila(bloque.cabecera, true);
+      bloque.filas.forEach(fila => dibujarFila(fila, false));
+      y += ESPACIO_TRAS_BLOQUE;
+    }
+  });
+
+  // Numeración de páginas en la esquina inferior derecha, añadida al final
+  // (una vez se conoce el número total de páginas) para no interferir con
+  // el resto del contenido ni con los saltos de página ya calculados.
+  const totalPaginas = doc.internal.getNumberOfPages();
+  for (let numeroPagina = 1; numeroPagina <= totalPaginas; numeroPagina++) {
+    doc.setPage(numeroPagina);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(120, 138, 156);
+    const textoPagina = `Página ${numeroPagina} de ${totalPaginas}`;
+    const anchoTextoPagina = doc.getTextWidth(textoPagina);
+    doc.text(textoPagina, margen + anchoUtil - anchoTextoPagina, alturaPagina - margen + 24);
+  }
+
+  doc.save(nombreArchivo);
+}
+
+
+/* ------------------------------------------------------------------ *
+ * GENERACIÓN DE POWERPOINT (.pptx)
+ *
+ * Pipeline: user_prompt + adjuntos -> extracción/normalización de la
+ * fuente -> la propia IA analiza y planifica la presentación (título,
+ * secciones, tipo de diapositiva más adecuado para cada contenido) ->
+ * la plantilla de diseño renderiza cada diapositiva -> validación del
+ * paquete .pptx generado -> descarga.
+ *
+ * El contenido de la presentación procede EXCLUSIVAMENTE de la
+ * "Consulta" y de los documentos adjuntos (nunca de la respuesta de la
+ * IA ya mostrada ni del "Rol del usuario"), tal como se pide.
+ * ------------------------------------------------------------------ */
+
+// [1/9] Constantes de diseño — paleta y tipografía reutilizan las mismas
+// que el resto de la aplicación (azules claros, fondo predominante claro).
+const DISENO_PPTX = {
+  colorFondo: 'F4F9FC',
+  colorSuperficie: 'FFFFFF',
+  colorPrimario: '2E6DA4',
+  colorPrimarioOscuro: '17324A',
+  colorAcentoClaro: 'DCEBF7',
+  colorTextoPrincipal: '1E2A38',
+  colorTextoSecundario: '57708A',
+  colorBorde: 'D8E6F1',
+  paletaGrafico: ['2E6DA4', '5B9BD5', '9DC3E6', '17324A', 'BDD7EE'],
+  fuente: 'Calibri',
+  anchoSlide: 13.33,
+  altoSlide: 7.5,
+  margen: 0.6,
+};
+
+// [2/9] Plantilla de sistema para que la propia IA planifique la
+// presentación. Se le pide que devuelva ÚNICAMENTE un JSON con un
+// esquema fijo, que es lo que después renderiza el motor de plantillas.
+const TIPOS_DIAPOSITIVA_SOPORTADOS = [
+  'portada', 'seccion', 'tituloCuerpo', 'dosColumnas', 'tresColumnas',
+  'comparacion', 'tabla', 'grafico', 'proceso', 'lineaDeTiempo',
+  'metricas', 'cita', 'resumen', 'referencias',
+];
+
+const SYSTEM_PROMPT_ESQUEMA_PPTX = `Eres un consultor experto en diseño de presentaciones profesionales. A partir del texto que te proporcione el usuario (su consulta y, en su caso, el contenido de documentos adjuntos), debes planificar una presentación de PowerPoint completa.
+
+Reglas obligatorias:
+- Analiza, organiza, resume y estructura la información en una presentación coherente. No te limites a copiar el texto de origen.
+- No inventes datos, cifras, fechas ni afirmaciones que no estén respaldadas por el texto proporcionado.
+- No omitas información importante del texto de origen solo por acortar las diapositivas; si un bloque de contenido es muy denso, repártelo en varias diapositivas relacionadas.
+- Determina tú mismo el número de diapositivas según la cantidad y complejidad del contenido (no uses un número fijo).
+- Usa varios tipos de diapositiva distintos según la estructura semántica del contenido; no uses el mismo tipo para todo.
+- La primera diapositiva debe ser siempre de tipo "portada".
+- Todo el texto generado (títulos, cuerpos, tablas, gráficos, notas) debe estar en español de España.
+- No traduzcas nombres propios, marcas, identificadores técnicos, URLs ni citas textuales.
+- Los tipos de diapositiva disponibles son EXACTAMENTE estos (usa el nombre tal cual, en el campo "tipo"): ${TIPOS_DIAPOSITIVA_SOPORTADOS.join(', ')}.
+- No dispones de imágenes reales, así que no propongas diapositivas basadas en imágenes.
+- Usa "grafico" solo cuando el texto de origen contenga datos numéricos reales que merezca la pena visualizar; nunca inventes cifras para rellenar un gráfico.
+- Usa "tabla" cuando el origen contenga información tabular o comparativas estructuradas.
+
+Responde ÚNICAMENTE con un objeto JSON válido (sin bloques de código, sin explicaciones antes o después), con esta forma exacta:
+
+{
+  "titulo": "Título de la presentación",
+  "subtitulo": "Subtítulo breve (opcional, usa cadena vacía si no aplica)",
+  "palabrasClave": ["palabra1", "palabra2"],
+  "diapositivas": [
+    {
+      "tipo": "uno de los tipos permitidos",
+      "titulo": "Título de la diapositiva (opcional en portada/cita)",
+      "subtitulo": "Subtítulo opcional",
+      "puntos": ["punto 1", "punto 2"],
+      "columnas": [{"titulo": "...", "puntos": ["...", "..."]}],
+      "tabla": {"encabezados": ["..."], "filas": [["...", "..."]]},
+      "grafico": {"tipoGrafico": "barras|lineas|circular", "categorias": ["..."], "series": [{"nombre": "...", "valores": [0]}]},
+      "pasos": ["paso 1", "paso 2"],
+      "hitos": [{"etiqueta": "...", "descripcion": "..."}],
+      "metricas": [{"valor": "...", "etiqueta": "..."}],
+      "cita": "texto de la cita",
+      "citaAutor": "autor (opcional)",
+      "referencias": ["..."],
+      "notas": "notas del orador (opcional, solo si aporta algo que no quepa en la diapositiva)"
+    }
+  ]
+}
+
+Incluye en cada diapositiva ÚNICAMENTE los campos que correspondan a su "tipo" (por ejemplo, una diapositiva de tipo "tabla" debe llevar el campo "tabla"; una de tipo "cita" debe llevar "cita"). Omite el resto de campos en esa diapositiva.`;
+
+// [3/9] Extracción y validación de la fuente de contenido
+function extraerFuentePptx() {
+  const consulta = el.consultaInput.value.trim();
+  const bloqueAdjuntos = construirBloqueDocumentosAdjuntos();
+  return { consulta, bloqueAdjuntos, fuenteCompleta: (consulta + bloqueAdjuntos).trim() };
+}
+
+function validarFuentePptx(fuente) {
+  if (estado.adjuntos.some(item => item.estado === 'leyendo')) {
+    throw new Error('Espera a que terminen de procesarse los documentos adjuntos antes de generar la presentación.');
+  }
+  if (!fuente.fuenteCompleta) {
+    throw new Error('No se ha podido generar la presentación porque no se ha encontrado contenido suficiente para crear las diapositivas. Escribe una consulta o adjunta algún documento.');
+  }
+}
+
+// [4/9] Planificación de la presentación mediante la IA
+const MAX_TOKENS_ESQUEMA_PPTX = 8000;
+
+async function generarEsquemaPresentacion({ apiKey, modeloIdApi, fuenteCompleta }) {
+  const resultado = await llamarAClaude({
+    apiKey,
+    modeloIdApi,
+    maxTokens: MAX_TOKENS_ESQUEMA_PPTX,
+    systemPrompt: SYSTEM_PROMPT_ESQUEMA_PPTX,
+    userPrompt: fuenteCompleta,
+  });
+  if (resultado.truncada) {
+    throw new Error('La planificación de la presentación se ha cortado por el límite de tokens. Prueba con un modelo de mayor capacidad o con una consulta/adjuntos más breves.');
+  }
+  return resultado.texto;
+}
+
+function parsearEsquemaPresentacion(textoRespuesta) {
+  let textoJson = textoRespuesta.trim();
+  // Por si el modelo envuelve el JSON en un bloque de código pese a la instrucción.
+  const coincidenciaBloque = textoJson.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  if (coincidenciaBloque) textoJson = coincidenciaBloque[1].trim();
+
+  let esquema;
+  try {
+    esquema = JSON.parse(textoJson);
+  } catch (error) {
+    throw new Error('No se ha podido interpretar la planificación de la presentación generada por la IA (formato inesperado). Inténtalo de nuevo.');
+  }
+
+  if (!esquema || typeof esquema !== 'object' || !Array.isArray(esquema.diapositivas) || esquema.diapositivas.length === 0) {
+    throw new Error('La planificación de la presentación generada no contiene diapositivas válidas.');
+  }
+  esquema.diapositivas = esquema.diapositivas.filter(d => d && typeof d === 'object' && typeof d.tipo === 'string');
+  if (esquema.diapositivas.length === 0) {
+    throw new Error('La planificación de la presentación generada no contiene diapositivas válidas.');
+  }
+  return esquema;
+}
+
+// [5/9] Elementos comunes de cada diapositiva (encabezado y pie de página)
+function anadirEncabezadoDiapositiva(slide, titulo, subtitulo) {
+  slide.addText(titulo || '', {
+    x: DISENO_PPTX.margen, y: 0.35, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2, h: 0.8,
+    fontFace: DISENO_PPTX.fuente, fontSize: 28, bold: true, color: DISENO_PPTX.colorPrimarioOscuro,
+  });
+  slide.addShape('rect', {
+    x: DISENO_PPTX.margen, y: 1.12, w: 0.6, h: 0.05, fill: { color: DISENO_PPTX.colorPrimario }, line: { type: 'none' },
+  });
+  if (subtitulo) {
+    slide.addText(subtitulo, {
+      x: DISENO_PPTX.margen, y: 1.2, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2, h: 0.5,
+      fontFace: DISENO_PPTX.fuente, fontSize: 16, color: DISENO_PPTX.colorTextoSecundario,
+    });
+  }
+}
+
+function anadirPieDePaginaPptx(slide, numero, total, tituloPresentacion, colorTexto) {
+  slide.addText(tituloPresentacion || 'ConSultar', {
+    x: DISENO_PPTX.margen, y: DISENO_PPTX.altoSlide - 0.42, w: 8, h: 0.3,
+    fontFace: DISENO_PPTX.fuente, fontSize: 9, color: colorTexto,
+  });
+  slide.addText(`${numero} / ${total}`, {
+    x: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen - 1.2, y: DISENO_PPTX.altoSlide - 0.42, w: 1.2, h: 0.3,
+    align: 'right', fontFace: DISENO_PPTX.fuente, fontSize: 9, color: colorTexto,
+  });
+}
+
+// [6/9] Un renderizador por tipo de diapositiva (separa "qué contiene" —
+// el esquema JSON de la IA— de "cómo se dibuja" — estas funciones).
+function renderizarPortada(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorPrimarioOscuro };
+  slide.addShape('rect', { x: 0, y: 0, w: DISENO_PPTX.anchoSlide, h: 0.18, fill: { color: DISENO_PPTX.colorPrimario }, line: { type: 'none' } });
+  slide.addText(d.titulo || '', {
+    x: 0.9, y: 2.6, w: DISENO_PPTX.anchoSlide - 1.8, h: 1.6,
+    fontFace: DISENO_PPTX.fuente, fontSize: 40, bold: true, color: 'FFFFFF',
+  });
+  if (d.subtitulo) {
+    slide.addText(d.subtitulo, {
+      x: 0.9, y: 4.2, w: DISENO_PPTX.anchoSlide - 1.8, h: 0.9,
+      fontFace: DISENO_PPTX.fuente, fontSize: 20, color: DISENO_PPTX.colorAcentoClaro,
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorAcentoClaro };
+}
+
+function renderizarSeccion(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorPrimario };
+  slide.addText(d.titulo || '', {
+    x: 0.9, y: 3.0, w: DISENO_PPTX.anchoSlide - 1.8, h: 1.4,
+    fontFace: DISENO_PPTX.fuente, fontSize: 32, bold: true, color: 'FFFFFF',
+  });
+  if (d.subtitulo) {
+    slide.addText(d.subtitulo, {
+      x: 0.9, y: 4.2, w: DISENO_PPTX.anchoSlide - 1.8, h: 0.7,
+      fontFace: DISENO_PPTX.fuente, fontSize: 16, color: DISENO_PPTX.colorAcentoClaro,
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorAcentoClaro };
+}
+
+function renderizarTituloCuerpo(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const puntos = (d.puntos || []).map(p => ({ text: p, options: { bullet: { indent: 18 }, breakLine: true, paraSpaceAfter: 12 } }));
+  if (puntos.length) {
+    slide.addText(puntos, {
+      x: DISENO_PPTX.margen, y: 1.9, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2, h: 4.6,
+      fontFace: DISENO_PPTX.fuente, fontSize: 18, color: DISENO_PPTX.colorTextoPrincipal, valign: 'top',
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarColumnas(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const columnas = d.columnas || [];
+  const n = columnas.length || 1;
+  const anchoTotal = DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2;
+  const espacio = 0.4;
+  const anchoCol = (anchoTotal - espacio * (n - 1)) / n;
+  columnas.forEach((col, i) => {
+    const x = DISENO_PPTX.margen + i * (anchoCol + espacio);
+    slide.addShape('roundRect', {
+      x, y: 1.9, w: anchoCol, h: 4.6, rectRadius: 0.06,
+      fill: { color: DISENO_PPTX.colorFondo }, line: { color: DISENO_PPTX.colorBorde, width: 1 },
+    });
+    slide.addText(col.titulo || '', {
+      x: x + 0.25, y: 2.1, w: anchoCol - 0.5, h: 0.5,
+      fontFace: DISENO_PPTX.fuente, fontSize: 16, bold: true, color: DISENO_PPTX.colorPrimario,
+    });
+    const puntos = (col.puntos || []).map(p => ({ text: p, options: { bullet: { indent: 14 }, breakLine: true, paraSpaceAfter: 8 } }));
+    slide.addText(puntos, {
+      x: x + 0.25, y: 2.65, w: anchoCol - 0.5, h: 3.7,
+      fontFace: DISENO_PPTX.fuente, fontSize: 13, color: DISENO_PPTX.colorTextoPrincipal, valign: 'top',
+    });
+  });
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarTabla(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const tabla = d.tabla || { encabezados: [], filas: [] };
+  const filaEncabezado = (tabla.encabezados || []).map(t => ({
+    text: String(t), options: { bold: true, color: 'FFFFFF', fill: { color: DISENO_PPTX.colorPrimario }, align: 'left' },
+  }));
+  const filasDatos = (tabla.filas || []).map((fila, i) => fila.map(celda => ({
+    text: String(celda),
+    options: { fill: { color: i % 2 === 0 ? DISENO_PPTX.colorSuperficie : DISENO_PPTX.colorFondo }, color: DISENO_PPTX.colorTextoPrincipal },
+  })));
+  const filas = filaEncabezado.length ? [filaEncabezado, ...filasDatos] : filasDatos;
+  if (filas.length) {
+    slide.addTable(filas, {
+      x: DISENO_PPTX.margen, y: 1.9, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2,
+      fontFace: DISENO_PPTX.fuente, fontSize: 13, border: { type: 'solid', color: DISENO_PPTX.colorBorde, pt: 0.75 },
+      autoPage: true, autoPageRepeatHeader: true,
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarGrafico(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const g = d.grafico || {};
+  const tiposChart = { barras: 'bar', lineas: 'line', circular: 'pie' };
+  const tipo = tiposChart[g.tipoGrafico] || 'bar';
+  const datos = (g.series || []).map(s => ({ name: s.nombre || '', labels: g.categorias || [], values: (s.valores || []).map(Number) }));
+  if (datos.length) {
+    slide.addChart(tipo, datos, {
+      x: DISENO_PPTX.margen, y: 1.9, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2, h: 4.6,
+      chartColors: DISENO_PPTX.paletaGrafico, showLegend: (datos.length > 1 || tipo === 'pie'), legendPos: 'b',
+      showTitle: false, catAxisLabelColor: DISENO_PPTX.colorTextoSecundario, valAxisLabelColor: DISENO_PPTX.colorTextoSecundario,
+      dataLabelColor: tipo === 'pie' ? 'FFFFFF' : DISENO_PPTX.colorTextoPrincipal, showValue: tipo === 'pie',
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarProceso(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const pasos = d.pasos || [];
+  const n = pasos.length || 1;
+  const anchoTotal = DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2;
+  const espacioFlecha = 0.35;
+  const anchoCaja = (anchoTotal - espacioFlecha * (n - 1)) / n;
+  pasos.forEach((paso, i) => {
+    const x = DISENO_PPTX.margen + i * (anchoCaja + espacioFlecha);
+    slide.addShape('roundRect', {
+      x, y: 3.0, w: anchoCaja, h: 1.6, rectRadius: 0.08,
+      fill: { color: DISENO_PPTX.colorAcentoClaro }, line: { color: DISENO_PPTX.colorPrimario, width: 1 },
+    });
+    slide.addText(String(i + 1), {
+      x: x + 0.15, y: 3.1, w: 0.5, h: 0.4, fontFace: DISENO_PPTX.fuente, fontSize: 16, bold: true, color: DISENO_PPTX.colorPrimario,
+    });
+    slide.addText(paso, {
+      x: x + 0.15, y: 3.5, w: anchoCaja - 0.3, h: 1.0, fontFace: DISENO_PPTX.fuente, fontSize: 12,
+      color: DISENO_PPTX.colorTextoPrincipal, valign: 'top',
+    });
+    if (i < n - 1) {
+      slide.addShape('rightArrow', {
+        x: x + anchoCaja, y: 3.55, w: espacioFlecha, h: 0.4, fill: { color: DISENO_PPTX.colorPrimario }, line: { type: 'none' },
+      });
+    }
+  });
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarLineaDeTiempo(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const hitos = d.hitos || [];
+  const n = hitos.length || 1;
+  const margenIzq = DISENO_PPTX.margen;
+  const anchoTotal = DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2;
+  const anchoEtiqueta = 2.0;
+  const y = 3.4;
+  slide.addShape('line', { x: margenIzq, y, w: anchoTotal, h: 0, line: { color: DISENO_PPTX.colorPrimario, width: 2 } });
+  hitos.forEach((hito, i) => {
+    const xPunto = margenIzq + (n === 1 ? anchoTotal / 2 : (anchoTotal / (n - 1)) * i);
+    // La caja de la etiqueta se centra en el punto, pero sin salirse nunca del área de la diapositiva.
+    let xCaja = xPunto - anchoEtiqueta / 2;
+    xCaja = Math.max(margenIzq, Math.min(xCaja, DISENO_PPTX.anchoSlide - DISENO_PPTX.margen - anchoEtiqueta));
+    slide.addShape('ellipse', { x: xPunto - 0.1, y: y - 0.1, w: 0.2, h: 0.2, fill: { color: DISENO_PPTX.colorPrimario }, line: { type: 'none' } });
+    slide.addText(hito.etiqueta || '', {
+      x: xCaja, y: y - 0.75, w: anchoEtiqueta, h: 0.5, align: 'center',
+      fontFace: DISENO_PPTX.fuente, fontSize: 13, bold: true, color: DISENO_PPTX.colorPrimarioOscuro,
+    });
+    slide.addText(hito.descripcion || '', {
+      x: xCaja, y: y + 0.2, w: anchoEtiqueta, h: 1.4, align: 'center',
+      fontFace: DISENO_PPTX.fuente, fontSize: 11, color: DISENO_PPTX.colorTextoSecundario, valign: 'top',
+    });
+  });
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarMetricas(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo, d.subtitulo);
+  const metricas = d.metricas || [];
+  const n = metricas.length || 1;
+  const anchoTotal = DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2;
+  const espacio = 0.3;
+  const anchoCaja = (anchoTotal - espacio * (n - 1)) / n;
+  metricas.forEach((m, i) => {
+    const x = DISENO_PPTX.margen + i * (anchoCaja + espacio);
+    slide.addShape('roundRect', {
+      x, y: 2.3, w: anchoCaja, h: 2.4, rectRadius: 0.08,
+      fill: { color: DISENO_PPTX.colorFondo }, line: { color: DISENO_PPTX.colorBorde, width: 1 },
+    });
+    slide.addText(String(m.valor != null ? m.valor : ''), {
+      x, y: 2.55, w: anchoCaja, h: 1.0, align: 'center',
+      fontFace: DISENO_PPTX.fuente, fontSize: 32, bold: true, color: DISENO_PPTX.colorPrimario,
+    });
+    slide.addText(m.etiqueta || '', {
+      x: x + 0.15, y: 3.6, w: anchoCaja - 0.3, h: 0.9, align: 'center',
+      fontFace: DISENO_PPTX.fuente, fontSize: 13, color: DISENO_PPTX.colorTextoSecundario, valign: 'top',
+    });
+  });
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarCita(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorAcentoClaro };
+  slide.addShape('rect', { x: 1.2, y: 2.3, w: 0.08, h: 2.4, fill: { color: DISENO_PPTX.colorPrimario }, line: { type: 'none' } });
+  slide.addText(`"${d.cita || ''}"`, {
+    x: 1.6, y: 2.2, w: DISENO_PPTX.anchoSlide - 2.8, h: 2.0,
+    fontFace: DISENO_PPTX.fuente, fontSize: 24, italic: true, color: DISENO_PPTX.colorPrimarioOscuro, valign: 'middle',
+  });
+  if (d.citaAutor) {
+    slide.addText(`— ${d.citaAutor}`, {
+      x: 1.6, y: 4.3, w: DISENO_PPTX.anchoSlide - 2.8, h: 0.5,
+      fontFace: DISENO_PPTX.fuente, fontSize: 15, color: DISENO_PPTX.colorTextoSecundario,
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+function renderizarReferencias(pptx, d) {
+  const slide = pptx.addSlide();
+  slide.background = { color: DISENO_PPTX.colorSuperficie };
+  anadirEncabezadoDiapositiva(slide, d.titulo || 'Referencias', d.subtitulo);
+  const puntos = (d.referencias || []).map(r => ({ text: r, options: { bullet: { indent: 14 }, breakLine: true, paraSpaceAfter: 6 } }));
+  if (puntos.length) {
+    slide.addText(puntos, {
+      x: DISENO_PPTX.margen, y: 1.9, w: DISENO_PPTX.anchoSlide - DISENO_PPTX.margen * 2, h: 4.6,
+      fontFace: DISENO_PPTX.fuente, fontSize: 13, color: DISENO_PPTX.colorTextoSecundario, valign: 'top',
+    });
+  }
+  return { slide, colorPie: DISENO_PPTX.colorTextoSecundario };
+}
+
+const RENDERIZADORES_DIAPOSITIVA_PPTX = {
+  portada: renderizarPortada,
+  seccion: renderizarSeccion,
+  tituloCuerpo: renderizarTituloCuerpo,
+  dosColumnas: renderizarColumnas,
+  tresColumnas: renderizarColumnas,
+  comparacion: renderizarColumnas,
+  tabla: renderizarTabla,
+  grafico: renderizarGrafico,
+  proceso: renderizarProceso,
+  lineaDeTiempo: renderizarLineaDeTiempo,
+  metricas: renderizarMetricas,
+  cita: renderizarCita,
+  resumen: renderizarTituloCuerpo,
+  referencias: renderizarReferencias,
+};
+
+// [7/9] Construcción del documento .pptx completo a partir del esquema
+function construirPresentacionPptx(esquema) {
+  const pptx = new PptxGenJS();
+  pptx.layout = 'LAYOUT_WIDE';
+  pptx.author = 'ConSultar';
+  pptx.company = 'ConSultar';
+  pptx.revision = '1';
+  pptx.title = esquema.titulo || 'Presentación generada por ConSultar';
+  pptx.subject = esquema.subtitulo || esquema.titulo || 'Presentación generada automáticamente';
+  // Nota: la API pública de PptxGenJS no expone propiedades independientes
+  // para "keywords" ni "language" en los metadatos del documento (solo
+  // author/company/revision/subject/title); por eso las palabras clave no
+  // pueden fijarse como metadato nativo del archivo.
+
+  esquema.diapositivas.forEach(d => {
+    const render = RENDERIZADORES_DIAPOSITIVA_PPTX[d.tipo] || renderizarTituloCuerpo;
+    const { slide } = render(pptx, d);
+    if (d.notas) slide.addNotes(d.notas);
+  });
+
+  const total = pptx.slides.length;
+  pptx.slides.forEach((slide, indice) => {
+    const esPortadaOSeccion = indice === 0 || slide.background && slide.background.color !== DISENO_PPTX.colorSuperficie;
+    anadirPieDePaginaPptx(slide, indice + 1, total, esquema.titulo, esPortadaOSeccion ? DISENO_PPTX.colorAcentoClaro : DISENO_PPTX.colorTextoSecundario);
+  });
+
+  return pptx;
+}
+
+// [8/9] Validación del paquete generado: comprueba que es un .pptx real
+// (firma ZIP válida) y de un tamaño mínimo razonable, en vez de asumir
+// que la operación fue correcta solo porque no lanzó ninguna excepción.
+async function validarPaquetePptx(pptx, numDiapositivasEsperadas) {
+  const buffer = await pptx.write({ outputType: 'arraybuffer' });
+  const bytes = new Uint8Array(buffer);
+  const firmaValida = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B; // "PK" (cabecera ZIP/OOXML)
+  if (!firmaValida || bytes.length < 2000) {
+    throw new Error('El archivo de PowerPoint generado no parece válido. Inténtalo de nuevo.');
+  }
+  if (!numDiapositivasEsperadas || numDiapositivasEsperadas < 1) {
+    throw new Error('La presentación generada no contiene ninguna diapositiva.');
+  }
+}
+
+// [9/9] Orquestación: validar -> planificar (IA) -> renderizar -> validar -> descargar
+async function manejarClicGenerarPptx() {
+  if (estado.generandoPptx) return;
+
+  limpiarEstado();
+
+  if (typeof PptxGenJS === 'undefined') {
+    showError('No se ha podido cargar la librería de generación de PowerPoint. Comprueba tu conexión a internet y recarga la página.');
+    return;
+  }
+  if (!el.apiKeyInput.value.trim()) {
+    marcarCampoInvalido(el.apiKeyInput, 'Introduce tu clave de API de Anthropic.');
+    showError('Introduce tu clave de API antes de generar la presentación.');
+    return;
+  }
+
+  let fuente;
+  try {
+    fuente = extraerFuentePptx();
+    validarFuentePptx(fuente);
+  } catch (error) {
+    showError(error.message);
+    return;
+  }
+
+  const apiKey = el.apiKeyInput.value.trim();
+  const modelo = getModeloSeleccionado();
+
+  estado.generandoPptx = true;
+  el.generarPptxBtn.disabled = true;
+  el.consultarBtn.disabled = true;
+  const textoOriginalBoton = el.generarPptxBtn.textContent;
+  el.generarPptxBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Analizando contenido…</span>';
+  showStatus('Analizando la consulta y los documentos adjuntos para planificar la presentación…', 'info');
+
+  try {
+    const textoEsquema = await generarEsquemaPresentacion({
+      apiKey, modeloIdApi: modelo.idApi, fuenteCompleta: fuente.fuenteCompleta,
+    });
+
+    el.generarPptxBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Generando diapositivas…</span>';
+    showStatus('Generando las diapositivas…', 'info');
+
+    const esquema = parsearEsquemaPresentacion(textoEsquema);
+    const pptx = construirPresentacionPptx(esquema);
+
+    await validarPaquetePptx(pptx, esquema.diapositivas.length);
+
+    const nombreArchivo = sanitizeFilenameBase(esquema.titulo || 'presentacion') + '.pptx';
+    await pptx.writeFile({ fileName: nombreArchivo });
+
+    showStatus(`Presentación generada correctamente: «${nombreArchivo}» (${esquema.diapositivas.length} diapositivas). Descarga iniciada.`, 'success');
+  } catch (error) {
+    showError(error && error.message ? error.message : 'No se ha podido generar la presentación por un error inesperado.');
+  } finally {
+    estado.generandoPptx = false;
+    el.generarPptxBtn.disabled = false;
+    el.consultarBtn.disabled = false;
+    el.generarPptxBtn.textContent = textoOriginalBoton;
+  }
+}
+
+
+/* ------------------------------------------------------------------ *
+ * 9. ARRANQUE
+ * ------------------------------------------------------------------ */
+document.addEventListener('DOMContentLoaded', initializeApp);
+</script>
+</body>
+</html>
