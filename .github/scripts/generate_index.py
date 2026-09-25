@@ -1,9 +1,24 @@
 #!/usr/bin/env python3
-"""Generado por la skill github-artifact-uploader. Regenera el índice de
-artifacts a partir del checkout local y lo publica en el repo destino."""
-import argparse, base64, html, json, os, sys, urllib.request, urllib.error
+"""Generado por la skill github-artifact-uploader. Regenera el portal de
+artifacts a partir del checkout local (usando portal_render.py, en esta
+misma carpeta) y lo publica en el repo destino."""
+import base64, json, os, sys, urllib.request, urllib.error
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from portal_render import extract_app_metadata, render_portal_html
 
 API_ROOT = "https://api.github.com"
+
+FOLDER = "artifacts"
+DEST_OWNER = "RafaUMH2110"
+DEST_REPO = "IAC"
+DEST_PATH = "artifacts/index.html"
+DEST_BRANCH = "main"
+TITLE = "Herramientas de IA para la academia"
+SUBTITLE = "Aplicaciones de inteligencia artificial para dise\u00f1o de moda, generaci\u00f3n de contenido y automatizaci\u00f3n de procesos acad\u00e9micos."
+EYEBROW = "RafaUMH2110 \u00b7 UMH"
+CONTACT_NAME = "Rafael Puerto"
+CONTACT_EMAIL = "r.puerto@umh.es"
 
 
 def api_request(url, token, method="GET", payload=None):
@@ -11,7 +26,7 @@ def api_request(url, token, method="GET", payload=None):
         "Authorization": f"Bearer {token}",
         "Accept": "application/vnd.github+json",
         "X-GitHub-Api-Version": "2022-11-28",
-        "User-Agent": "artifacts-index-sync",
+        "User-Agent": "artifacts-portal-sync",
     }
     data = None
     if payload is not None:
@@ -31,57 +46,33 @@ def api_request(url, token, method="GET", payload=None):
         return e.code, parsed
 
 
-def list_local_html(folder):
-    items = []
+def list_local_apps(folder):
+    """Recorre folder buscando .html/.htm con metadatos data-app-title."""
+    apps = []
     for root, _, files in os.walk(folder):
         for fn in files:
-            if fn.lower().endswith((".html", ".htm")):
-                full = os.path.join(root, fn)
-                rel = os.path.relpath(full, folder).replace(os.sep, "/")
-                items.append(rel)
-    return sorted(items)
+            if not fn.lower().endswith((".html", ".htm")):
+                continue
+            full = os.path.join(root, fn)
+            rel = os.path.relpath(full, folder).replace(os.sep, "/")
+            with open(full, encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            meta = extract_app_metadata(content)
+            if meta is None:
+                continue
+            apps.append((rel, meta))
+    return apps
 
 
-def path_to_url_and_label(owner, repo, rel):
-    owner_lc = owner.lower()
-    base = f"https://{owner_lc}.github.io/{repo}"
+def path_to_url(pages_owner, pages_repo, rel):
+    owner_lc = pages_owner.lower()
+    base = f"https://{owner_lc}.github.io/{pages_repo}"
     if rel == "index.html":
-        return "index", f"{base}/"
+        return f"{base}/"
     if rel.endswith("/index.html"):
         slug = rel[: -len("/index.html")]
-        return slug, f"{base}/{slug}/"
-    label = rel.rsplit(".", 1)[0]
-    return label, f"{base}/{rel}"
-
-
-def render_html(title, links):
-    items_html = "\n".join(
-        f'      <li><a href="{html.escape(url)}">{html.escape(label)}</a></li>'
-        for label, url in links
-    )
-    return f"""<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>{html.escape(title)}</title>
-  <style>
-    body {{ font-family: system-ui, sans-serif; max-width: 700px; margin: 40px auto; padding: 0 20px; color: #1a1a1a; }}
-    h1 {{ font-size: 1.6rem; }}
-    ul {{ line-height: 2; padding-left: 1.2rem; }}
-    a {{ color: #0969da; text-decoration: none; }}
-    a:hover {{ text-decoration: underline; }}
-  </style>
-</head>
-<body>
-  <h1>{html.escape(title)}</h1>
-  <ul>
-{items_html}
-  </ul>
-  <p style="margin-top:2rem;color:#666;font-size:0.85rem;">Generado automáticamente al hacer push a artifacts/.</p>
-</body>
-</html>
-"""
+        return f"{base}/{slug}/"
+    return f"{base}/{rel}"
 
 
 def get_existing_sha(owner, repo, path, branch, token):
@@ -101,20 +92,11 @@ def put_file(owner, repo, path, branch, content_bytes, message, token):
         payload["sha"] = sha
     status, body = api_request(f"{API_ROOT}/repos/{owner}/{repo}/contents/{path}", token, method="PUT", payload=payload)
     if status not in (200, 201):
-        raise RuntimeError(f"Fallo al subir el índice (HTTP {status}): {body.get('message', body)}")
+        raise RuntimeError(f"Fallo al subir el portal (HTTP {status}): {body.get('message', body)}")
     return body
 
 
 def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--folder", default="artifacts")
-    parser.add_argument("--dest-owner", default="RafaUMH2110")
-    parser.add_argument("--dest-repo", default="IAC")
-    parser.add_argument("--dest-path", default="artifacts/index.html")
-    parser.add_argument("--dest-branch", default="main")
-    parser.add_argument("--title", default='Índice de artifacts de Rafa')
-    args = parser.parse_args()
-
     token = os.environ.get("DEST_TOKEN")
     if not token:
         print("ERROR: falta la variable de entorno DEST_TOKEN", file=sys.stderr)
@@ -126,17 +108,24 @@ def main():
         sys.exit(1)
     pages_owner, pages_repo = pages_owner_repo.split("/", 1)
 
-    rels = list_local_html(args.folder)
-    if not rels:
-        print("No se encontraron artifacts HTML; no se actualiza el índice.")
+    local_apps = list_local_apps(FOLDER)
+    if not local_apps:
+        print("No se encontraron apps con metadatos de catálogo; no se actualiza el portal.")
         return
 
-    links = [path_to_url_and_label(pages_owner, pages_repo, r) for r in rels]
-    content = render_html(args.title, links).encode("utf-8")
+    catalog = []
+    for rel, meta in local_apps:
+        meta["url"] = path_to_url(pages_owner, pages_repo, rel)
+        catalog.append(meta)
 
-    put_file(args.dest_owner, args.dest_repo, args.dest_path, args.dest_branch, content,
-             "Update artifacts index (auto-sync)", token)
-    print(f"Índice actualizado con {len(links)} enlaces -> {args.dest_owner}/{args.dest_repo}:{args.dest_path}")
+    html_out = render_portal_html(
+        catalog, TITLE, SUBTITLE, EYEBROW,
+        contact_name=CONTACT_NAME, contact_email=CONTACT_EMAIL,
+    ).encode("utf-8")
+
+    put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
+             "Update artifacts portal (auto-sync)", token)
+    print(f"Portal actualizado con {len(catalog)} apps -> {DEST_OWNER}/{DEST_REPO}:{DEST_PATH}")
 
 
 if __name__ == "__main__":
