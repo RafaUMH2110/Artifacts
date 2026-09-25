@@ -1,1 +1,1448 @@
-<h1>GenPatMod - demo</h1>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<!--
+  ============================================================================
+  GenPatMod — Generador de Patrones de Corte de Moda con IA
+  ============================================================================
+  INSTRUCCIONES PARA EL PROFESOR (léelas antes de publicar la app)
+
+  1) CÓMO CONSEGUIR UNA API KEY
+     - Anthropic (Claude): https://console.anthropic.com/settings/keys
+     - OpenAI (GPT):       https://platform.openai.com/api-keys
+     - Google (Gemini):    https://aistudio.google.com/app/apikey
+     La clave se guarda SOLO en el navegador del alumno (localStorage) y se
+     envía SOLO al endpoint oficial del proveedor elegido. Nunca viaja a
+     ningún servidor propio ni de terceros.
+
+  2) CÓMO PUBLICAR ESTA APP GRATIS EN GITHUB PAGES
+     a) Crea un repositorio nuevo en GitHub (puede ser público o privado).
+     b) Sube este fichero con el nombre exacto "index.html" a la raíz del repo.
+     c) Ve a Settings → Pages → Build and deployment → Source: "Deploy from
+        a branch" → Branch: "main" / carpeta "/ (root)" → Save.
+     d) En un par de minutos la app estará disponible en:
+        https://<tu-usuario>.github.io/<tu-repositorio>/
+
+  3) CONSTANTES QUE PUEDES EDITAR PARA ADAPTAR LA APP A TU ASIGNATURA
+     - SYSTEM_PROMPT_PATRON      → el "rol" del modelo al dibujar cada pieza.
+     - SYSTEM_PROMPT_PLANIFICAR  → cómo se decide qué piezas tiene la prenda.
+     - MODELOS_POR_PROVEEDOR     → modelos que aparecen en el desplegable.
+     - PRECIOS_POR_MTOK          → tabla de precios usada para el coste
+       estimado. Son precios ORIENTATIVOS: revisa las tarifas vigentes en la
+       documentación oficial de cada proveedor antes de usarlos con fines
+       de facturación real (Anthropic: https://docs.claude.com/en/docs/about-claude/pricing).
+     - A4_ANCHO_MM / A4_ALTO_MM / MARGEN_MM → geometría de la página impresa.
+
+  4) CODIFICACIÓN DE CARACTERES (si lo alojas en tu propio servidor Linux)
+     Este fichero está en UTF-8 y, además de declarar <meta charset="UTF-8">
+     nada más empezar el <head>, incluye una marca BOM UTF-8 (los 3 bytes
+     EF BB BF) justo al principio del fichero. Esto es necesario porque
+     muchos servidores Linux (Apache con "AddDefaultCharset", Nginx sin
+     "charset utf-8" configurado, etc.) envían la cabecera HTTP
+     "Content-Type: text/html; charset=ISO-8859-1" o similar, y esa cabecera
+     HTTP tiene SIEMPRE prioridad sobre el <meta charset> del documento, por
+     mucho que esté bien colocado: el navegador ignora la etiqueta y rompe
+     los acentos. La marca BOM es la única señal que el navegador respeta
+     por encima incluso de esa cabecera errónea, así que fuerza UTF-8 pase
+     lo que pase. Si aun así ves problemas de codificación:
+       - Sirve el fichero tal cual (no lo reabras y regrabes con un editor
+         que pueda quitar el BOM o cambiar la codificación a otra).
+       - Comprueba con "curl -I" la cabecera Content-Type que envía tu
+         servidor para el .html; si puedes, corrígela para que use UTF-8.
+  ============================================================================
+-->
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenPatMod — Generador de Patrones de Corte</title>
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/svg2pdf.js@2.2.3/dist/svg2pdf.umd.min.js"></script>
+
+<style>
+  :root{
+    --azul:#1f4e5f;
+    --azul-claro:#e8f1f3;
+    --acento:#c0563a;
+    --gris:#5a6b70;
+    --gris-claro:#f4f6f7;
+    --borde:#d8e0e2;
+    --ok:#2f7a4f;
+    --error:#b3312c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--gris-claro);
+    color:#20292b;
+  }
+  header{
+    background:var(--azul);
+    color:#fff;
+    padding:22px 20px;
+    text-align:center;
+  }
+  header h1{margin:0;font-size:1.6rem;}
+  header p{margin:6px 0 0;font-size:0.95rem;opacity:0.9;}
+
+  .aviso{
+    background:#fff4e5;
+    border-bottom:1px solid #f0d9ad;
+    color:#7a5b12;
+    text-align:center;
+    padding:8px 14px;
+    font-size:0.85rem;
+  }
+
+  main{
+    max-width:820px;
+    margin:0 auto;
+    padding:20px 16px 60px;
+  }
+
+  section.panel{
+    background:#fff;
+    border:1px solid var(--borde);
+    border-radius:10px;
+    padding:18px 20px;
+    margin-bottom:18px;
+  }
+  section.panel h2{
+    margin:0 0 14px;
+    font-size:1.05rem;
+    color:var(--azul);
+    border-bottom:1px solid var(--borde);
+    padding-bottom:8px;
+  }
+
+  label{display:block;font-size:0.85rem;font-weight:600;margin:10px 0 4px;color:var(--gris);}
+  select, input[type=password], input[type=text], textarea{
+    width:100%;
+    padding:9px 10px;
+    border:1px solid var(--borde);
+    border-radius:6px;
+    font-size:0.95rem;
+    font-family:inherit;
+    background:#fff;
+  }
+  textarea{min-height:80px;resize:vertical;}
+  #input-max-tokens{width:9ch;text-align:right;}
+
+  .fila{display:flex;gap:10px;flex-wrap:wrap;}
+  .fila > div{flex:1;min-width:180px;}
+
+  .botones{display:flex;gap:10px;margin-top:12px;flex-wrap:wrap;}
+  button{
+    cursor:pointer;
+    border:none;
+    border-radius:6px;
+    padding:10px 16px;
+    font-size:0.92rem;
+    font-weight:600;
+    font-family:inherit;
+  }
+  button.primario{background:var(--acento);color:#fff;}
+  button.primario:disabled{background:#d3b6ac;cursor:not-allowed;}
+  button.secundario{background:var(--azul-claro);color:var(--azul);}
+  button.secundario:hover{background:#d7e7ea;}
+  button.peligro{background:#f6dedc;color:var(--error);}
+
+  .estado-key{font-size:0.82rem;margin-top:6px;color:var(--gris);}
+  .estado-key.si{color:var(--ok);}
+
+  #estado-generacion{
+    display:none;
+    margin-top:14px;
+    padding:12px 14px;
+    border-radius:8px;
+    background:var(--azul-claro);
+    color:var(--azul);
+    font-size:0.9rem;
+    align-items:center;
+    gap:10px;
+  }
+  #estado-generacion.visible{display:flex;}
+  #estado-generacion.error{background:#fbe4e2;color:var(--error);}
+
+  #aviso-truncado{
+    margin-top:12px;
+    padding:10px 14px;
+    border-radius:8px;
+    background:#fff4e5;
+    border:1px solid #f0d9ad;
+    color:#7a5b12;
+    font-size:0.85rem;
+  }
+  .spinner{
+    width:16px;height:16px;
+    border:3px solid rgba(0,0,0,0.15);
+    border-top-color:currentColor;
+    border-radius:50%;
+    animation:girar 0.8s linear infinite;
+    flex-shrink:0;
+  }
+  @keyframes girar{to{transform:rotate(360deg);}}
+
+  .pieza-card{
+    border:1px solid var(--borde);
+    border-radius:8px;
+    padding:10px;
+    margin-bottom:10px;
+    background:#fafcfc;
+  }
+  .pieza-card h3{margin:0 0 6px;font-size:0.92rem;color:var(--azul);}
+  .pieza-card .svg-wrap{
+    max-width:220px;
+    margin:0 auto 6px;
+    background:#fff;
+    border:1px solid var(--borde);
+  }
+  .pieza-card .svg-wrap svg{display:block;width:100%;height:auto;}
+  .pieza-card p{margin:0;font-size:0.8rem;color:var(--gris);}
+
+  #resultado{margin-top:16px;}
+  #pdf-preview{
+    width:100%;
+    height:480px;
+    border:1px solid var(--borde);
+    border-radius:8px;
+    display:none;
+    margin-top:14px;
+  }
+
+  .contador-coste{
+    font-size:0.8rem;
+    color:var(--gris);
+    margin-top:10px;
+    border-top:1px dashed var(--borde);
+    padding-top:8px;
+  }
+
+  footer{text-align:center;font-size:0.78rem;color:var(--gris);padding:20px;}
+
+  #svg-render-host{
+    position:absolute;
+    left:-99999px;
+    top:0;
+    width:210mm;
+    height:297mm;
+    background:#fff;
+    overflow:hidden;
+  }
+
+  .modal-overlay{
+    position:fixed;inset:0;
+    background:rgba(20,30,32,0.55);
+    display:none;
+    align-items:flex-start;
+    justify-content:center;
+    padding:5vh 16px;
+    z-index:1000;
+    overflow-y:auto;
+  }
+  .modal-overlay.visible{display:flex;}
+  .modal-caja{
+    background:#fff;
+    border-radius:10px;
+    max-width:760px;
+    width:100%;
+    padding:28px 32px 34px;
+    position:relative;
+    box-shadow:0 10px 40px rgba(0,0,0,0.25);
+  }
+  .btn-cerrar-modal{
+    position:absolute;top:14px;right:14px;
+    background:var(--gris-claro);border:none;
+    width:30px;height:30px;border-radius:50%;
+    font-size:1rem;line-height:1;cursor:pointer;color:var(--gris);
+  }
+  .guia-contenido h2{color:var(--azul);margin:26px 0 8px;font-size:1.15rem;}
+  .guia-contenido h2:first-child{margin-top:0;}
+  .guia-contenido h3{color:var(--acento);margin:18px 0 6px;font-size:1rem;}
+  .guia-contenido p{line-height:1.5;margin:6px 0;}
+  .guia-contenido ul, .guia-contenido ol{padding-left:22px;line-height:1.5;}
+  .guia-contenido li{margin:4px 0;}
+  .guia-contenido code{background:var(--gris-claro);padding:1px 5px;border-radius:4px;font-size:0.85em;}
+  .guia-contenido blockquote{
+    margin:10px 0;padding:8px 12px;
+    background:var(--azul-claro);border-left:3px solid var(--azul);
+    border-radius:0 6px 6px 0;font-size:0.9rem;
+  }
+  .guia-contenido hr{border:none;border-top:1px solid var(--borde);margin:20px 0;}
+</style>
+</head>
+<body
+  data-app-title="GenPatMod"
+  data-app-description="Genera patrones de corte de moda en SVG a partir de una idea y los exporta a PDF A4, usando Claude, OpenAI o Gemini."
+  data-categories="ia,diseno-creatividad,automatizacion,docencia"
+  data-tags="Claude,OpenAI,Gemini,SVG,PDF,Patrones"
+>
+
+<header>
+  <h1>🧵 GenPatMod</h1>
+  <p>Genera patrones de corte de moda con IA y expórtalos como PDF A4 listo para imprimir</p>
+  <button id="btn-abrir-guia" class="secundario" style="margin-top:10px;">📖 Guía de utilización</button>
+</header>
+
+<div class="aviso">
+  ⚠️ La IA puede cometer errores. Revisa el resultado antes de usarlo; esta herramienta no sustituye el criterio profesional.
+</div>
+
+<main>
+
+  <section class="panel">
+    <h2>1. Configuración del proveedor de IA</h2>
+    <div class="fila">
+      <div>
+        <label for="sel-proveedor">Proveedor</label>
+        <select id="sel-proveedor">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+          <option value="gemini">Google (Gemini)</option>
+        </select>
+      </div>
+      <div>
+        <label for="sel-modelo">Modelo</label>
+        <select id="sel-modelo"></select>
+      </div>
+      <div style="flex:0 0 auto;min-width:auto;">
+        <label for="input-max-tokens">Nº máx. tokens de salida</label>
+        <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="4096">
+        <div class="estado-key" id="limite-tokens-modelo" style="margin-top:4px;"></div>
+      </div>
+    </div>
+    <div id="modelo-otro-wrap" style="display:none;">
+      <label for="input-modelo-otro">Identificador de modelo</label>
+      <input type="text" id="input-modelo-otro" placeholder="Ej: claude-sonnet-4-5">
+    </div>
+
+    <label for="input-apikey">API key del proveedor activo</label>
+    <input type="password" id="input-apikey" placeholder="Pega aquí tu API key">
+    <div class="botones">
+      <button class="secundario" id="btn-guardar-key">Guardar clave</button>
+      <button class="peligro" id="btn-borrar-key">Borrar clave</button>
+    </div>
+    <div class="estado-key" id="estado-key">No hay ninguna clave guardada para este proveedor.</div>
+  </section>
+
+  <section class="panel">
+    <h2>2. Describe la prenda</h2>
+    <label for="input-idea">Idea inicial (descripción libre de la prenda)</label>
+    <textarea id="input-idea" placeholder="Ej: una camisa clásica de manga larga con cuello camisero, puños y botonadura delantera, talla M"></textarea>
+
+    <div class="fila">
+      <div>
+        <label for="input-nombre-pdf">Nombre del fichero PDF (opcional)</label>
+        <input type="text" id="input-nombre-pdf" placeholder="Por defecto: patron_&lt;prenda&gt;.pdf">
+      </div>
+      <div>
+        <label for="input-nombre-txt">Nombre del fichero de prompts .txt (opcional)</label>
+        <input type="text" id="input-nombre-txt" placeholder="Por defecto: genpatmod_prompts.txt">
+      </div>
+    </div>
+
+    <label style="display:flex;align-items:center;gap:6px;font-weight:400;margin-top:12px;">
+      <input type="checkbox" id="chk-mostrar-prompt" checked style="width:auto;">
+      Mostrar el prompt mejorado (plan de piezas) en pantalla
+    </label>
+
+    <div class="botones">
+      <button class="primario" id="btn-generar" disabled>Generar patrón</button>
+      <button class="secundario" id="btn-exportar-txt" disabled>Exportar prompts (.txt)</button>
+    </div>
+
+    <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span></div>
+  </section>
+
+  <section class="panel" id="panel-resultado" style="display:none;">
+    <h2>3. Resultado</h2>
+    <div id="prompt-mejorado-wrap" style="display:none;">
+      <label style="margin-top:0;">Prompt mejorado (plan de piezas decidido por la IA)</label>
+      <textarea id="prompt-mejorado" readonly style="min-height:160px;font-family:ui-monospace,Consolas,monospace;font-size:0.8rem;background:var(--gris-claro);"></textarea>
+      <div class="botones">
+        <button class="secundario" id="btn-editar-prompt">✏️ Editar prompt mejorado</button>
+        <button class="primario" id="btn-continuar-generacion" style="display:none;">▶️ Generar piezas con este plan</button>
+        <button class="primario" id="btn-regenerar-prompt" style="display:none;">🔁 Generar con este prompt editado</button>
+      </div>
+    </div>
+    <div id="aviso-truncado" style="display:none;"></div>
+    <div id="resultado"></div>
+    <div class="botones">
+      <button class="primario" id="btn-descargar-pdf" style="display:none;">Descargar PDF</button>
+    </div>
+    <iframe id="pdf-preview"></iframe>
+    <div class="contador-coste" id="contador-coste"></div>
+  </section>
+
+</main>
+
+<div id="svg-render-host"></div>
+
+<div class="modal-overlay" id="modal-guia">
+  <div class="modal-caja">
+    <button class="btn-cerrar-modal" id="btn-cerrar-guia" aria-label="Cerrar">✕</button>
+    <div class="guia-contenido">
+      <h2>GenPatMod — Guía de utilización</h2>
+      <p><strong>GenPatMod</strong> es una aplicación web de un solo fichero que, a partir de la descripción libre de una prenda, genera con IA sus piezas de patrón de corte en SVG y las exporta como un PDF listo para imprimir en A4.</p>
+      <p>No necesita instalación ni servidor: se abre directamente en el navegador (o se aloja gratis en GitHub Pages) y funciona con tu propia clave de API de Anthropic, OpenAI o Google.</p>
+      <hr>
+
+      <h2>1. Requisitos</h2>
+      <ul>
+        <li>Un navegador moderno (Chrome, Edge, Firefox o Safari).</li>
+        <li>Una clave de API de al menos uno de estos proveedores:
+          <ul>
+            <li>Anthropic (Claude): <code>console.anthropic.com/settings/keys</code></li>
+            <li>OpenAI (GPT): <code>platform.openai.com/api-keys</code></li>
+            <li>Google (Gemini): <code>aistudio.google.com/app/apikey</code></li>
+          </ul>
+        </li>
+        <li>Una impresora (opcional) para imprimir el PDF a tamaño real.</li>
+      </ul>
+      <blockquote>🔒 La clave de API se guarda solo en tu navegador (<code>localStorage</code>) y se envía únicamente al endpoint oficial del proveedor elegido. GenPatMod no tiene servidor propio ni almacena nada en la nube.</blockquote>
+      <blockquote>🔤 El fichero incluye una marca UTF-8 (BOM) al principio para que los acentos y la "ñ" se vean bien aunque tu servidor envíe una cabecera de codificación incorrecta. No lo reabras y regrabes con un editor que pueda eliminarla.</blockquote>
+
+      <h2>2. Uso paso a paso</h2>
+      <h3>Paso 1 — Configura el proveedor de IA</h3>
+      <p>En el bloque "1. Configuración del proveedor de IA": elige proveedor y modelo (o "Otro…" para escribir un identificador exacto), ajusta si quieres el número máximo de tokens de salida (el límite del modelo se muestra debajo del campo) y pega tu API key, pulsando "Guardar clave".</p>
+
+      <h3>Paso 2 — Describe la prenda</h3>
+      <p>Escribe la idea inicial en lenguaje natural, por ejemplo: <em>"una camisa clásica de manga larga con cuello camisero, puños y botonadura delantera, talla M"</em>. Cuanto más detalle des, mejor será el resultado. Opcionalmente indica un nombre para el PDF y/o el .txt de prompts, y decide si quieres ver en pantalla el "prompt mejorado" con la casilla correspondiente. Pulsa <strong>Generar patrón</strong>.</p>
+
+      <h3>Paso 3 — Revisa el plan antes de continuar</h3>
+      <p>Al terminar la planificación, la app <strong>se detiene</strong> y muestra el "prompt mejorado" (si activaste la casilla del paso 2) esperando tu decisión: pulsa <strong>"▶️ Generar piezas con este plan"</strong> para continuar tal cual, o primero <strong>"✏️ Editar prompt mejorado"</strong> para corregirlo y luego <strong>"🔁 Generar con este prompt editado"</strong>. Si desactivaste la casilla, la app genera las piezas automáticamente sin detenerse.</p>
+
+      <h3>Paso 4 — Revisa el resultado</h3>
+      <p>La app genera el SVG de cada pieza una por una y luego construye el PDF de forma determinista (sin IA): calcula el escalado a A4 midiendo el dibujo real de cada pieza, la centra, añade una regla de control y compone el documento final. Al terminar verás una tarjeta por pieza con su vista previa y un botón para descargar su SVG, la vista previa del PDF completo con su botón de descarga, y el contador de tokens y coste estimado de la sesión.</p>
+
+      <h3>Paso 5 — Editar el plan y volver a generar (opcional)</h3>
+      <p>Aunque ya se haya generado el PDF, puedes pulsar de nuevo "✏️ Editar prompt mejorado", corregir lo que necesites manteniendo el formato ("Prenda: ..." y una lista numerada de piezas) y pulsar "🔁 Generar con este prompt editado": la app regenera las piezas y el PDF directamente desde tu texto, sin repetir la llamada de planificación.</p>
+
+      <h3>Paso 6 — Exportar los prompts usados</h3>
+      <p>El botón "Exportar prompts (.txt)" descarga un fichero con la idea inicial, el plan de piezas y los prompts de sistema/usuario empleados en cada llamada — útil para documentar o repetir el proceso.</p>
+
+      <h2>3. El PDF generado</h2>
+      <ul>
+        <li><strong>1 o 2 páginas iniciales</strong> con el mismo contenido que se muestra en pantalla en "Prompt mejorado" (si el plan es muy largo, se trunca con un aviso para no superar esas dos páginas).</li>
+        <li><strong>Una página A4 por pieza</strong>, con la pieza a tamaño real (o reducida con su escala indicada si no cabe entera), un título con prenda/pieza/medidas, y una regla de control de 10 cm reales para comprobar que la impresión no ha reescalado el documento (debe imprimirse <strong>sin</strong> "ajustar a página").</li>
+      </ul>
+
+      <h2>4. Avisos y solución de problemas</h2>
+      <ul>
+        <li><strong>"La respuesta de la IA se ha quedado corta por falta de tokens…"</strong>: sube el "Nº máx. tokens de salida" (dentro del límite del modelo) y vuelve a generar.</li>
+        <li><strong>Error 401/403:</strong> la API key no es válida o no tiene permisos para ese modelo.</li>
+        <li><strong>Error 429:</strong> límite de uso alcanzado; espera unos segundos y reinténtalo.</li>
+        <li><strong>Error 404:</strong> el identificador de modelo no existe o no está disponible en tu cuenta.</li>
+        <li><strong>Tiempo de espera superado (60 s) o error de red:</strong> comprueba tu conexión y reinténtalo.</li>
+        <li><strong>"No se ha podido interpretar el prompt editado":</strong> al editarlo a mano, no cambies la estructura general (línea "Prenda: ..." + lista numerada de piezas).</li>
+      </ul>
+
+      <h2>5. Advertencia</h2>
+      <p>⚠️ La IA puede cometer errores en las medidas o en la forma de las piezas. Revisa siempre el patrón generado —y comprueba las medidas con la regla de control impresa— antes de cortar tela.</p>
+      <hr>
+      <p style="text-align:center;color:var(--gris);font-size:0.85rem;">GenPatMod · Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  GenPatMod · Generado con ayuda de IA · Revisa siempre el patrón antes de cortar tela<br>
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es" style="color:inherit;">r.puerto@umh.es</a>) · Última modificación: 25/09/2026
+</footer>
+
+<script>
+/* ============================================================================
+ * CONSTANTES EDITABLES
+ * ==========================================================================*/
+
+// --- System prompt de PATRONAJE (rol del modelo al dibujar cada pieza) -----
+// Este es el system prompt literal definido para esta app (BLOQUE 0).
+const SYSTEM_PROMPT_PATRON = `Eres un experto en diseño de patrones de confección y generación de SVG,
+especializado en crear piezas de patrón de corte precisas, claras y listas para producción.
+
+Tu tarea es generar el código SVG de UNA SOLA pieza de patrón de corte, completo,
+válido y autocontenido.
+
+### 1. Sistema de coordenadas (MUY IMPORTANTE)
+- El elemento raíz debe ser: <svg xmlns="http://www.w3.org/2000/svg"
+  width="Xcm" height="Ycm" viewBox="0 0 X Y">
+  donde X e Y son el ancho y el alto REALES de la pieza en centímetros.
+- El viewBox debe usar EXACTAMENTE los mismos números que width/height (sin la unidad).
+  Es decir, 1 unidad de usuario del SVG = 1 centímetro real.
+- No apliques ningún transform de escalado global ni reduzcas la pieza: dibújala
+  a su tamaño real en centímetros, tal como se describe en el encargo.
+- No te preocupes por si la pieza cabe o no en una hoja A4: eso se gestiona
+  automáticamente fuera de este SVG.
+
+### 2. Contenido de la pieza
+- Dibuja el contorno de corte completo de la pieza como un <path> o <polygon> cerrado.
+- Incluye el margen de costura como una línea discontinua paralela al contorno, si procede.
+- Añade referencias de patronaje cuando sean relevantes: línea de hilo (con flecha),
+  línea de doblez, piquetes, centro delantero/espalda, número de pieza.
+- Incluye el nombre de la pieza como texto (<text>), en español, en mayúsculas,
+  bien centrado y sin solaparse con otras líneas.
+- Indica las medidas principales junto a los bordes correspondientes (en cm).
+- IMPORTANTE: dos textos nunca deben solaparse ni tocarse entre sí, ni con el
+  contorno de la pieza. Deja siempre un margen de separación de al menos 0.5 cm
+  alrededor de cada texto. Si no hay espacio suficiente, usa un tamaño de letra
+  más pequeño en vez de invadir otro elemento.
+- Todo el contenido (contorno, líneas de margen, referencias y textos) debe
+  quedar dentro del rectángulo width x height / viewBox que tú mismo declares
+  para la pieza: no dibujes nada fuera de esos límites.
+
+### 3. Reglas técnicas
+- Usa únicamente geometría vectorial pura: <path>, <line>, <polyline>, <polygon>,
+  <rect>, <circle>, <text>, <g>. Nada de imágenes rasterizadas, filtros, JavaScript,
+  fuentes externas ni referencias externas.
+- Usa trazos finos (stroke-width entre 0.05 y 0.15, ya que las unidades son centímetros)
+  y colores de alto contraste sobre fondo blanco o transparente.
+- Todas las etiquetas de apertura deben tener su cierre correspondiente, terminando
+  correctamente en </svg>.
+- El idioma de todos los textos debe ser español.
+
+### 4. Formato de salida
+Devuelve ÚNICAMENTE el código SVG dentro de un bloque de código Markdown de tipo \`xml\`.
+No añadas explicaciones, comentarios ni ningún texto fuera del bloque de código.`;
+
+// --- System prompt de PLANIFICACIÓN (decide qué piezas tiene la prenda) ----
+// Asunción (FASE 1): la idea libre del usuario se traduce primero en una
+// lista de piezas con sus medidas, y luego cada pieza se dibuja por separado
+// con el system prompt anterior — igual que en el cuaderno Python de partida.
+const SYSTEM_PROMPT_PLANIFICAR = `Eres un patronista experto en confección industrial.
+A partir de la idea inicial de una prenda que te da el usuario, decide qué piezas de
+patrón forman esa prenda (las estrictamente necesarias, entre 1 y 8) y describe cada
+una con su forma y sus medidas reales aproximadas en centímetros para una talla
+estándar M, incluyendo margen de costura y referencias de patronaje relevantes.
+
+Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin comentarios
+y sin fences de markdown, con este esquema EXACTO:
+{"prenda": "<nombre de la prenda>", "piezas": [{"nombre": "<identificador corto, en minúsculas, sin espacios ni tildes>", "descripcion": "<descripción completa: forma, medidas reales en cm, margen de costura, referencias de patronaje>"}]}
+
+Todo el texto (nombres y descripciones) debe estar en español.`;
+
+// --- Modelos que aparecen en cada desplegable --------------------------------
+const MODELOS_POR_PROVEEDOR = {
+  anthropic: {
+    modelos: ["claude-sonnet-4-5", "claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"],
+    porDefecto: "claude-sonnet-4-5" // valor definido en el BLOQUE 0 del encargo
+  },
+  openai: {
+    modelos: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+    porDefecto: "gpt-4o"
+  },
+  gemini: {
+    modelos: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
+    porDefecto: "gemini-1.5-flash"
+  }
+};
+// La lista de modelos de cada proveedor cambia con frecuencia: revisa la
+// documentación oficial y usa "Otro…" con el identificador exacto si el
+// modelo que quieres usar no aparece en la lista.
+
+// --- Límite de tokens de salida de cada modelo (orientativo) -----------------
+// Se usa para no dejar pedir al usuario más tokens de los que el modelo puede
+// devolver. Si un modelo no aparece aquí (p. ej. uno escrito a mano en "Otro…"),
+// se aplica LIMITE_TOKENS_DEFECTO. Verifica los límites vigentes en la
+// documentación de cada proveedor si vas a cambiar de modelo con frecuencia.
+const LIMITE_TOKENS_DEFECTO = 8000;
+const LIMITES_TOKENS_MODELO = {
+  "claude-sonnet-4-5": 64000,
+  "claude-sonnet-5": 64000,
+  "claude-opus-5-5": 64000,
+  "claude-haiku-4-5-20251001": 64000,
+  "claude-fable-5-1": 64000,
+  "gpt-4o": 16384,
+  "gpt-4o-mini": 16384,
+  "gpt-4.1": 32768,
+  "gpt-4.1-mini": 32768,
+  "o3-mini": 65536,
+  "gemini-1.5-pro": 8192,
+  "gemini-1.5-flash": 8192,
+  "gemini-2.0-flash": 8192
+};
+
+function limiteTokensModelo(modelo){
+  return LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO;
+}
+
+// --- Precios orientativos (USD por millón de tokens) ------------------------
+// AVISO: precios aproximados en el momento de escribir esta app. Verifica las
+// tarifas vigentes antes de usarlos con fines de facturación real.
+const PRECIOS_POR_MTOK = {
+  "claude-sonnet-4-5": {in: 3.00, out: 15.00},
+  "claude-sonnet-5": {in: 3.00, out: 15.00},
+  "claude-opus-5-5": {in: 5.00, out: 25.00},
+  "claude-haiku-4-5-20251001": {in: 1.00, out: 5.00},
+  "claude-fable-5-1": {in: 10.00, out: 50.00},
+  "gpt-4o": {in: 2.50, out: 10.00},
+  "gpt-4o-mini": {in: 0.15, out: 0.60},
+  "gpt-4.1": {in: 2.00, out: 8.00},
+  "gpt-4.1-mini": {in: 0.40, out: 1.60},
+  "o3-mini": {in: 1.10, out: 4.40},
+  "gemini-1.5-pro": {in: 1.25, out: 5.00},
+  "gemini-1.5-flash": {in: 0.075, out: 0.30},
+  "gemini-2.0-flash": {in: 0.10, out: 0.40}
+};
+
+// --- Geometría de la página impresa (idéntica al pipeline Python de origen) -
+const A4_ANCHO_MM = 210.0;
+const A4_ALTO_MM = 297.0;
+const MARGEN_MM = 12.0;
+const AREA_ANCHO_MM = A4_ANCHO_MM - 2 * MARGEN_MM;
+const RESERVA_REGLA_MM = 10.0; // franja inferior reservada para la regla de control, para que nunca se solape con la pieza
+const AREA_ALTO_MM = A4_ALTO_MM - 2 * MARGEN_MM;
+const AREA_ALTO_UTIL_MM = AREA_ALTO_MM - RESERVA_REGLA_MM; // alto realmente disponible para dibujar la pieza
+const UNIDAD_A_CM = {cm: 1.0, mm: 0.1, in: 2.54, px: 2.54 / 96.0, "": 1.0};
+
+// --- Medición y autoajuste de textos, para garantizar que ningún texto de la
+//     cabecera o la regla se salga de la página impresa -----------------------
+function medirTextoMm(texto, fontSizeMm, fontFamily){
+  if (!medirTextoMm._ctx){
+    medirTextoMm._ctx = document.createElement("canvas").getContext("2d");
+  }
+  const px = fontSizeMm * 96 / 25.4; // mm -> px (asumiendo 96dpi, aproximación suficiente para ajustar tamaños)
+  medirTextoMm._ctx.font = `${px}px ${fontFamily}`;
+  return medirTextoMm._ctx.measureText(texto).width * 25.4 / 96; // px -> mm
+}
+
+function ajustarFontSizeParaCaber(texto, anchoMaximoMm, fontSizeInicial, fontSizeMinimo, fontFamily){
+  fontFamily = fontFamily || "Helvetica, Arial, sans-serif";
+  let fs = fontSizeInicial;
+  while (fs > fontSizeMinimo && medirTextoMm(texto, fs, fontFamily) > anchoMaximoMm){
+    fs -= 0.1;
+  }
+  return Math.max(fs, fontSizeMinimo);
+}
+
+const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_key", gemini: "ia_gemini_key"};
+
+/* ============================================================================
+ * ESTADO Y REFERENCIAS DE UI
+ * ==========================================================================*/
+const $ = (id) => document.getElementById(id);
+const selProveedor = $("sel-proveedor");
+const selModelo = $("sel-modelo");
+const modeloOtroWrap = $("modelo-otro-wrap");
+const inputModeloOtro = $("input-modelo-otro");
+const inputApiKey = $("input-apikey");
+const inputMaxTokens = $("input-max-tokens");
+const limiteTokensModeloDiv = $("limite-tokens-modelo");
+const chkMostrarPrompt = $("chk-mostrar-prompt");
+const estadoKey = $("estado-key");
+const inputIdea = $("input-idea");
+const inputNombrePdf = $("input-nombre-pdf");
+const inputNombreTxt = $("input-nombre-txt");
+const btnGenerar = $("btn-generar");
+const btnExportarTxt = $("btn-exportar-txt");
+const estadoGeneracion = $("estado-generacion");
+const estadoTexto = $("estado-texto");
+const panelResultado = $("panel-resultado");
+const resultadoDiv = $("resultado");
+const promptMejoradoWrap = $("prompt-mejorado-wrap");
+const promptMejoradoTexto = $("prompt-mejorado");
+const btnEditarPrompt = $("btn-editar-prompt");
+const btnContinuarGeneracion = $("btn-continuar-generacion");
+const btnRegenerarPrompt = $("btn-regenerar-prompt");
+const avisoTruncadoDiv = $("aviso-truncado");
+const btnDescargarPdf = $("btn-descargar-pdf");
+const pdfPreview = $("pdf-preview");
+const contadorCoste = $("contador-coste");
+const svgRenderHost = $("svg-render-host");
+
+let costeAcumulado = {entrada: 0, salida: 0, usd: 0};
+let ultimosPrompts = null; // para exportar a .txt
+let ultimoPdfBlobUrl = null;
+let ultimoPlanGenerado = null; // para poder restaurar el texto si se cancela la edición
+let ultimosOpts = null; // proveedor/modelo/apiKey de la última generación, para regenerar sin repetir el paso 1
+let pendienteContinuar = null; // datos guardados mientras se espera a que el usuario revise/edite el prompt mejorado
+
+/* ============================================================================
+ * GESTIÓN DE PROVEEDOR / MODELO / API KEY
+ * ==========================================================================*/
+function proveedorActivo(){ return selProveedor.value; }
+
+function obtenerMaxTokens(){
+  const valor = parseInt(inputMaxTokens.value, 10);
+  const limite = limiteTokensModelo(modeloActivo());
+  if (!valor || valor < 256) return Math.min(4096, limite);
+  return Math.min(valor, limite);
+}
+
+function ajustarLimiteTokens(){
+  const limite = limiteTokensModelo(modeloActivo());
+  inputMaxTokens.max = String(limite);
+  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
+  limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+}
+
+function modeloActivo(){
+  return selModelo.value === "__otro__" ? inputModeloOtro.value.trim() : selModelo.value;
+}
+
+function repintarModelos(){
+  const cfg = MODELOS_POR_PROVEEDOR[proveedorActivo()];
+  selModelo.innerHTML = "";
+  cfg.modelos.forEach(m => {
+    const op = document.createElement("option");
+    op.value = m; op.textContent = m;
+    if (m === cfg.porDefecto) op.selected = true;
+    selModelo.appendChild(op);
+  });
+  const opOtro = document.createElement("option");
+  opOtro.value = "__otro__"; opOtro.textContent = "Otro…";
+  selModelo.appendChild(opOtro);
+  modeloOtroWrap.style.display = "none";
+}
+
+function cargarKeyGuardada(){
+  const clave = localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || "";
+  inputApiKey.value = clave;
+  actualizarEstadoKey();
+}
+
+function actualizarEstadoKey(){
+  const hay = !!localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]);
+  estadoKey.textContent = hay ? "✅ Hay una clave guardada para este proveedor." : "No hay ninguna clave guardada para este proveedor.";
+  estadoKey.className = "estado-key" + (hay ? " si" : "");
+  actualizarBotonGenerar();
+}
+
+function validarFormatoKey(proveedor, key){
+  if (!key) return false;
+  if (proveedor === "anthropic") return key.startsWith("sk-ant-");
+  if (proveedor === "openai") return key.startsWith("sk-");
+  if (proveedor === "gemini") return key.startsWith("AIza");
+  return true;
+}
+
+selProveedor.addEventListener("change", () => { repintarModelos(); cargarKeyGuardada(); ajustarLimiteTokens(); });
+selModelo.addEventListener("change", () => {
+  modeloOtroWrap.style.display = selModelo.value === "__otro__" ? "block" : "none";
+  ajustarLimiteTokens();
+});
+inputModeloOtro.addEventListener("input", ajustarLimiteTokens);
+
+$("btn-guardar-key").addEventListener("click", () => {
+  const key = inputApiKey.value.trim();
+  if (!key){ alert("Escribe una API key antes de guardar."); return; }
+  if (!validarFormatoKey(proveedorActivo(), key)){
+    if (!confirm("El formato de la clave no parece habitual para este proveedor. ¿Guardarla igualmente?")) return;
+  }
+  localStorage.setItem(CLAVES_LOCALSTORAGE[proveedorActivo()], key);
+  actualizarEstadoKey();
+});
+
+$("btn-borrar-key").addEventListener("click", () => {
+  localStorage.removeItem(CLAVES_LOCALSTORAGE[proveedorActivo()]);
+  inputApiKey.value = "";
+  actualizarEstadoKey();
+});
+
+inputIdea.addEventListener("input", actualizarBotonGenerar);
+inputApiKey.addEventListener("input", actualizarBotonGenerar);
+
+function actualizarBotonGenerar(){
+  const hayKey = !!(localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || inputApiKey.value.trim());
+  const hayIdea = inputIdea.value.trim().length > 0;
+  btnGenerar.disabled = !(hayKey && hayIdea);
+}
+
+repintarModelos();
+cargarKeyGuardada();
+ajustarLimiteTokens();
+
+/* ============================================================================
+ * MODAL DE LA GUÍA DE UTILIZACIÓN
+ * ==========================================================================*/
+const modalGuia = $("modal-guia");
+const btnAbrirGuia = $("btn-abrir-guia");
+const btnCerrarGuia = $("btn-cerrar-guia");
+
+function abrirGuia(){ modalGuia.classList.add("visible"); }
+function cerrarGuia(){ modalGuia.classList.remove("visible"); }
+
+btnAbrirGuia.addEventListener("click", abrirGuia);
+btnCerrarGuia.addEventListener("click", cerrarGuia);
+modalGuia.addEventListener("click", (e) => { if (e.target === modalGuia) cerrarGuia(); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") cerrarGuia(); });
+
+/* ============================================================================
+ * LLAMADA UNIFICADA A LA IA (Anthropic / OpenAI / Gemini)
+ * ==========================================================================*/
+async function fetchConTimeout(url, opciones, timeoutMs = 60000){
+  const controlador = new AbortController();
+  const id = setTimeout(() => controlador.abort(), timeoutMs);
+  try{
+    return await fetch(url, {...opciones, signal: controlador.signal});
+  } catch(e){
+    if (e.name === "AbortError") throw new Error("La petición ha superado el tiempo máximo de espera (60 s). Inténtalo de nuevo.");
+    throw new Error("Error de red: no se ha podido contactar con el servidor de la IA. Revisa tu conexión.");
+  } finally {
+    clearTimeout(id);
+  }
+}
+
+function mensajeErrorHttp(status, cuerpo){
+  if (status === 401 || status === 403) return "La API key no es válida o no tiene permisos (código " + status + ").";
+  if (status === 429) return "Se ha alcanzado el límite de uso de la API (código 429). Espera unos segundos e inténtalo de nuevo.";
+  if (status === 404) return "El modelo indicado no existe o no está disponible en tu cuenta (código 404). Revisa el identificador del modelo.";
+  const detalle = cuerpo && (cuerpo.error && cuerpo.error.message ? cuerpo.error.message : JSON.stringify(cuerpo).slice(0,200));
+  return "Error del proveedor (código " + status + ")" + (detalle ? ": " + detalle : ".");
+}
+
+async function llamarIA(systemPrompt, userPrompt, opts){
+  const {proveedor, modelo, apiKey, maxTokens} = opts;
+  let url, headers, body, extraerTexto, extraerUso, estaTruncado;
+
+  if (proveedor === "anthropic"){
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {"content-type":"application/json","x-api-key": apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+    body = {model: modelo, max_tokens: maxTokens, system: systemPrompt, messages: [{role:"user", content: userPrompt}]};
+    extraerTexto = (d) => (d.content && d.content[0] && d.content[0].text) || "";
+    extraerUso = (d) => ({entrada: d.usage?.input_tokens || 0, salida: d.usage?.output_tokens || 0});
+    estaTruncado = (d) => d.stop_reason === "max_tokens";
+  } else if (proveedor === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {"content-type":"application/json","Authorization":"Bearer " + apiKey};
+    body = {model: modelo, max_tokens: maxTokens, messages: [{role:"system", content: systemPrompt},{role:"user", content: userPrompt}]};
+    extraerTexto = (d) => (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || "";
+    extraerUso = (d) => ({entrada: d.usage?.prompt_tokens || 0, salida: d.usage?.completion_tokens || 0});
+    estaTruncado = (d) => d.choices && d.choices[0] && d.choices[0].finish_reason === "length";
+  } else if (proveedor === "gemini"){
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    headers = {"content-type":"application/json"};
+    body = {system_instruction: {parts: [{text: systemPrompt}]}, contents: [{role:"user", parts:[{text: userPrompt}]}], generationConfig: {maxOutputTokens: maxTokens}};
+    extraerTexto = (d) => (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0].text) || "";
+    extraerUso = (d) => ({entrada: d.usageMetadata?.promptTokenCount || 0, salida: d.usageMetadata?.candidatesTokenCount || 0});
+    estaTruncado = (d) => d.candidates && d.candidates[0] && d.candidates[0].finishReason === "MAX_TOKENS";
+  } else {
+    throw new Error("Proveedor desconocido: " + proveedor);
+  }
+
+  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let data;
+  try { data = await resp.json(); } catch(e){ data = {}; }
+
+  if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+
+  const texto = extraerTexto(data);
+  const uso = extraerUso(data);
+  const truncado = !!estaTruncado(data);
+
+  acumularCoste(modelo, uso.entrada, uso.salida);
+
+  return {texto, truncado, uso};
+}
+
+function acumularCoste(modelo, entrada, salida){
+  costeAcumulado.entrada += entrada;
+  costeAcumulado.salida += salida;
+  const precios = PRECIOS_POR_MTOK[modelo];
+  if (precios){
+    costeAcumulado.usd += (entrada / 1e6) * precios.in + (salida / 1e6) * precios.out;
+  }
+  pintarContadorCoste();
+}
+
+function pintarContadorCoste(){
+  const {entrada, salida, usd} = costeAcumulado;
+  const precioConocido = !!PRECIOS_POR_MTOK[modeloActivo()];
+  contadorCoste.textContent = `Tokens usados en esta sesión — entrada: ${entrada.toLocaleString("es-ES")}, salida: ${salida.toLocaleString("es-ES")}.` +
+    (precioConocido ? ` Coste estimado: $${usd.toFixed(4)} (aproximado, verifica las tarifas vigentes).` : " (no hay precio de referencia cargado para este modelo).");
+}
+
+/* ============================================================================
+ * EXTRACCIÓN DE JSON / SVG DE LA RESPUESTA DEL MODELO
+ * ==========================================================================*/
+function extraerJSON(texto){
+  let limpio = texto.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  try { return JSON.parse(limpio); } catch(e){}
+  const inicio = limpio.indexOf("{");
+  const fin = limpio.lastIndexOf("}");
+  if (inicio >= 0 && fin > inicio){
+    try { return JSON.parse(limpio.slice(inicio, fin+1)); } catch(e){}
+  }
+  return null;
+}
+
+function extraerSVG(texto){
+  let m = /```(?:xml|svg)?\s*(<svg[\s\S]*?<\/svg>)\s*```/i.exec(texto);
+  if (m) return m[1];
+  m = /(<svg[\s\S]*?<\/svg>)/i.exec(texto);
+  return m ? m[1] : "";
+}
+
+/* ============================================================================
+ * PASO 1 — PLANIFICAR LAS PIEZAS DE LA PRENDA
+ * ==========================================================================*/
+async function planificarPiezas(idea, opts, avisosTruncado){
+  const maxTokensBase = obtenerMaxTokens();
+  const userPrompt = "Idea inicial de la prenda: " + idea;
+  let resp = await llamarIA(SYSTEM_PROMPT_PLANIFICAR, userPrompt, {...opts, maxTokens: maxTokensBase});
+  let plan = extraerJSON(resp.texto);
+
+  if (!plan || !Array.isArray(plan.piezas) || plan.piezas.length === 0 || resp.truncado){
+    const userRetry = "Tu respuesta anterior no cumplía el formato pedido o estaba incompleta. " +
+      "Devuelve ÚNICAMENTE el objeto JSON válido y completo, sin texto adicional ni fences de markdown, " +
+      "con el esquema exacto indicado.\n\n" + userPrompt;
+    resp = await llamarIA(SYSTEM_PROMPT_PLANIFICAR, userRetry, {...opts, maxTokens: Math.round(maxTokensBase * 1.6)});
+    plan = extraerJSON(resp.texto);
+  }
+
+  if (resp.truncado && avisosTruncado) avisosTruncado.push("la planificación de las piezas");
+
+  if (!plan || !Array.isArray(plan.piezas) || plan.piezas.length === 0){
+    throw new Error("No se ha podido obtener un plan de piezas válido. Prueba a describir la idea con más detalle.");
+  }
+  return plan;
+}
+
+/* ============================================================================
+ * PASO 2 — GENERAR EL SVG DE CADA PIEZA
+ * ==========================================================================*/
+async function generarSVGPieza(nombre, descripcion, opts, avisosTruncado){
+  const userPrompt = `Genera la pieza de patrón de corte descrita a continuación, siguiendo estrictamente
+las reglas del system prompt (coordenadas en centímetros reales, viewBox coincidente
+con width/height, sin escalar ni recortar la pieza).
+
+Pieza: ${nombre}
+Descripción: ${descripcion}`;
+
+  const maxTokensBase = obtenerMaxTokens();
+  let resp = await llamarIA(SYSTEM_PROMPT_PATRON, userPrompt, {...opts, maxTokens: maxTokensBase});
+  let svg = extraerSVG(resp.texto);
+
+  if (!svg || resp.truncado){
+    const userRetry = "Tu respuesta anterior no contenía un SVG válido y completo, o estaba truncada. " +
+      "Devuelve ÚNICAMENTE el bloque de código SVG completo (con apertura y cierre </svg>), sin texto adicional.\n\n" + userPrompt;
+    resp = await llamarIA(SYSTEM_PROMPT_PATRON, userRetry, {...opts, maxTokens: Math.round(maxTokensBase * 1.6)});
+    svg = extraerSVG(resp.texto);
+  }
+
+  if (resp.truncado && avisosTruncado) avisosTruncado.push(`la pieza "${nombre}"`);
+
+  if (!svg) throw new Error(`No se ha podido generar un SVG válido para la pieza "${nombre}".`);
+  return svg;
+}
+
+/* ============================================================================
+ * PIPELINE DETERMINISTA DE MAQUETACIÓN A4 (sin IA) — ported del cuaderno Python
+ * ==========================================================================*/
+function parsearLongitud(valor){
+  const m = /^\s*([\d.]+)\s*([a-zA-Z%]*)\s*$/.exec(valor || "");
+  if (!m) return null;
+  const numero = parseFloat(m[1]);
+  const unidad = m[2].toLowerCase();
+  if (unidad === "%") return null;
+  return numero * (UNIDAD_A_CM[unidad] ?? 1.0);
+}
+
+function parsearDimensionesSVG(svg){
+  const mOpen = /<svg[^>]*>/i.exec(svg);
+  if (!mOpen) throw new Error("El SVG generado no contiene una etiqueta <svg> válida.");
+  const etiqueta = mOpen[0];
+
+  const vbMatch = /viewBox\s*=\s*["']([^"']+)["']/i.exec(etiqueta);
+  let viewbox = null;
+  if (vbMatch){
+    const partes = vbMatch[1].trim().split(/[\s,]+/).map(Number);
+    if (partes.length === 4 && partes.every(n => !isNaN(n))) viewbox = partes;
+  }
+
+  const wMatch = /\bwidth\s*=\s*["']([^"']+)["']/i.exec(etiqueta);
+  const hMatch = /\bheight\s*=\s*["']([^"']+)["']/i.exec(etiqueta);
+  let anchoCm = null, altoCm = null;
+  if (wMatch && hMatch){
+    anchoCm = parsearLongitud(wMatch[1]);
+    altoCm = parsearLongitud(hMatch[1]);
+  }
+  if ((anchoCm == null || altoCm == null) && viewbox){
+    anchoCm = viewbox[2]; altoCm = viewbox[3];
+  }
+  if (!anchoCm || !altoCm || anchoCm <= 0 || altoCm <= 0){
+    throw new Error("No se han podido determinar las dimensiones físicas del SVG generado.");
+  }
+  if (!viewbox) viewbox = [0, 0, anchoCm, altoCm];
+  return {anchoCm, altoCm, viewbox};
+}
+
+function extraerContenidoInterno(svg){
+  const m = /<svg[^>]*>([\s\S]*)<\/svg>/i.exec(svg);
+  return m ? m[1] : "";
+}
+
+function escapeXML(s){
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function resolverNombreFichero(valorCampo, extension, nombrePorDefecto){
+  let nombre = (valorCampo || "").trim();
+  if (!nombre) return nombrePorDefecto;
+  if (!nombre.toLowerCase().endsWith("." + extension)) nombre += "." + extension;
+  return nombre;
+}
+
+// Mide el rectángulo REAL que ocupa el contenido dibujado por el modelo
+// (incluyendo cualquier texto o trazo que sobresalga de las dimensiones que
+// el propio SVG dice tener). Es la fuente de verdad para el escalado: así, si
+// el modelo declara mal su width/height/viewBox, o un texto se sale del
+// límite que él mismo se puso, el patrón se sigue ajustando correctamente
+// a la página en lugar de desbordarla.
+function medirBBoxReal(svgPieza){
+  try{
+    const doc = new DOMParser().parseFromString(svgPieza, "image/svg+xml");
+    const raiz = doc.documentElement;
+    if (!raiz || raiz.nodeName.toLowerCase() !== "svg") return null;
+    const svgNS = "http://www.w3.org/2000/svg";
+    const wrapper = document.createElementNS(svgNS, "svg");
+    const g = document.createElementNS(svgNS, "g");
+    Array.from(raiz.childNodes).forEach(nodo => {
+      if (nodo.nodeType === 1) g.appendChild(nodo.cloneNode(true)); // solo elementos
+    });
+    wrapper.appendChild(g);
+    svgRenderHost.innerHTML = "";
+    svgRenderHost.appendChild(wrapper);
+    const caja = g.getBBox();
+    svgRenderHost.innerHTML = "";
+    if (!caja || !isFinite(caja.width) || !isFinite(caja.height) || caja.width <= 0 || caja.height <= 0) return null;
+    return {x: caja.x, y: caja.y, width: caja.width, height: caja.height};
+  } catch(e){
+    svgRenderHost.innerHTML = "";
+    return null;
+  }
+}
+
+function construirPaginaA4(svgPieza, tituloPrenda, nombrePieza, indicePieza, totalPiezas){
+  const contenido = extraerContenidoInterno(svgPieza);
+
+  // Preferimos SIEMPRE la caja real medida en el navegador (incluye textos que
+  // se salgan del viewBox declarado). Solo si no se puede medir recurrimos a
+  // los atributos que dice tener el propio SVG, como red de seguridad.
+  const cajaReal = medirBBoxReal(svgPieza);
+  let anchoCm, altoCm, vbX, vbY, factorXBase, factorYBase;
+  if (cajaReal){
+    anchoCm = cajaReal.width;
+    altoCm = cajaReal.height;
+    vbX = cajaReal.x;
+    vbY = cajaReal.y;
+    factorXBase = 1.0; // 1 unidad del SVG = 1 cm, según el system prompt de patronaje
+    factorYBase = 1.0;
+  } else {
+    const declarado = parsearDimensionesSVG(svgPieza);
+    anchoCm = declarado.anchoCm;
+    altoCm = declarado.altoCm;
+    [vbX, vbY] = declarado.viewbox;
+    const vbW = declarado.viewbox[2], vbH = declarado.viewbox[3];
+    factorXBase = vbW ? anchoCm / vbW : 1.0;
+    factorYBase = vbH ? altoCm / vbH : 1.0;
+  }
+
+  const cmPorUnidadX = factorXBase;
+  const cmPorUnidadY = factorYBase;
+  const anchoMm = anchoCm * 10.0, altoMm = altoCm * 10.0;
+
+  // El alto disponible excluye la franja reservada para la regla de control,
+  // así la pieza nunca puede solaparse con ella.
+  const escalaAjustar = Math.min(AREA_ANCHO_MM / anchoMm, AREA_ALTO_UTIL_MM / altoMm);
+  const escalaFinal = Math.min(1.0, escalaAjustar); // nunca ampliamos, solo reducimos si hace falta
+
+  const anchoFinalMm = anchoMm * escalaFinal, altoFinalMm = altoMm * escalaFinal;
+  const offsetX = MARGEN_MM + (AREA_ANCHO_MM - anchoFinalMm) / 2.0;
+  const offsetY = MARGEN_MM + (AREA_ALTO_UTIL_MM - altoFinalMm) / 2.0;
+
+  const factorX = cmPorUnidadX * 10.0 * escalaFinal;
+  const factorY = cmPorUnidadY * 10.0 * escalaFinal;
+
+  const longitudReglaMm = 100.0 * escalaFinal;
+  const reglaY = A4_ALTO_MM - MARGEN_MM - 6;
+  const reglaX0 = MARGEN_MM;
+
+  const textoEscala = Math.abs(escalaFinal - 1.0) < 1e-6 ? "1:1 (tamaño real)" : `1:${(1/escalaFinal).toFixed(2)}`;
+
+  // --- Cabecera en dos líneas, con el tamaño de letra autoajustado para que
+  //     NUNCA se salga del ancho imprimible, sea cual sea la longitud del
+  //     nombre de la prenda o de la pieza. -------------------------------
+  const FUENTE = "Helvetica, Arial, sans-serif";
+  const linea1Texto = `${tituloPrenda} — ${nombrePieza.replace(/_/g," ").toUpperCase()}`;
+  const linea2Texto = `Pieza ${indicePieza}/${totalPiezas} — Escala: ${textoEscala} — Tamaño real: ${anchoCm.toFixed(1)} x ${altoCm.toFixed(1)} cm`;
+  const fsLinea1 = ajustarFontSizeParaCaber(linea1Texto, AREA_ANCHO_MM, 4.2, 2.6, FUENTE);
+  const fsLinea2 = ajustarFontSizeParaCaber(linea2Texto, AREA_ANCHO_MM, 3.4, 2.4, FUENTE);
+  const linea1 = escapeXML(linea1Texto);
+  const linea2 = escapeXML(linea2Texto);
+
+  // --- Texto de la regla, también autoajustado por seguridad --------------
+  const textoRegla = `Regla de control: esta línea mide 10 cm reales si se imprime SIN "ajustar a página".`;
+  const fsRegla = ajustarFontSizeParaCaber(textoRegla, AREA_ANCHO_MM, 3.2, 2.2, FUENTE);
+
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${A4_ANCHO_MM}mm" height="${A4_ALTO_MM}mm" viewBox="0 0 ${A4_ANCHO_MM} ${A4_ALTO_MM}">
+  <rect x="0" y="0" width="${A4_ANCHO_MM}" height="${A4_ALTO_MM}" fill="white"/>
+  <rect x="${MARGEN_MM}" y="${MARGEN_MM}" width="${AREA_ANCHO_MM}" height="${AREA_ALTO_MM}" fill="none" stroke="#cccccc" stroke-width="0.3" stroke-dasharray="2,2"/>
+  <text x="${MARGEN_MM}" y="5" font-family="${FUENTE}" font-size="${fsLinea1.toFixed(2)}" fill="#000000">${linea1}</text>
+  <text x="${MARGEN_MM}" y="9.3" font-family="${FUENTE}" font-size="${fsLinea2.toFixed(2)}" fill="#000000">${linea2}</text>
+  <g transform="translate(${offsetX},${offsetY}) scale(${factorX},${factorY}) translate(${-vbX},${-vbY})">
+    ${contenido}
+  </g>
+  <line x1="${reglaX0}" y1="${reglaY}" x2="${reglaX0 + longitudReglaMm}" y2="${reglaY}" stroke="black" stroke-width="0.4"/>
+  <line x1="${reglaX0}" y1="${reglaY - 1}" x2="${reglaX0}" y2="${reglaY + 1}" stroke="black" stroke-width="0.4"/>
+  <line x1="${reglaX0 + longitudReglaMm}" y1="${reglaY - 1}" x2="${reglaX0 + longitudReglaMm}" y2="${reglaY + 1}" stroke="black" stroke-width="0.4"/>
+  <text x="${reglaX0}" y="${reglaY + 4.5}" font-family="${FUENTE}" font-size="${fsRegla.toFixed(2)}" fill="#000000">${escapeXML(textoRegla)}</text>
+</svg>`;
+}
+
+function agregarPaginasResumen(pdf, nombrePrenda, textoResumen){
+  const MARGEN = 15;
+  const ANCHO_UTIL = A4_ANCHO_MM - 2 * MARGEN;
+  const ALTO_LINEA = 5;
+  const Y_INICIO_P1 = 32;
+  const Y_LIMITE = A4_ALTO_MM - MARGEN;
+  const Y_INICIO_P2 = MARGEN;
+
+  const lineasPorPagina1 = Math.floor((Y_LIMITE - Y_INICIO_P1) / ALTO_LINEA);
+  const lineasPorPagina2 = Math.floor((Y_LIMITE - Y_INICIO_P2) / ALTO_LINEA);
+  const maxLineasTotal = lineasPorPagina1 + lineasPorPagina2;
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  let lineas = pdf.splitTextToSize(textoResumen, ANCHO_UTIL);
+  if (lineas.length > maxLineasTotal){
+    lineas = lineas.slice(0, maxLineasTotal - 1);
+    lineas.push("[…] contenido truncado — el plan completo se muestra en pantalla.");
+  }
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(15);
+  pdf.text(nombrePrenda, MARGEN, 20);
+  pdf.setDrawColor(200);
+  pdf.line(MARGEN, 24, A4_ANCHO_MM - MARGEN, 24);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  let y = Y_INICIO_P1;
+  let enPagina2 = false;
+  lineas.forEach(linea => {
+    if (!enPagina2 && y > Y_LIMITE){
+      pdf.addPage("a4", "portrait");
+      enPagina2 = true;
+      y = Y_INICIO_P2;
+    }
+    pdf.text(linea, MARGEN, y);
+    y += ALTO_LINEA;
+  });
+}
+
+async function construirPDF(piezas, nombrePrenda, textoResumen){
+  const {jsPDF} = window.jspdf;
+  const pdf = new jsPDF({unit:"mm", format:"a4", orientation:"portrait"});
+
+  agregarPaginasResumen(pdf, nombrePrenda, textoResumen);
+
+  for (let i = 0; i < piezas.length; i++){
+    pdf.addPage("a4", "portrait");
+    const paginaSVG = construirPaginaA4(piezas[i].svg, nombrePrenda, piezas[i].nombre, i+1, piezas.length);
+    const svgEl = new DOMParser().parseFromString(paginaSVG, "image/svg+xml").documentElement;
+    svgRenderHost.innerHTML = "";
+    svgRenderHost.appendChild(svgEl);
+    await pdf.svg(svgEl, {x:0, y:0, width:A4_ANCHO_MM, height:A4_ALTO_MM});
+  }
+  svgRenderHost.innerHTML = "";
+  return pdf;
+}
+
+/* ============================================================================
+ * RENDERIZADO DE PIEZAS EN PANTALLA (vista previa)
+ * ==========================================================================*/
+function svgParaPreview(svgString){
+  try{
+    const doc = new DOMParser().parseFromString(svgString, "image/svg+xml").documentElement;
+    doc.removeAttribute("width");
+    doc.removeAttribute("height");
+    return new XMLSerializer().serializeToString(doc);
+  } catch(e){ return svgString; }
+}
+
+async function guardarArchivo(nombreArchivo, contenido, tipoMime){
+  // Dentro de un Artifact publicado, los enlaces de descarga clásicos no
+  // funcionan: se usa la capacidad "downloads" del visor. Fuera de ese
+  // entorno (fichero abierto directamente, o alojado en tu propio servidor
+  // o GitHub Pages) no existe window.claude, así que se recurre a la
+  // descarga normal del navegador.
+  let downloads = null;
+  if (window.claude && window.claude.use){
+    try { downloads = await window.claude.use("downloads"); } catch(e){ downloads = null; }
+  }
+  const datos = contenido instanceof Blob ? contenido : new Blob([contenido], {type: tipoMime});
+  if (downloads){
+    try{
+      await downloads.save({filename: nombreArchivo, data: datos});
+    } catch(err){
+      console.error("No se ha podido guardar el fichero:", err);
+      if (!err || err.code !== "declined"){
+        alert(`No se ha podido guardar "${nombreArchivo}": ${(err && (err.message || err.code)) || "error desconocido"}.`);
+      }
+    }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(datos);
+  a.download = nombreArchivo;
+  a.click();
+}
+
+function pintarPieza(nombre, descripcion, svg){
+  const card = document.createElement("div");
+  card.className = "pieza-card";
+  card.innerHTML = `<h3>${escapeXML(nombre.replace(/_/g," ").toUpperCase())}</h3>
+    <div class="svg-wrap">${svgParaPreview(svg)}</div>
+    <p>${escapeXML(descripcion)}</p>
+    <div class="botones"><button class="secundario btn-descargar-svg">⬇️ Descargar SVG</button></div>`;
+  card.querySelector(".btn-descargar-svg").addEventListener("click", () => {
+    const nombreArchivo = nombre.toLowerCase().replace(/[^a-z0-9]+/g,"_") + ".svg";
+    guardarArchivo(nombreArchivo, svg, "image/svg+xml");
+  });
+  resultadoDiv.appendChild(card);
+}
+
+function formatearNombrePieza(nombre){
+  const limpio = String(nombre || "").replace(/_/g," ").trim();
+  return limpio.charAt(0).toUpperCase() + limpio.slice(1);
+}
+
+function generarTextoResumen(plan){
+  let texto = `Prenda: ${plan.prenda}\n\nPiezas (${plan.piezas.length}):\n`;
+  plan.piezas.forEach((p, i) => {
+    texto += `\n${i+1}. ${formatearNombrePieza(p.nombre)}\n   ${p.descripcion}\n`;
+  });
+  return texto;
+}
+
+function pintarPromptMejorado(plan){
+  ultimoPlanGenerado = plan;
+  promptMejoradoTexto.value = generarTextoResumen(plan);
+  promptMejoradoWrap.style.display = "block";
+}
+
+// Interpreta de vuelta el texto del "prompt mejorado" (con el mismo formato que
+// genera generarTextoResumen) tras haber sido editado a mano por el usuario.
+function parsearTextoResumenEditado(texto){
+  const mPrenda = /^Prenda:\s*(.+)$/m.exec(texto);
+  if (!mPrenda) return null;
+  const prenda = mPrenda[1].trim();
+  if (!prenda) return null;
+
+  const piezas = [];
+  let actual = null;
+  texto.split("\n").forEach(linea => {
+    const mNum = /^\s*\d+\.\s+(.+?)\s*$/.exec(linea);
+    if (mNum){
+      if (actual && actual.nombre) piezas.push(actual);
+      actual = {nombre: mNum[1].trim(), descripcion: ""};
+    } else if (actual && /^Prenda:/.test(linea) === false && /^Piezas\s*\(/.test(linea) === false && linea.trim()){
+      actual.descripcion += (actual.descripcion ? " " : "") + linea.trim();
+    }
+  });
+  if (actual && actual.nombre) piezas.push(actual);
+
+  if (piezas.length === 0) return null;
+  return {prenda, piezas};
+}
+
+function mostrarAvisoTruncado(avisosTruncado){
+  if (!avisosTruncado || avisosTruncado.length === 0){
+    avisoTruncadoDiv.style.display = "none";
+    avisoTruncadoDiv.textContent = "";
+    return;
+  }
+  avisoTruncadoDiv.textContent = "⚠️ La respuesta de la IA se ha quedado corta por falta de tokens en: " +
+    avisosTruncado.join(", ") + ". El resultado puede estar incompleto: sube el \"Nº máximo de tokens de salida\" y vuelve a generar.";
+  avisoTruncadoDiv.style.display = "block";
+}
+
+/* ============================================================================
+ * ORQUESTACIÓN PRINCIPAL
+ * ==========================================================================*/
+function fijarEstado(texto, esError){
+  estadoGeneracion.classList.add("visible");
+  estadoGeneracion.classList.toggle("error", !!esError);
+  estadoTexto.textContent = texto;
+}
+function ocultarEstado(){ estadoGeneracion.classList.remove("visible"); }
+
+async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, avisosTruncado){
+  resultadoDiv.innerHTML = "";
+  btnDescargarPdf.style.display = "none";
+  pdfPreview.style.display = "none";
+  btnExportarTxt.disabled = true;
+
+  const promptsUsados = promptsPrevios.slice();
+  const piezasGeneradas = [];
+  for (let i = 0; i < plan.piezas.length; i++){
+    const pieza = plan.piezas[i];
+    fijarEstado(`Generando el patrón de la pieza "${pieza.nombre}" (${i+1}/${plan.piezas.length})…`, false);
+    const svg = await generarSVGPieza(pieza.nombre, pieza.descripcion, opts, avisosTruncado);
+    piezasGeneradas.push({nombre: pieza.nombre, descripcion: pieza.descripcion, svg});
+    pintarPieza(pieza.nombre, pieza.descripcion, svg);
+    promptsUsados.push({etapa:"Pieza: " + pieza.nombre, system: SYSTEM_PROMPT_PATRON, user: "Descripción: " + pieza.descripcion, resultado: "(SVG generado, ver PDF)"});
+  }
+
+  fijarEstado("Construyendo el PDF (portada + una página A4 por pieza, autoescalado)…", false);
+  const pdf = await construirPDF(piezasGeneradas, plan.prenda, generarTextoResumen(plan));
+  const blobUrl = pdf.output("bloburl");
+  ultimoPdfBlobUrl = blobUrl;
+
+  pdfPreview.src = blobUrl;
+  pdfPreview.style.display = "block";
+  btnDescargarPdf.style.display = "inline-block";
+  btnDescargarPdf.onclick = () => {
+    const nombreDefecto = "patron_" + plan.prenda.toLowerCase().replace(/[^a-z0-9]+/g,"_") + ".pdf";
+    const nombreArchivo = resolverNombreFichero(inputNombrePdf.value, "pdf", nombreDefecto);
+    guardarArchivo(nombreArchivo, pdf.output("blob"), "application/pdf");
+  };
+
+  ultimosPrompts = {idea: ideaParaExportar, plan, promptsUsados};
+  btnExportarTxt.disabled = false;
+
+  mostrarAvisoTruncado(avisosTruncado);
+  fijarEstado(`Listo. Se han generado ${piezasGeneradas.length} pieza(s) para "${plan.prenda}".`, false);
+}
+
+btnGenerar.addEventListener("click", async () => {
+  const proveedor = proveedorActivo();
+  const modelo = modeloActivo();
+  const apiKey = inputApiKey.value.trim() || localStorage.getItem(CLAVES_LOCALSTORAGE[proveedor]) || "";
+  const idea = inputIdea.value.trim();
+
+  if (!modelo){ alert("Indica un identificador de modelo."); return; }
+  if (!validarFormatoKey(proveedor, apiKey)){
+    if (!confirm("El formato de la API key no parece habitual para " + proveedor + ". ¿Continuar de todos modos?")) return;
+  }
+
+  btnGenerar.disabled = true;
+  panelResultado.style.display = "block";
+  promptMejoradoWrap.style.display = "none";
+  promptMejoradoTexto.value = "";
+  promptMejoradoTexto.readOnly = true;
+  btnEditarPrompt.textContent = "✏️ Editar prompt mejorado";
+  btnEditarPrompt.style.display = "inline-block";
+  btnContinuarGeneracion.style.display = "none";
+  btnRegenerarPrompt.style.display = "none";
+  pendienteContinuar = null;
+  mostrarAvisoTruncado(null);
+
+  const opts = {proveedor, modelo, apiKey};
+  ultimosOpts = opts;
+  const avisosTruncado = [];
+
+  try{
+    fijarEstado("Analizando la idea y planificando las piezas del patrón…", false);
+    const plan = await planificarPiezas(idea, opts, avisosTruncado);
+    ultimoPlanGenerado = plan;
+    const promptsUsados = [{etapa:"Planificación", system: SYSTEM_PROMPT_PLANIFICAR, user: "Idea inicial de la prenda: " + idea, resultado: JSON.stringify(plan, null, 2)}];
+
+    if (chkMostrarPrompt.checked){
+      pintarPromptMejorado(plan);
+      pendienteContinuar = {plan, opts, idea, promptsUsados, avisosTruncado};
+      btnContinuarGeneracion.style.display = "inline-block";
+      fijarEstado("Revisa el plan de piezas. Edítalo si quieres, o pulsa \"Generar piezas con este plan\" para continuar.", false);
+      return;
+    }
+
+    promptMejoradoWrap.style.display = "none";
+    await generarPiezasYPDF(plan, opts, idea, promptsUsados, avisosTruncado);
+  } catch(err){
+    console.error(err);
+    fijarEstado("❌ " + err.message, true);
+  } finally {
+    actualizarBotonGenerar();
+  }
+});
+
+btnEditarPrompt.addEventListener("click", () => {
+  if (promptMejoradoTexto.readOnly){
+    promptMejoradoTexto.readOnly = false;
+    promptMejoradoTexto.style.background = "#fff";
+    promptMejoradoTexto.focus();
+    btnEditarPrompt.textContent = "Cancelar edición";
+    btnContinuarGeneracion.style.display = "none";
+    btnRegenerarPrompt.style.display = "inline-block";
+  } else {
+    if (ultimoPlanGenerado) pintarPromptMejorado(ultimoPlanGenerado);
+    promptMejoradoTexto.readOnly = true;
+    promptMejoradoTexto.style.background = "var(--gris-claro)";
+    btnEditarPrompt.textContent = "✏️ Editar prompt mejorado";
+    btnRegenerarPrompt.style.display = "none";
+    if (pendienteContinuar) btnContinuarGeneracion.style.display = "inline-block";
+  }
+});
+
+btnContinuarGeneracion.addEventListener("click", async () => {
+  if (!pendienteContinuar) return;
+  const {plan, opts, idea, promptsUsados, avisosTruncado} = pendienteContinuar;
+  pendienteContinuar = null;
+  btnContinuarGeneracion.style.display = "none";
+  btnEditarPrompt.style.display = "none";
+  btnGenerar.disabled = true;
+
+  try{
+    fijarEstado("Generando las piezas a partir del plan revisado…", false);
+    await generarPiezasYPDF(plan, opts, idea, promptsUsados, avisosTruncado);
+  } catch(err){
+    console.error(err);
+    fijarEstado("❌ " + err.message, true);
+  } finally {
+    btnEditarPrompt.style.display = "inline-block";
+    actualizarBotonGenerar();
+  }
+});
+
+btnRegenerarPrompt.addEventListener("click", async () => {
+  if (!ultimosOpts){
+    alert("Genera primero un patrón para fijar el proveedor, el modelo y la API key.");
+    return;
+  }
+  const textoEditado = promptMejoradoTexto.value;
+  const planEditado = parsearTextoResumenEditado(textoEditado);
+  if (!planEditado){
+    alert("No se ha podido interpretar el prompt editado. Mantén el formato: una línea \"Prenda: ...\" y una lista numerada de piezas (\"1. nombre\" seguido de su descripción).");
+    return;
+  }
+
+  pendienteContinuar = null;
+  btnGenerar.disabled = true;
+  btnRegenerarPrompt.disabled = true;
+  promptMejoradoTexto.readOnly = true;
+  btnEditarPrompt.textContent = "✏️ Editar prompt mejorado";
+  btnContinuarGeneracion.style.display = "none";
+  btnRegenerarPrompt.style.display = "none";
+  ultimoPlanGenerado = planEditado;
+  mostrarAvisoTruncado(null);
+
+  const avisosTruncado = [];
+  const promptsUsados = [{etapa:"Planificación (prompt editado a mano)", system: "(el usuario editó manualmente el prompt mejorado)", user: textoEditado, resultado: JSON.stringify(planEditado, null, 2)}];
+
+  try{
+    fijarEstado("Regenerando el patrón a partir del prompt editado…", false);
+    await generarPiezasYPDF(planEditado, ultimosOpts, inputIdea.value.trim(), promptsUsados, avisosTruncado);
+  } catch(err){
+    console.error(err);
+    fijarEstado("❌ " + err.message, true);
+  } finally {
+    btnRegenerarPrompt.disabled = false;
+    actualizarBotonGenerar();
+  }
+});
+
+btnExportarTxt.addEventListener("click", () => {
+  if (!ultimosPrompts) return;
+  let contenido = "GenPatMod — prompts de entrada de esta generación\n";
+  contenido += "=".repeat(60) + "\n\n";
+  contenido += "Idea inicial:\n" + ultimosPrompts.idea + "\n\n";
+  contenido += "Plan de piezas (JSON):\n" + JSON.stringify(ultimosPrompts.plan, null, 2) + "\n\n";
+  ultimosPrompts.promptsUsados.forEach(p => {
+    contenido += "-".repeat(60) + "\n";
+    contenido += "Etapa: " + p.etapa + "\n\nSystem prompt:\n" + p.system + "\n\nUser prompt:\n" + p.user + "\n\n";
+  });
+  guardarArchivo(resolverNombreFichero(inputNombreTxt.value, "txt", "genpatmod_prompts.txt"), contenido, "text/plain;charset=utf-8");
+});
+</script>
+</body>
+</html>
