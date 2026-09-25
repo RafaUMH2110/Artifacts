@@ -1,0 +1,19 @@
+name: Sync artifacts index to IAC
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "artifacts/**"
+  workflow_dispatch:
+
+jobs:
+  sync-index:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Generate and push index to IAC
+        env:
+          DEST_TOKEN: ${{ secrets.IAC_SYNC_TOKEN }}
+        run: python3 .github/scripts/generate_index.py
