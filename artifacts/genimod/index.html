@@ -1,1 +1,1576 @@
-<h1>GenImOd - demo</h1>
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GenImOd &#8212; Generador de im&#225;genes de moda mediante IA</title>
+<style>
+  :root {
+    --bg: #f5f9fe;
+    --card: #ffffff;
+    --border: #d9e6f5;
+    --border-strong: #b7cfe9;
+    --text: #14283f;
+    --muted: #55708d;
+    --blue-50: #eaf3fc;
+    --blue-100: #d5e7f9;
+    --blue-500: #3b82c4;
+    --blue-600: #2b6cb0;
+    --blue-700: #21568f;
+    --ok: #1d7a4b;
+    --ok-bg: #e8f6ee;
+    --err: #b3261e;
+    --err-bg: #fdecea;
+    --warn-bg: #fff7e0;
+    --warn-border: #ecd48a;
+    --radius: 14px;
+    --shadow: 0 2px 10px rgba(33, 86, 143, 0.07);
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) { :root { color-scheme: light; } }
+  * { box-sizing: border-box; }
+  html { scroll-padding-top: 1rem; }
+  body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.55; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+  header.hero { padding: 2.5rem 0 1.5rem; }
+  header.hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.2rem, 5vw, 3.2rem); margin: 0; letter-spacing: -0.02em; color: var(--blue-700); font-weight: 700; }
+  header.hero p.sub { margin: .25rem 0 1rem; font-size: 1.15rem; color: var(--muted); }
+  .flow { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .92rem; }
+  .flow span.step { background: var(--blue-50); border: 1px solid var(--blue-100); color: var(--blue-700); padding: .25rem .7rem; border-radius: 999px; font-weight: 600; }
+  .flow span.sep { color: var(--blue-500); }
+
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); padding: 1.4rem 1.5rem; margin-bottom: 1.25rem; }
+  .card h2 { margin: 0 0 .9rem; font-size: 1.15rem; color: var(--blue-700); }
+  .card h3 { margin: 0 0 .5rem; font-size: 1rem; }
+
+  .notice { background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px; padding: .8rem 1rem; font-size: .9rem; margin-bottom: 1.25rem; }
+
+  label { display: block; font-weight: 600; margin-bottom: .35rem; font-size: .95rem; }
+  input[type="password"], input[type="text"], input[type="number"], select, textarea {
+    width: 100%; font: inherit; color: var(--text); background: #fff;
+    border: 1px solid var(--border-strong); border-radius: 10px; padding: .6rem .75rem;
+  }
+  textarea { resize: vertical; min-height: 120px; }
+  textarea.tall { min-height: 260px; }
+  textarea[readonly] { background: var(--blue-50); }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible, a:focus-visible {
+    outline: 3px solid var(--blue-500); outline-offset: 2px;
+  }
+
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  .field { margin-bottom: 1rem; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .key-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+  .key-row input { flex: 1 1 200px; }
+  .hint { font-size: .85rem; color: var(--muted); margin: .3rem 0 0; }
+  .badge { display: inline-block; font-size: .8rem; padding: .1rem .55rem; border-radius: 999px; font-weight: 600; margin-left: .4rem; }
+  .badge.ok { background: var(--ok-bg); color: var(--ok); }
+  .badge.no { background: var(--blue-50); color: var(--muted); }
+
+  button { font: inherit; cursor: pointer; border-radius: 10px; padding: .5rem .95rem; border: 1px solid var(--border-strong); background: #fff; color: var(--blue-700); font-weight: 600; }
+  button:hover:not(:disabled) { background: var(--blue-50); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
+  button.primary:hover:not(:disabled) { background: var(--blue-700); }
+  button.big { width: 100%; font-size: 1.15rem; padding: .95rem 1rem; display: flex; align-items: center; justify-content: center; gap: .7rem; }
+
+  .spinner { width: 1.1em; height: 1.1em; border: 3px solid rgba(255,255,255,.4); border-top-color: #fff; border-radius: 50%; animation: spin .8s linear infinite; display: none; }
+  .busy .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+  .status { margin-top: .9rem; padding: .7rem 1rem; border-radius: 10px; font-weight: 600; display: none; }
+  .status.show { display: block; }
+  .status.info { background: var(--blue-50); color: var(--blue-700); border: 1px solid var(--blue-100); }
+  .status.ok { background: var(--ok-bg); color: var(--ok); border: 1px solid #b9e2cb; }
+  .status.error { background: var(--err-bg); color: var(--err); border: 1px solid #f3b9b4; }
+
+  .image-box { border: 2px dashed var(--border-strong); border-radius: var(--radius); min-height: 220px; display: flex; align-items: center; justify-content: center; color: var(--muted); padding: 1rem; text-align: center; background: var(--blue-50); }
+  .image-box.filled { border-style: solid; background: #fff; padding: .5rem; }
+  .image-box img { max-width: 100%; height: auto; max-height: 85vh; border-radius: 8px; display: block; }
+  .meta { font-size: .88rem; color: var(--muted); margin: .75rem 0 0; display: grid; gap: .15rem; }
+
+  details.card summary { cursor: pointer; font-weight: 700; color: var(--blue-700); font-size: 1.15rem; }
+  details.card ol { padding-left: 1.3rem; margin: .8rem 0; }
+  details.card li { margin-bottom: .3rem; }
+
+  /* Historial y comparaci&#243;n */
+  .export-row { align-items: flex-end; }
+  .export-row select, .export-row input { width: auto; min-width: 8rem; }
+  .export-row .field-inline { margin: 0; }
+  .hist-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+  .hist-toolbar .count { color: var(--muted); font-size: .9rem; margin-right: auto; }
+  .hist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 1rem; }
+  .hist-item { border: 1px solid var(--border); border-radius: 12px; padding: .7rem; background: #fff; display: flex; flex-direction: column; gap: .5rem; }
+  .hist-item.selected { border-color: var(--blue-600); box-shadow: 0 0 0 2px var(--blue-100); }
+  .hist-item .thumb { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; border-radius: 8px; background: var(--blue-50); display: block; }
+  .hist-item .thumb-missing { width: 100%; aspect-ratio: 3 / 4; border-radius: 8px; background: var(--blue-50); color: var(--muted); display: flex; align-items: center; justify-content: center; text-align: center; font-size: .85rem; padding: .5rem; }
+  .hist-item .pick { display: flex; align-items: center; gap: .45rem; font-weight: 600; font-size: .88rem; margin: 0; }
+  .hist-item .pick input { width: 1.1rem; height: 1.1rem; }
+  .hist-item .idea { font-size: .88rem; margin: 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+  .hist-item .info { font-size: .8rem; color: var(--muted); margin: 0; }
+  .hist-item .actions { display: flex; flex-wrap: wrap; gap: .35rem; }
+  .hist-item .actions button { padding: .3rem .6rem; font-size: .85rem; }
+  .hist-empty { color: var(--muted); padding: 1rem; text-align: center; background: var(--blue-50); border: 2px dashed var(--border-strong); border-radius: 12px; }
+  .compare-scroll { overflow-x: auto; margin-top: 1rem; }
+  .compare-grid { display: grid; gap: 1rem; min-width: 0; }
+  .compare-col { border: 1px solid var(--border); border-radius: 12px; padding: .7rem; background: #fff; min-width: 0; }
+  .compare-col img { width: 100%; height: auto; border-radius: 8px; display: block; margin-bottom: .6rem; }
+  .compare-col h3 { font-size: .95rem; }
+  .compare-col dl { margin: 0 0 .6rem; font-size: .85rem; }
+  .compare-col dl div { display: flex; justify-content: space-between; gap: .5rem; padding: .2rem .35rem; border-radius: 6px; }
+  .compare-col dt { color: var(--muted); }
+  .compare-col dd { margin: 0; text-align: right; word-break: break-word; }
+  .compare-col .diff { background: var(--blue-100); font-weight: 700; }
+  .compare-col details summary { cursor: pointer; font-weight: 600; font-size: .88rem; color: var(--blue-700); }
+  .compare-col details p { font-size: .82rem; white-space: pre-wrap; word-break: break-word; margin: .4rem 0; }
+
+  footer { text-align: center; font-size: .82rem; color: var(--muted); padding-top: 1rem; }
+  footer a { color: var(--blue-600); }
+  .hidden { display: none !important; }
+
+  @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
+</style>
+</head>
+<body
+  data-app-title="GenImOd"
+  data-app-description="Genera imágenes de moda con IA: mejora la idea con Claude y crea la imagen final con FLUX (fal.ai). Versión completa, con modelos y parámetros configurables."
+  data-categories="ia,diseno-creatividad,generacion-contenido,docencia"
+  data-tags="Claude,FLUX,fal.ai,Imágenes,Moda"
+>
+<div class="wrap">
+
+  <header class="hero">
+    <h1>GenImOd</h1>
+    <p class="sub">Generador de im&#225;genes de moda mediante IA</p>
+    <div class="flow" aria-label="Flujo de trabajo">
+      <span class="step">Idea inicial</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">Claude</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">Prompt optimizado</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">FLUX</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">Imagen</span>
+    </div>
+  </header>
+
+  <div class="notice" role="note">
+    <strong>Aviso de seguridad:</strong> esta aplicaci&#243;n funciona directamente desde el navegador. Las API keys se almacenan localmente en este dispositivo y se env&#237;an &#250;nicamente al proveedor correspondiente para realizar las solicitudes. Almacenar una API key en <code>localStorage</code> es c&#243;modo, pero no equivale a guardar un secreto en un servidor. No se recomienda este mecanismo para secretos institucionales ni para aplicaciones p&#250;blicas de producci&#243;n; para esos entornos se recomienda utilizar un backend o proxy seguro.
+  </div>
+
+  <!-- SECCI&#211;N 1 &#8212; CONFIGURACI&#211;N -->
+  <section class="card" aria-labelledby="h-config">
+    <h2 id="h-config">1. Configuraci&#243;n de las API keys</h2>
+    <div class="grid2">
+      <div>
+        <label for="anthropicKey">API key de Anthropic <span id="anthropicBadge" class="badge no">sin guardar</span></label>
+        <div class="key-row">
+          <input type="password" id="anthropicKey" autocomplete="off" spellcheck="false">
+          <button type="button" id="anthropicSave">Guardar</button>
+          <button type="button" id="anthropicToggle" aria-pressed="false">Mostrar</button>
+          <button type="button" id="anthropicDelete">Borrar</button>
+        </div>
+      </div>
+      <div>
+        <label for="falKey">API key de fal.ai <span id="falBadge" class="badge no">sin guardar</span></label>
+        <div class="key-row">
+          <input type="password" id="falKey" autocomplete="off" spellcheck="false">
+          <button type="button" id="falSave">Guardar</button>
+          <button type="button" id="falToggle" aria-pressed="false">Mostrar</button>
+          <button type="button" id="falDelete">Borrar</button>
+        </div>
+      </div>
+    </div>
+    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com y fal.run). La validez definitiva la confirma la respuesta del proveedor.</p>
+  </section>
+
+  <!-- SECCI&#211;N 2 &#8212; MODELOS -->
+  <section class="card" aria-labelledby="h-models">
+    <h2 id="h-models">2. Modelos</h2>
+    <div class="grid2">
+      <div>
+        <div class="field">
+          <label for="claudeModel">Modelo de Claude</label>
+          <select id="claudeModel"></select>
+        </div>
+        <div class="field hidden" id="claudeCustomWrap">
+          <label for="claudeCustom">Identificador del modelo de Claude</label>
+          <input type="text" id="claudeCustom" autocomplete="off" spellcheck="false" placeholder="Identificador exacto del modelo">
+          <p class="hint">No se comprueba de antemano: ser&#225; la API la que confirme si es v&#225;lido.</p>
+        </div>
+        <div class="field">
+          <label for="maxTokens">M&#225;ximo de tokens de Claude</label>
+          <input type="number" id="maxTokens" min="1" step="1" inputmode="numeric" value="4096">
+          <p class="hint">L&#237;mite de longitud de la respuesta de Claude (<code>max_tokens</code>). Por defecto 4096. Si es demasiado bajo, el prompt puede quedar cortado.</p>
+        </div>
+      </div>
+      <div>
+        <div class="field">
+          <label for="falModel">Modelo de generaci&#243;n de imagen</label>
+          <select id="falModel"></select>
+        </div>
+        <div class="field hidden" id="falCustomWrap">
+          <label for="falCustom">Identificador del modelo de fal.ai</label>
+          <input type="text" id="falCustom" autocomplete="off" spellcheck="false" placeholder="p. ej. fal-ai/flux-pro/v1.1">
+          <p class="hint">Se enviar&#225;n los par&#225;metros definidos en <code>CUSTOM_FAL_PARAMS</code> (configurable en el c&#243;digo).</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SECCI&#211;N 3 &#8212; PROMPT -->
+  <section class="card" aria-labelledby="h-prompt">
+    <h2 id="h-prompt">3. Prompt</h2>
+    <div class="field">
+      <label for="systemPrompt">Instrucciones del sistema</label>
+      <textarea id="systemPrompt" class="tall"></textarea>
+      <div class="row">
+        <button type="button" id="systemClear">Borrar</button>
+        <button type="button" id="systemRestore">Restaurar predeterminado</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="idea">Idea inicial <span aria-hidden="true">*</span></label>
+      <textarea id="idea" required aria-required="true" placeholder="Describe brevemente la prenda que quieres visualizar..."></textarea>
+      <div class="row"><button type="button" id="ideaClear">Borrar</button></div>
+    </div>
+  </section>
+
+  <!-- SECCI&#211;N 4 &#8212; PAR&#193;METROS -->
+  <section class="card" aria-labelledby="h-params">
+    <h2 id="h-params">4. Par&#225;metros de la imagen</h2>
+    <div class="grid3">
+      <div>
+        <label for="steps">N&#250;mero de pasos de inferencia</label>
+        <select id="steps"></select>
+      </div>
+      <div>
+        <label for="formatFixed">Formato de generaci&#243;n</label>
+        <input type="text" id="formatFixed" value="PNG" readonly aria-readonly="true">
+      </div>
+      <div>
+        <label for="imageSize">Tama&#241;o / formato de imagen</label>
+        <select id="imageSize"></select>
+      </div>
+    </div>
+    <div class="field" style="margin-top:1rem">
+      <label for="safety">Tolerancia del filtro de seguridad de fal.ai</label>
+      <select id="safety"></select>
+      <p class="hint">Si el filtro marca una imagen, fal.ai suele devolverla en negro. Un valor m&#225;s alto es m&#225;s permisivo; por defecto, 2. Usa la opci&#243;n menos permisiva que te d&#233; buenos resultados, sobre todo si la usan alumnos.</p>
+    </div>
+  </section>
+
+  <!-- SECCI&#211;N 5 &#8212; ACCI&#211;N -->
+  <section class="card" aria-labelledby="h-action">
+    <h2 id="h-action">5. Generar</h2>
+    <button type="button" id="generate" class="primary big" disabled>
+      <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
+    </button>
+    <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
+    <div id="status" class="status" role="status" aria-live="polite"></div>
+    <div id="error" class="status error" role="alert"></div>
+  </section>
+
+  <!-- RESULTADOS -->
+  <section class="card" aria-labelledby="h-claude">
+    <h2 id="h-claude">Prompt generado por Claude</h2>
+    <textarea id="generatedPrompt" class="tall" readonly aria-label="Prompt generado por Claude" placeholder="El prompt generado por Claude aparecer&#225; aqu&#237;."></textarea>
+    <div class="row">
+      <button type="button" id="copyPrompt" disabled>Copiar prompt</button>
+      <button type="button" id="downloadPrompt" disabled>Descargar prompt</button>
+      <button type="button" id="clearPrompt" disabled>Borrar</button>
+      <button type="button" id="downloadTxt" disabled>Descargar prompts (.txt)</button>
+    </div>
+    <p class="meta" id="claudeMeta"></p>
+  </section>
+
+  <section class="card" aria-labelledby="h-image">
+    <h2 id="h-image">Imagen generada</h2>
+    <div class="image-box" id="imageBox"><span>La imagen generada aparecer&#225; aqu&#237;.</span></div>
+    <div class="meta" id="imageMeta"></div>
+    <div class="row export-row">
+      <div class="field-inline">
+        <label for="exportFormat">Formato de exportaci&#243;n</label>
+        <select id="exportFormat">
+          <option value="png">PNG (original de fal.ai)</option>
+          <option value="jpeg">JPEG</option>
+        </select>
+      </div>
+      <div class="field-inline hidden" id="jpegQualityWrap">
+        <label for="jpegQuality">Calidad JPEG (1-100)</label>
+        <input type="number" id="jpegQuality" min="1" max="100" step="1" inputmode="numeric" value="92">
+      </div>
+      <button type="button" id="downloadImage" class="primary" disabled>Descargar imagen PNG</button>
+    </div>
+    <p class="hint">El PNG es el archivo original que devuelve fal.ai. El JPEG se convierte en tu navegador y ocupa menos; si la imagen tuviera transparencia, se rellena con fondo blanco.</p>
+  </section>
+
+  <!-- HISTORIAL LOCAL -->
+  <section class="card" aria-labelledby="h-history">
+    <h2 id="h-history">Historial de generaciones</h2>
+    <p class="hint" style="margin-top:0">Cada generaci&#243;n se guarda autom&#225;ticamente en este navegador (IndexedDB) con su idea, sus instrucciones, el prompt de Claude, los par&#225;metros y la imagen. No incluye API keys. Selecciona de 2 a 4 para compararlas.</p>
+    <div class="hist-toolbar">
+      <span class="count" id="historyCount" aria-live="polite">0 generaciones</span>
+      <button type="button" id="historyCompare" class="primary" disabled>Comparar selecci&#243;n</button>
+      <button type="button" id="historyUnselect" disabled>Quitar selecci&#243;n</button>
+      <button type="button" id="historyClear" disabled>Vaciar historial</button>
+    </div>
+    <div id="historyList" class="hist-grid"></div>
+    <div id="compareWrap" class="hidden">
+      <h3 style="margin-top:1.25rem">Comparaci&#243;n</h3>
+      <p class="hint">Los valores que difieren entre las generaciones aparecen resaltados.</p>
+      <div class="compare-scroll"><div id="compareGrid" class="compare-grid"></div></div>
+      <div class="row"><button type="button" id="compareClose">Cerrar comparaci&#243;n</button></div>
+    </div>
+  </section>
+
+  <!-- SECCI&#211;N EDUCATIVA -->
+  <details class="card">
+    <summary>&#191;C&#243;mo funciona GenImOd?</summary>
+    <ol>
+      <li>El usuario introduce una idea inicial.</li>
+      <li>Claude analiza y mejora la idea.</li>
+      <li>Claude genera un prompt especializado en ingl&#233;s.</li>
+      <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
+      <li>FLUX genera la imagen.</li>
+      <li>GenImOd muestra y permite descargar el resultado.</li>
+    </ol>
+    <p>La imagen resultante depende de:</p>
+    <ul>
+      <li>La idea inicial.</li>
+      <li>Las instrucciones del sistema.</li>
+      <li>El modelo de Claude seleccionado.</li>
+      <li>El modelo FLUX seleccionado.</li>
+      <li>Los par&#225;metros de inferencia.</li>
+    </ul>
+    <p>Prueba a cambiar solo una de estas variables cada vez para observar su efecto sobre el resultado.</p>
+  </details>
+
+  <footer>
+    <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
+    <p>&#218;ltima modificaci&#243;n: 24/09/2026</p>
+  </footer>
+</div>
+
+<script>
+"use strict";
+(() => {
+
+/* ==========================================================================
+   CONFIGURACI\u00d3N \u2014 modifica aqu\u00ed los valores habituales
+   ========================================================================== */
+const APP_CONFIG = {
+  name: "GenImOd",
+  requestTimeoutMs: 60000,        // Tiempo m\u00e1ximo por solicitud (60 s)
+  queueMaxWaitMs: 120000,         // Tiempo m\u00e1ximo total si fal.ai responde con cola
+  queuePollIntervalMs: 2000,
+  anthropic: {
+    endpoint: "https://api.anthropic.com/v1/messages",
+    version: "2023-06-01",
+    defaultModel: "claude-sonnet-4-5-20250929",   // Configurable: no asumas que es v\u00e1lido indefinidamente
+    maxTokens: 4096
+  },
+  fal: {
+    baseUrl: "https://fal.run/",                  // El endpoint final es baseUrl + identificador del modelo
+    defaultModel: "fal-ai/flux-pro/v1.1",
+    defaultInferenceSteps: 20,
+    defaultImageSize: "portrait_4_3",
+    defaultSafetyTolerance: "2",                  // 1 = m\u00e1s estricto, 6 = m\u00e1s permisivo
+    outputFormat: "png",
+    numImages: 1
+  }
+};
+
+/* Modelos de Claude configurados. Para a\u00f1adir otro, agrega una entrada. */
+const CLAUDE_MODELS = [
+  { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)" },
+  { id: "claude-sonnet-5",            label: "Claude Sonnet 5 (claude-sonnet-5)" },
+  { id: "claude-opus-5-5",            label: "Claude Opus 5.5 (claude-opus-5-5)" },
+  { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" }
+];
+
+/* Modelos de fal.ai configurados y par\u00e1metros que admite cada uno.
+   Para a\u00f1adir otro modelo, agrega una entrada con su esquema real. */
+const FAL_MODELS = {
+  "fal-ai/flux-pro/v1.1": {
+    label: "FLUX 1.1 [pro] (fal-ai/flux-pro/v1.1)",
+    params: ["prompt", "num_inference_steps", "num_images", "output_format", "image_size", "safety_tolerance"],
+    imageSizes: [
+      { value: "portrait_4_3",  label: "Retrato 4:3" },
+      { value: "portrait_16_9", label: "Retrato 16:9" }
+    ]
+  }
+};
+/* Par\u00e1metros enviados a un modelo introducido manualmente ("Otro\u2026"). */
+const CUSTOM_FAL_PARAMS = ["prompt", "num_inference_steps", "num_images", "output_format", "image_size", "safety_tolerance"];
+/* Niveles del filtro de seguridad de la familia FLUX Pro (se env\u00edan como texto). */
+const SAFETY_TOLERANCE_OPTIONS = [
+  { value: "1", label: "1 - Muy estricto" },
+  { value: "2", label: "2 - Estricto (predeterminado)" },
+  { value: "3", label: "3 - Intermedio" },
+  { value: "4", label: "4 - Permisivo" },
+  { value: "5", label: "5 - Muy permisivo" },
+  { value: "6", label: "6 - El m\u00e1s permisivo" }
+];
+const CUSTOM_FAL_IMAGE_SIZES = FAL_MODELS[APP_CONFIG.fal.defaultModel].imageSizes;
+const INFERENCE_STEP_OPTIONS = [10, 20, 30, 40];
+
+/* Exportaci\u00f3n de la imagen descargada. La generaci\u00f3n siempre se solicita en PNG;
+   el JPEG se obtiene convirtiendo ese PNG en el navegador. */
+const EXPORT_CONFIG = { defaultFormat: "png", defaultJpegQuality: 92 };
+const EXPORT_FORMATS = {
+  png:  { mime: "image/png",  ext: ".png", label: "PNG" },
+  jpeg: { mime: "image/jpeg", ext: ".jpg", label: "JPEG" }
+};
+
+/* Historial local de generaciones (IndexedDB, solo en este navegador). */
+const HISTORY_CONFIG = {
+  dbName: "genimod_history",
+  storeName: "generations",
+  maxEntries: 30,        // Al superarse, se eliminan las m\u00e1s antiguas
+  maxCompare: 4          // M\u00e1ximo de generaciones comparables a la vez
+};
+
+/* Precios documentados. Si est\u00e1n vac\u00edos, se muestra "Coste: no disponible".
+   Formato Anthropic: { "<modelo>": { inputPerMTok: <USD>, outputPerMTok: <USD> } }
+   Formato fal:       { "<modelo>": { perImage: <USD> } } */
+const PRICING = {
+  anthropic: {},
+  fal: {}
+};
+
+/* Prompt del sistema predeterminado para Claude. */
+const DEFAULT_SYSTEM_PROMPT = `Eres un experto en fotograf\u00eda comercial de moda, direcci\u00f3n de arte, fotograf\u00eda de producto y descripci\u00f3n de materiales y texturas.
+
+Tu tarea es transformar una idea inicial, posiblemente breve o incompleta, en un prompt de alta calidad para un modelo de generaci\u00f3n de im\u00e1genes FLUX.
+
+La imagen solicitada debe representar una prenda de moda mediante una fotograf\u00eda comercial hiperrealista de cuerpo completo.
+
+Describe de forma precisa y visualmente \u00fatil:
+
+* La prenda y su construcci\u00f3n.
+* Silueta, corte y proporciones.
+* Materiales y tejidos.
+* Textura superficial y comportamiento f\u00edsico del tejido.
+* Costuras, pespuntes, dobladillos, cierres y acabados.
+* Peque\u00f1as imperfecciones naturales.
+* Variaciones sutiles del material.
+* Pliegues, arrugas y tensi\u00f3n del tejido.
+* Microdetalles visibles.
+* Ca\u00edda natural de la prenda.
+* Relaci\u00f3n entre la prenda y el cuerpo.
+* Pose y postura del modelo cuando sea relevante.
+* Iluminaci\u00f3n.
+* Sombras y reflejos.
+* Entorno y fondo.
+* Composici\u00f3n fotogr\u00e1fica.
+* Distancia y perspectiva de c\u00e1mara.
+* Focal aproximada, por ejemplo 85mm, cuando resulte apropiada.
+* Profundidad de campo.
+* Apertura aproximada, por ejemplo f/1.4, cuando resulte apropiada.
+* Calidad y caracter\u00edsticas propias de una fotograf\u00eda comercial real.
+
+No utilices palabras vac\u00edas o gen\u00e9ricas como \u201cphotorealistic\u201d, \u201chyperrealistic\u201d, \u201cultra-detailed\u201d o \u201chyperdetailed\u201d como sustituto de una descripci\u00f3n visual concreta.
+
+En su lugar, describe los elementos f\u00edsicos, \u00f3pticos, materiales y fotogr\u00e1ficos que hacen que la imagen resulte cre\u00edble.
+
+La fotograf\u00eda debe mostrar la prenda de cuerpo completo y permitir apreciar claramente su dise\u00f1o y construcci\u00f3n.
+
+El prompt final debe estar optimizado para FLUX.
+
+Devuelve \u00daNICAMENTE el prompt final en ingl\u00e9s.
+
+No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, comillas ni bloques Markdown.`;
+
+/* Claves de localStorage (las API keys usan exactamente estos nombres). */
+const STORAGE = {
+  anthropicKey: "ia_anthropic_key",
+  falKey: "ia_fal_key",
+  claudeModel: "genimod_claude_model",
+  falModel: "genimod_fal_model",
+  steps: "genimod_inference_steps",
+  maxTokens: "genimod_max_tokens",
+  imageSize: "genimod_image_size",
+  safety: "genimod_safety_tolerance",
+  exportFormat: "genimod_export_format",
+  jpegQuality: "genimod_jpeg_quality"
+};
+
+const OTHER = "__otro__";
+
+/* ==========================================================================
+   ESTADO Y REFERENCIAS
+   ========================================================================== */
+const $ = (id) => document.getElementById(id);
+const state = {
+  busy: false,
+  lastPrompt: "",
+  lastSystem: "",
+  lastIdea: "",
+  imageUrl: "",
+  imageModel: "",
+  imageSteps: null
+};
+
+/* ==========================================================================
+   ALMACENAMIENTO LOCAL
+   ========================================================================== */
+function storageGet(key) { try { return localStorage.getItem(key) || ""; } catch (e) { return ""; } }
+function storageSet(key, value) { try { localStorage.setItem(key, value); return true; } catch (e) { return false; } }
+function storageRemove(key) { try { localStorage.removeItem(key); } catch (e) { /* sin acci\u00f3n */ } }
+
+/* ==========================================================================
+   GESTI\u00d3N DE API KEYS
+   ========================================================================== */
+function keyConfig(provider) {
+  return provider === "anthropic"
+    ? { storage: STORAGE.anthropicKey, input: $("anthropicKey"), badge: $("anthropicBadge"), name: "Anthropic" }
+    : { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
+}
+
+function saveApiKey(provider) {
+  const cfg = keyConfig(provider);
+  const value = cfg.input.value.trim();
+  if (!value) { showError(`Introduce la API key de ${cfg.name} antes de guardarla.`); return; }
+  if (!storageSet(cfg.storage, value)) { showError("No se ha podido guardar la clave en este navegador."); return; }
+  clearError();
+  cfg.input.value = "";
+  showStatus(`API key de ${cfg.name} guardada en este dispositivo.`, "ok");
+  refreshKeyBadges();
+  validateForm();
+}
+
+function deleteApiKey(provider) {
+  const cfg = keyConfig(provider);
+  storageRemove(cfg.storage);
+  cfg.input.value = "";
+  showStatus(`API key de ${cfg.name} eliminada.`, "info");
+  refreshKeyBadges();
+  validateForm();
+}
+
+function toggleKeyVisibility(provider) {
+  const cfg = keyConfig(provider);
+  const btn = $(provider + "Toggle");
+  const show = cfg.input.type === "password";
+  cfg.input.type = show ? "text" : "password";
+  btn.textContent = show ? "Ocultar" : "Mostrar";
+  btn.setAttribute("aria-pressed", String(show));
+}
+
+function refreshKeyBadges() {
+  ["anthropic", "fal"].forEach((p) => {
+    const cfg = keyConfig(p);
+    const saved = !!storageGet(cfg.storage);
+    cfg.badge.textContent = saved ? "guardada" : "sin guardar";
+    cfg.badge.className = "badge " + (saved ? "ok" : "no");
+    cfg.input.placeholder = saved ? "Clave guardada (introduce otra para reemplazarla)" : "Pega aqu\u00ed tu API key";
+  });
+}
+
+/* ==========================================================================
+   MODELOS Y PAR\u00c1METROS
+   ========================================================================== */
+function fillSelect(select, options) {
+  select.innerHTML = "";
+  options.forEach((o) => {
+    const opt = document.createElement("option");
+    opt.value = o.value; opt.textContent = o.label;
+    select.appendChild(opt);
+  });
+}
+
+function getActiveModel(kind) {
+  if (kind === "claude") {
+    const v = $("claudeModel").value;
+    return (v === OTHER ? $("claudeCustom").value : v).trim();
+  }
+  const v = $("falModel").value;
+  return (v === OTHER ? $("falCustom").value : v).trim();
+}
+
+function refreshImageSizes(preferred) {
+  const sel = $("falModel").value;
+  const sizes = sel === OTHER ? CUSTOM_FAL_IMAGE_SIZES : FAL_MODELS[sel].imageSizes;
+  fillSelect($("imageSize"), sizes.map((s) => ({ value: s.value, label: s.label })));
+  const wanted = preferred || $("imageSize").value;
+  if (sizes.some((s) => s.value === wanted)) $("imageSize").value = wanted;
+  else $("imageSize").value = sizes.some((s) => s.value === APP_CONFIG.fal.defaultImageSize) ? APP_CONFIG.fal.defaultImageSize : sizes[0].value;
+}
+
+function toggleCustomFields() {
+  $("claudeCustomWrap").classList.toggle("hidden", $("claudeModel").value !== OTHER);
+  $("falCustomWrap").classList.toggle("hidden", $("falModel").value !== OTHER);
+}
+
+/* ==========================================================================
+   VALIDACI\u00d3N DEL FORMULARIO
+   ========================================================================== */
+/* Devuelve el m\u00e1ximo de tokens como entero positivo, o NaN si el campo no es v\u00e1lido. */
+function getMaxTokens() {
+  const raw = $("maxTokens").value.trim();
+  const n = Number(raw);
+  return raw !== "" && Number.isInteger(n) && n >= 1 ? n : NaN;
+}
+
+function validateForm() {
+  const hasKeys = !!storageGet(STORAGE.anthropicKey) && !!storageGet(STORAGE.falKey);
+  const hasIdea = $("idea").value.trim().length > 0;
+  const modelsOk = getActiveModel("claude").length > 0 && getActiveModel("fal").length > 0;
+  const tokensOk = Number.isFinite(getMaxTokens());
+  const ok = hasKeys && hasIdea && modelsOk && tokensOk && !state.busy;
+  $("generate").disabled = !ok;
+  const hint = $("generateHint");
+  if (state.busy) hint.textContent = "";
+  else if (ok) hint.textContent = "Todo listo para generar.";
+  else {
+    const missing = [];
+    if (!storageGet(STORAGE.anthropicKey)) missing.push("la API key de Anthropic");
+    if (!storageGet(STORAGE.falKey)) missing.push("la API key de fal.ai");
+    if (!hasIdea) missing.push("la idea inicial");
+    if (!modelsOk) missing.push("los identificadores de modelo");
+    if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
+    hint.textContent = "Falta: " + missing.join(", ") + ".";
+  }
+  return ok;
+}
+
+/* ==========================================================================
+   MENSAJES DE ESTADO Y ERROR
+   ========================================================================== */
+function showStatus(message, type = "info") {
+  const el = $("status");
+  el.textContent = message;
+  el.className = "status show " + type;
+}
+function showError(message) {
+  const el = $("error");
+  el.textContent = "Error: " + message;
+  el.classList.add("show");
+}
+function clearError() { $("error").classList.remove("show"); $("error").textContent = ""; }
+
+function showLoading(isLoading, label) {
+  state.busy = isLoading;
+  $("generate").classList.toggle("busy", isLoading);
+  $("generate").setAttribute("aria-busy", String(isLoading));
+  $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen";
+  validateForm();
+}
+
+/* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
+function redact(text) {
+  let out = String(text || "");
+  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.falKey), $("anthropicKey").value, $("falKey").value]
+    .filter((k) => k && k.length > 5)
+    .forEach((k) => { out = out.split(k).join("[clave oculta]"); });
+  return out;
+}
+
+/* ==========================================================================
+   GESTI\u00d3N DE ERRORES HTTP
+   ========================================================================== */
+class AppError extends Error {}
+
+function messageForStatus(status) {
+  if (status === 400) return "Solicitud no v\u00e1lida. Revisa los par\u00e1metros introducidos.";
+  if (status === 401) return "La API key no es v\u00e1lida o no est\u00e1 autorizada.";
+  if (status === 403) return "El acceso a este modelo o servicio no est\u00e1 autorizado.";
+  if (status === 404) return "El modelo o endpoint no existe.";
+  if (status === 429) return "Se ha alcanzado el l\u00edmite de uso o de solicitudes.";
+  if (status >= 500 && status <= 599) return "El proveedor ha devuelto un error interno.";
+  return `El proveedor ha devuelto una respuesta inesperada (HTTP ${status}).`;
+}
+
+/* Extrae un detalle breve y seguro del cuerpo de error del proveedor. */
+function providerDetail(data) {
+  try {
+    let d = "";
+    if (data && data.error && typeof data.error.message === "string") d = data.error.message;
+    else if (data && typeof data.detail === "string") d = data.detail;
+    else if (data && Array.isArray(data.detail) && data.detail[0] && data.detail[0].msg) d = data.detail[0].msg;
+    else if (data && typeof data.message === "string") d = data.message;
+    return d ? redact(d).slice(0, 300) : "";
+  } catch (e) { return ""; }
+}
+
+/* fetch con timeout (AbortController) y errores traducidos. */
+async function fetchJson(url, options) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), APP_CONFIG.requestTimeoutMs);
+  let response;
+  try {
+    response = await fetch(url, { ...options, signal: controller.signal });
+  } catch (err) {
+    if (err && err.name === "AbortError") throw new AppError("La operaci\u00f3n ha superado el tiempo m\u00e1ximo de espera.");
+    throw new AppError("No se ha podido establecer conexi\u00f3n con el servicio.");
+  } finally {
+    clearTimeout(timer);
+  }
+  let data = null;
+  let parseFailed = false;
+  try { data = await response.json(); } catch (e) { parseFailed = true; }
+  if (!response.ok) {
+    const detail = providerDetail(data);
+    throw new AppError(messageForStatus(response.status) + (detail ? ` Detalle del proveedor: ${detail}` : ""));
+  }
+  if (parseFailed || data === null) throw new AppError("La respuesta del proveedor no es un JSON v\u00e1lido.");
+  return data;
+}
+
+/* ==========================================================================
+   ANTHROPIC \u2014 MEJORA DEL PROMPT
+   ========================================================================== */
+/* Mensaje de usuario estructurado que se env\u00eda a Claude. */
+function buildUserMessage(idea) {
+  return `Transforma la siguiente idea en un prompt profesional para FLUX.
+
+IDEA INICIAL:
+${idea}
+
+REQUISITOS:
+- Fotograf\u00eda de moda.
+- Cuerpo completo.
+- La prenda debe ser claramente visible.
+- Descripci\u00f3n precisa de materiales y construcci\u00f3n.
+- Iluminaci\u00f3n y c\u00e1mara f\u00edsicamente plausibles.
+- El resultado final debe ser un prompt en ingl\u00e9s.
+- Devuelve exclusivamente el prompt final.`;
+}
+
+async function mejorarPromptConClaude(systemPrompt, idea, model, maxTokens) {
+  const body = {
+    model,
+    max_tokens: maxTokens,
+    messages: [{ role: "user", content: buildUserMessage(idea) }]
+  };
+  if (systemPrompt.trim()) body.system = systemPrompt;
+
+  const data = await fetchJson(APP_CONFIG.anthropic.endpoint, {
+    method: "POST",
+    headers: {
+      "x-api-key": storageGet(STORAGE.anthropicKey),
+      "anthropic-version": APP_CONFIG.anthropic.version,
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  return { text: extractClaudeText(data), usage: data && data.usage ? data.usage : null, stopReason: data && data.stop_reason ? data.stop_reason : null };
+}
+
+/* Extrae el texto de los bloques de contenido; no asume que toda la respuesta sea texto. */
+function extractClaudeText(data) {
+  if (!data || !Array.isArray(data.content)) throw new AppError("Claude no ha generado un prompt v\u00e1lido.");
+  const text = data.content
+    .filter((b) => b && b.type === "text" && typeof b.text === "string")
+    .map((b) => b.text)
+    .join("\n")
+    .trim();
+  if (!text) throw new AppError("Claude no ha generado un prompt v\u00e1lido.");
+  return text;
+}
+
+/* ==========================================================================
+   FAL.AI \u2014 GENERACI\u00d3N DE IMAGEN
+   ========================================================================== */
+function buildFalBody(model, prompt, steps, imageSize, safety) {
+  const allowed = FAL_MODELS[model] ? FAL_MODELS[model].params : CUSTOM_FAL_PARAMS;
+  const all = {
+    prompt,
+    num_inference_steps: steps,
+    num_images: APP_CONFIG.fal.numImages,
+    output_format: APP_CONFIG.fal.outputFormat,   // Siempre PNG
+    image_size: imageSize,
+    safety_tolerance: safety
+  };
+  const body = {};
+  allowed.forEach((k) => { if (k in all) body[k] = all[k]; });
+  return body;
+}
+
+async function generarImagenConFal(prompt, model, steps, imageSize, safety) {
+  const headers = {
+    "Authorization": "Key " + storageGet(STORAGE.falKey),
+    "Content-Type": "application/json"
+  };
+  const url = APP_CONFIG.fal.baseUrl + model;   // p. ej. https://fal.run/fal-ai/flux-pro/v1.1
+  let data = await fetchJson(url, {
+    method: "POST", headers,
+    body: JSON.stringify(buildFalBody(model, prompt, steps, imageSize, safety))
+  });
+
+  // Si el servicio responde con un flujo de cola en lugar del resultado final, se sigue el flujo documentado.
+  const hasImages = data && Array.isArray(data.images);
+  if (!hasImages && data && (data.status_url || data.response_url)) {
+    data = await esperarColaFal(data, headers);
+  }
+  return extractFalImage(data);
+}
+
+async function esperarColaFal(queued, headers) {
+  const started = Date.now();
+  const statusUrl = queued.status_url;
+  const responseUrl = queued.response_url;
+  if (!statusUrl || !responseUrl) throw new AppError("fal.ai no ha devuelto ninguna imagen.");
+  const authOnly = { Authorization: headers.Authorization };
+  while (Date.now() - started < APP_CONFIG.queueMaxWaitMs) {
+    const st = await fetchJson(statusUrl, { method: "GET", headers: authOnly });
+    if (st && st.status === "COMPLETED") {
+      return await fetchJson(responseUrl, { method: "GET", headers: authOnly });
+    }
+    if (st && (st.status === "FAILED" || st.status === "ERROR")) {
+      throw new AppError("El proveedor ha devuelto un error interno.");
+    }
+    await new Promise((r) => setTimeout(r, APP_CONFIG.queuePollIntervalMs));
+  }
+  throw new AppError("La operaci\u00f3n ha superado el tiempo m\u00e1ximo de espera.");
+}
+
+/* Valida la estructura y devuelve la primera imagen. */
+function extractFalImage(data) {
+  if (!data || !Array.isArray(data.images) || !data.images.length) {
+    throw new AppError("fal.ai no ha devuelto ninguna imagen.");
+  }
+  const img = data.images[0];
+  if (!img || typeof img.url !== "string" || !/^https:\/\//i.test(img.url)) {
+    throw new AppError("La respuesta de fal.ai no contiene una imagen v\u00e1lida.");
+  }
+  return { url: img.url, width: img.width || null, height: img.height || null, contentType: img.content_type || null, seed: data.seed ?? null,
+           // has_nsfw_concepts: lista con un booleano por imagen (si el modelo la devuelve)
+           nsfw: Array.isArray(data.has_nsfw_concepts) && data.has_nsfw_concepts[0] === true };
+}
+
+/* ==========================================================================
+   VISUALIZACI\u00d3N
+   ========================================================================== */
+function displayGeneratedPrompt(text, usage, model, note) {
+  $("generatedPrompt").value = text;
+  ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !text; });
+  const meta = $("claudeMeta");
+  meta.textContent = "";
+  if (!text) return;
+  const lines = [`Modelo de Claude: ${model}`];
+  if (usage && Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)) {
+    lines.push(`Tokens: ${usage.input_tokens} de entrada \u00b7 ${usage.output_tokens} de salida`);
+  }
+  lines.push(costLineAnthropic(model, usage));
+  if (note) lines.push(note);
+  lines.forEach((l) => { const s = document.createElement("div"); s.textContent = l; meta.appendChild(s); });
+}
+
+function costLineAnthropic(model, usage) {
+  const p = PRICING.anthropic[model];
+  if (p && usage && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
+    const cost = (usage.input_tokens * p.inputPerMTok + usage.output_tokens * p.outputPerMTok) / 1e6;
+    return `Coste del prompt: ${cost.toFixed(5)} USD`;
+  }
+  return "Coste: no disponible";
+}
+function costLineFal(model) {
+  const p = PRICING.fal[model];
+  if (p && Number.isFinite(p.perImage)) return `Coste de la imagen: ${p.perImage.toFixed(4)} USD`;
+  return "Coste: no disponible";
+}
+
+function displayGeneratedImage(info, model, steps) {
+  state.imageUrl = info.url;
+  state.imageModel = model;
+  state.imageSteps = steps;
+  const box = $("imageBox");
+  box.className = "image-box filled";
+  box.innerHTML = "";
+  const img = document.createElement("img");
+  img.alt = "Imagen de moda generada por IA";
+  img.referrerPolicy = "no-referrer";
+  img.addEventListener("load", () => renderImageMeta(info, model, steps, img.naturalWidth, img.naturalHeight));
+  img.addEventListener("error", () => showError("No se ha podido cargar la imagen desde fal.ai. Prueba a descargarla de nuevo."));
+  img.src = info.url;
+  box.appendChild(img);
+  renderImageMeta(info, model, steps, info.width, info.height);
+  $("downloadImage").disabled = false;
+}
+
+function renderImageMeta(info, model, steps, w, h) {
+  const meta = $("imageMeta");
+  meta.innerHTML = "";
+  const lines = [];
+  if (w && h) lines.push(`Dimensiones: ${w} \u00d7 ${h} px`);
+  lines.push(`Modelo: ${model}`);
+  lines.push(`Pasos de inferencia: ${steps}`);
+  if (info.nsfw) lines.push("Aviso: el filtro de seguridad de fal.ai ha marcado esta imagen (suele devolverse en negro).");
+  if (info.contentType) lines.push(`Tipo de contenido: ${info.contentType}`);
+  lines.push(costLineFal(model));
+  lines.forEach((l) => { const d = document.createElement("div"); d.textContent = l; meta.appendChild(d); });
+}
+
+/* ==========================================================================
+   DESCARGAS Y PORTAPAPELES
+   ========================================================================== */
+function saveBlob(blob, filename) {
+  const a = document.createElement("a");
+  const url = URL.createObjectURL(blob);
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 2000);
+}
+
+function withExtension(name, ext) {
+  return name.toLowerCase().endsWith(ext) ? name : name + ext;
+}
+
+/* Exporta prompts a .txt (UTF-8). */
+function downloadPromptsAsTxt() {
+  const sep = "========================================";
+  const sub = "----------------------------------------";
+  const content =
+`${sep}
+GENIMOD \u2014 PROMPTS
+${sep}
+
+INSTRUCCIONES DEL SISTEMA
+${sub}
+
+${state.lastSystem}
+
+
+IDEA INICIAL
+${sub}
+
+${state.lastIdea}
+
+
+PROMPT GENERADO POR CLAUDE
+${sub}
+
+${state.lastPrompt}
+`;
+  saveBlob(new Blob([content], { type: "text/plain;charset=utf-8" }), withExtension("GenImOd_prompts", ".txt"));
+}
+
+function downloadPromptOnly() {
+  const text = $("generatedPrompt").value;
+  if (!text) return;
+  saveBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), "GenImOd_prompt.txt");
+}
+
+/* Descarga la imagen en el formato elegido (PNG original o JPEG convertido en el navegador). */
+function getExportFormat() { return $("exportFormat").value === "jpeg" ? "jpeg" : "png"; }
+
+/* Calidad JPEG como valor 0-1; si el campo no es v\u00e1lido se usa el valor por defecto. */
+function getJpegQuality() {
+  const n = Number($("jpegQuality").value);
+  const pct = Number.isFinite(n) && n >= 1 ? Math.min(100, Math.round(n)) : EXPORT_CONFIG.defaultJpegQuality;
+  return pct / 100;
+}
+
+function updateExportUi() {
+  const f = getExportFormat();
+  $("jpegQualityWrap").classList.toggle("hidden", f !== "jpeg");
+  $("downloadImage").textContent = "Descargar imagen " + EXPORT_FORMATS[f].label;
+}
+
+/* Decodifica un Blob de imagen para poder dibujarlo en un canvas. */
+async function decodeImageBlob(blob) {
+  if (window.createImageBitmap) {
+    try { const bmp = await createImageBitmap(blob); return { source: bmp, width: bmp.width, height: bmp.height, close: () => bmp.close() }; }
+    catch (e) { /* se prueba con <img> */ }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("decode"));
+      i.src = url;
+    });
+    return { source: img, width: img.naturalWidth, height: img.naturalHeight, close: () => {} };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/* Convierte un Blob de imagen a PNG o JPEG mediante un canvas. */
+async function reencodeBlob(blob, format) {
+  const fmt = EXPORT_FORMATS[format];
+  const decoded = await decodeImageBlob(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = decoded.width;
+  canvas.height = decoded.height;
+  const ctx = canvas.getContext("2d");
+  if (format === "jpeg") {          // JPEG no admite transparencia
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(decoded.source, 0, 0);
+  decoded.close();
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("encode"))), fmt.mime, format === "jpeg" ? getJpegQuality() : undefined);
+  });
+}
+
+/* Guarda el Blob en el formato elegido; si ya est\u00e1 en ese formato, se guarda el original sin recodificar. */
+async function exportBlob(blob, baseName) {
+  const format = getExportFormat();
+  const fmt = EXPORT_FORMATS[format];
+  const out = blob.type === fmt.mime ? blob : await reencodeBlob(blob, format);
+  saveBlob(out, withExtension(baseName, fmt.ext));
+}
+
+/* Si el navegador impide leer la imagen (CORS), se abre la original en otra pesta\u00f1a. */
+function openOriginalFallback(url) {
+  window.open(url, "_blank", "noopener");
+  if (getExportFormat() === "jpeg") {
+    showStatus("El navegador no permite leer la imagen para convertirla a JPEG. Se ha abierto la original (PNG) en otra pesta\u00f1a: usa \u00abGuardar imagen como\u2026\u00bb.", "info");
+  } else {
+    showStatus("El navegador no permiti\u00f3 la descarga directa. Se ha abierto la imagen en otra pesta\u00f1a: usa \u00abGuardar imagen como\u2026\u00bb.", "info");
+  }
+}
+
+async function downloadImage() {
+  if (!state.imageUrl) return;
+  try {
+    const resp = await fetch(state.imageUrl);
+    if (!resp.ok) throw new Error("http " + resp.status);
+    await exportBlob(await resp.blob(), "GenImOd_imagen");
+  } catch (e) {
+    openOriginalFallback(state.imageUrl);
+  }
+}
+
+async function copyToClipboard(text) {
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (e) {
+    const ta = document.createElement("textarea");
+    ta.value = text; ta.style.position = "fixed"; ta.style.opacity = "0";
+    document.body.appendChild(ta); ta.select();
+    try { document.execCommand("copy"); } catch (err) { showError("No se ha podido copiar el prompt."); ta.remove(); return; }
+    ta.remove();
+  }
+  showStatus("Prompt copiado al portapapeles.", "ok");
+}
+
+/* ==========================================================================
+   FLUJO PRINCIPAL
+   ========================================================================== */
+async function generar() {
+  clearError();
+  if (!validateForm()) { showError("Completa todos los campos obligatorios antes de generar."); return; }
+
+  const systemPrompt = $("systemPrompt").value;
+  const idea = $("idea").value.trim();
+  const claudeModel = getActiveModel("claude");
+  const falModel = getActiveModel("fal");
+  const steps = Number($("steps").value);
+  const imageSize = $("imageSize").value;
+  const safety = $("safety").value;
+  const maxTokens = getMaxTokens();
+
+  resetResults();
+  showLoading(true, "Generando\u2026");
+  try {
+    showStatus("Mejorando la idea con Claude\u2026", "info");
+    const claude = await mejorarPromptConClaude(systemPrompt, idea, claudeModel, maxTokens);
+    state.lastPrompt = claude.text;
+    state.lastSystem = systemPrompt;
+    state.lastIdea = idea;
+    const truncated = claude.stopReason === "max_tokens"
+      ? "Aviso: la respuesta de Claude se ha cortado al alcanzar el l\u00edmite de tokens. Aumenta el m\u00e1ximo de tokens y vuelve a generar."
+      : "";
+    displayGeneratedPrompt(claude.text, claude.usage, claudeModel, truncated);
+    showStatus("Prompt generado por Claude", "ok");
+
+    showStatus("Generando imagen con FLUX\u2026", "info");
+    const image = await generarImagenConFal(claude.text, falModel, steps, imageSize, safety);
+    displayGeneratedImage(image, falModel, steps);
+    if (image.nsfw) {
+      showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Sube la tolerancia (m\u00e1x. 6) o reformula la idea con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
+    } else {
+      showStatus("Imagen generada correctamente.", "ok");
+    }
+    await guardarEnHistorial({
+      idea, systemPrompt, prompt: claude.text, claudeModel, falModel, steps, imageSize, safety,
+      image, usage: claude.usage
+    });
+  } catch (err) {
+    $("status").className = "status";
+    showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+function resetResults() {
+  state.imageUrl = "";
+  $("imageBox").className = "image-box";
+  $("imageBox").innerHTML = "<span>La imagen generada aparecer\u00e1 aqu\u00ed.</span>";
+  $("imageMeta").innerHTML = "";
+  $("downloadImage").disabled = true;
+  displayGeneratedPrompt("", null, "");
+}
+
+function resetApplication() {
+  resetResults();
+  clearError();
+  $("status").className = "status";
+  state.lastPrompt = state.lastSystem = state.lastIdea = "";
+}
+
+/* ==========================================================================
+   HISTORIAL LOCAL (IndexedDB)
+   Guarda idea, instrucciones, prompt de Claude, par\u00e1metros e imagen.
+   Nunca guarda API keys.
+   ========================================================================== */
+const historySelection = new Set();
+let historyObjectUrls = [];   // URLs temporales de miniaturas
+let compareObjectUrls = [];   // URLs temporales de la comparaci\u00f3n
+let loadedObjectUrl = "";     // URL temporal de la generaci\u00f3n cargada en el visor
+
+function openHistoryDb() {
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB) { reject(new Error("IndexedDB no disponible")); return; }
+    const req = indexedDB.open(HISTORY_CONFIG.dbName, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(HISTORY_CONFIG.storeName, { keyPath: "id" });
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+/* Ejecuta una operaci\u00f3n en una transacci\u00f3n y resuelve al completarse. */
+async function idbTx(mode, action) {
+  const db = await openHistoryDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HISTORY_CONFIG.storeName, mode);
+    const store = tx.objectStore(HISTORY_CONFIG.storeName);
+    let result;
+    const req = action(store);
+    if (req) req.onsuccess = () => { result = req.result; };
+    tx.oncomplete = () => { db.close(); resolve(result); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+    tx.onabort = () => { db.close(); reject(tx.error || new Error("Transacci\u00f3n cancelada")); };
+  });
+}
+
+async function historyGetAll() {
+  const all = await idbTx("readonly", (s) => s.getAll());
+  return (all || []).sort((a, b) => b.createdAt - a.createdAt);
+}
+
+async function guardarEnHistorial(data) {
+  try {
+    // Se intenta conservar la imagen PNG original; si el navegador lo impide (CORS), se guarda solo su URL.
+    let blob = null;
+    try {
+      const resp = await fetch(data.image.url);
+      if (resp.ok) blob = await resp.blob();
+    } catch (e) { /* se guardar\u00e1 solo la URL */ }
+
+    const record = {
+      id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+      createdAt: Date.now(),
+      idea: data.idea,
+      systemPrompt: data.systemPrompt,
+      prompt: data.prompt,
+      claudeModel: data.claudeModel,
+      falModel: data.falModel,
+      steps: data.steps,
+      imageSize: data.imageSize,
+      safety: data.safety,
+      nsfw: !!data.image.nsfw,
+      width: data.image.width || null,
+      height: data.image.height || null,
+      seed: data.image.seed ?? null,
+      usage: data.usage || null,
+      url: data.image.url,
+      blob
+    };
+    await idbTx("readwrite", (s) => s.put(record));
+
+    // Recorte: se eliminan las m\u00e1s antiguas por encima del m\u00e1ximo configurado.
+    const all = await historyGetAll();
+    const extra = all.slice(HISTORY_CONFIG.maxEntries);
+    if (extra.length) await idbTx("readwrite", (s) => { extra.forEach((r) => s.delete(r.id)); });
+
+    await renderHistory();
+  } catch (e) {
+    showStatus("La imagen se ha generado, pero no se ha podido guardar en el historial de este navegador.", "info");
+  }
+}
+
+function revokeUrls(list) { list.forEach((u) => URL.revokeObjectURL(u)); return []; }
+
+/* Devuelve una URL utilizable para la imagen de un registro y la registra para liberarla despu\u00e9s. */
+function imageSrcForRecord(rec, bucket) {
+  if (rec.blob) {
+    const u = URL.createObjectURL(rec.blob);
+    bucket.push(u);
+    return u;
+  }
+  return rec.url || "";
+}
+
+function formatDate(ts) {
+  return new Date(ts).toLocaleString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+}
+
+async function renderHistory() {
+  const list = $("historyList");
+  historyObjectUrls = revokeUrls(historyObjectUrls);
+  let records = [];
+  try { records = await historyGetAll(); }
+  catch (e) {
+    list.innerHTML = "";
+    const p = document.createElement("div");
+    p.className = "hist-empty";
+    p.textContent = "El historial no est\u00e1 disponible en este navegador.";
+    list.appendChild(p);
+    return;
+  }
+
+  // Elimina de la selecci\u00f3n los registros que ya no existen
+  const ids = new Set(records.map((r) => r.id));
+  [...historySelection].forEach((id) => { if (!ids.has(id)) historySelection.delete(id); });
+
+  list.innerHTML = "";
+  $("historyCount").textContent = `${records.length} ${records.length === 1 ? "generaci\u00f3n" : "generaciones"}`;
+  $("historyClear").disabled = records.length === 0;
+
+  if (!records.length) {
+    const p = document.createElement("div");
+    p.className = "hist-empty";
+    p.style.gridColumn = "1 / -1";
+    p.textContent = "Todav\u00eda no hay generaciones guardadas. Genera una imagen para empezar el historial.";
+    list.appendChild(p);
+    updateCompareButtons();
+    return;
+  }
+
+  records.forEach((rec) => {
+    const item = document.createElement("article");
+    item.className = "hist-item" + (historySelection.has(rec.id) ? " selected" : "");
+
+    const pick = document.createElement("label");
+    pick.className = "pick";
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.checked = historySelection.has(rec.id);
+    cb.addEventListener("change", () => {
+      if (cb.checked) {
+        if (historySelection.size >= HISTORY_CONFIG.maxCompare) {
+          cb.checked = false;
+          showStatus(`Puedes comparar como m\u00e1ximo ${HISTORY_CONFIG.maxCompare} generaciones.`, "info");
+          return;
+        }
+        historySelection.add(rec.id);
+      } else historySelection.delete(rec.id);
+      item.classList.toggle("selected", cb.checked);
+      updateCompareButtons();
+    });
+    pick.append(cb, document.createTextNode("Comparar"));
+    item.appendChild(pick);
+
+    const src = imageSrcForRecord(rec, historyObjectUrls);
+    if (src) {
+      const img = document.createElement("img");
+      img.className = "thumb";
+      img.alt = "Miniatura de la generaci\u00f3n del " + formatDate(rec.createdAt);
+      img.loading = "lazy";
+      img.referrerPolicy = "no-referrer";
+      img.addEventListener("error", () => {
+        const miss = document.createElement("div");
+        miss.className = "thumb-missing";
+        miss.textContent = "La imagen ya no est\u00e1 disponible en fal.ai.";
+        img.replaceWith(miss);
+      });
+      img.src = src;
+      item.appendChild(img);
+    }
+
+    const idea = document.createElement("p");
+    idea.className = "idea";
+    idea.textContent = rec.idea;
+    idea.title = rec.idea;
+    item.appendChild(idea);
+
+    const info = document.createElement("p");
+    info.className = "info";
+    info.textContent = `${formatDate(rec.createdAt)} \u00b7 ${rec.steps} pasos`;
+    item.appendChild(info);
+
+    const actions = document.createElement("div");
+    actions.className = "actions";
+    const bLoad = document.createElement("button");
+    bLoad.type = "button"; bLoad.textContent = "Cargar";
+    bLoad.addEventListener("click", () => loadFromHistory(rec));
+    const bDl = document.createElement("button");
+    bDl.type = "button"; bDl.textContent = "Descargar";
+    bDl.setAttribute("aria-label", "Descargar imagen de esta generaci\u00f3n en el formato de exportaci\u00f3n elegido");
+    bDl.addEventListener("click", () => downloadRecordImage(rec));
+    const bDel = document.createElement("button");
+    bDel.type = "button"; bDel.textContent = "Eliminar";
+    bDel.addEventListener("click", async () => {
+      try { await idbTx("readwrite", (s) => s.delete(rec.id)); } catch (e) { showError("No se ha podido eliminar la generaci\u00f3n."); return; }
+      historySelection.delete(rec.id);
+      await renderHistory();
+      if (!$("compareWrap").classList.contains("hidden")) closeComparison();
+    });
+    actions.append(bLoad, bDl, bDel);
+    item.appendChild(actions);
+
+    list.appendChild(item);
+  });
+  updateCompareButtons();
+}
+
+function updateCompareButtons() {
+  const n = historySelection.size;
+  $("historyCompare").disabled = n < 2;
+  $("historyCompare").textContent = n ? `Comparar selecci\u00f3n (${n})` : "Comparar selecci\u00f3n";
+  $("historyUnselect").disabled = n === 0;
+}
+
+/* Carga una generaci\u00f3n en el editor y en los visores. */
+function loadFromHistory(rec) {
+  clearError();
+  $("idea").value = rec.idea;
+  $("systemPrompt").value = rec.systemPrompt;
+  setModelSelect("claudeModel", "claudeCustom", CLAUDE_MODELS.map((m) => m.id), rec.claudeModel);
+  setModelSelect("falModel", "falCustom", Object.keys(FAL_MODELS), rec.falModel);
+  toggleCustomFields();
+  refreshImageSizes(rec.imageSize);
+  if (rec.safety) $("safety").value = rec.safety;
+  if (INFERENCE_STEP_OPTIONS.includes(rec.steps)) $("steps").value = String(rec.steps);
+  persistPreferences();
+
+  state.lastPrompt = rec.prompt;
+  state.lastSystem = rec.systemPrompt;
+  state.lastIdea = rec.idea;
+  displayGeneratedPrompt(rec.prompt, rec.usage, rec.claudeModel);
+
+  if (loadedObjectUrl) { URL.revokeObjectURL(loadedObjectUrl); loadedObjectUrl = ""; }
+  let src = rec.url;
+  if (rec.blob) { loadedObjectUrl = URL.createObjectURL(rec.blob); src = loadedObjectUrl; }
+  displayGeneratedImage({ url: src, width: rec.width, height: rec.height, contentType: rec.blob ? rec.blob.type : null, nsfw: !!rec.nsfw }, rec.falModel, rec.steps);
+  validateForm();
+  showStatus("Generaci\u00f3n del " + formatDate(rec.createdAt) + " cargada. Puedes editarla y volver a generar.", "ok");
+  $("h-claude").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function setModelSelect(selectId, customId, knownIds, value) {
+  const sel = $(selectId);
+  if (knownIds.includes(value)) { sel.value = value; }
+  else { sel.value = OTHER; $(customId).value = value; }
+}
+
+async function downloadRecordImage(rec) {
+  const base = `GenImOd_${rec.id.split("-")[0]}`;
+  try {
+    let blob = rec.blob;
+    if (!blob) {
+      const resp = await fetch(rec.url);
+      if (!resp.ok) throw new Error("http " + resp.status);
+      blob = await resp.blob();
+    }
+    await exportBlob(blob, base);
+  } catch (e) {
+    openOriginalFallback(rec.url);
+  }
+}
+
+/* Comparaci\u00f3n lado a lado; resalta los par\u00e1metros que difieren. */
+async function renderComparison() {
+  const all = await historyGetAll();
+  const chosen = all.filter((r) => historySelection.has(r.id)).sort((a, b) => a.createdAt - b.createdAt);
+  if (chosen.length < 2) return;
+  compareObjectUrls = revokeUrls(compareObjectUrls);
+
+  const sizeLabel = (v) => { const f = CUSTOM_FAL_IMAGE_SIZES.find((s) => s.value === v); return f ? f.label : v; };
+  const rows = [
+    ["Modelo de Claude", (r) => r.claudeModel],
+    ["Modelo de imagen", (r) => r.falModel],
+    ["Pasos", (r) => String(r.steps)],
+    ["Tama\u00f1o", (r) => sizeLabel(r.imageSize)],
+    ["Tolerancia de seguridad", (r) => r.safety || "no registrada"],
+    ["Filtro activado", (r) => (r.nsfw ? "S\u00ed (imagen marcada)" : "No")],
+    ["Instrucciones", (r) => (r.systemPrompt === DEFAULT_SYSTEM_PROMPT ? "Predeterminadas" : "Modificadas")],
+    ["Idea inicial", (r) => r.idea]
+  ];
+
+  const grid = $("compareGrid");
+  grid.innerHTML = "";
+  grid.style.gridTemplateColumns = `repeat(${chosen.length}, minmax(220px, 1fr))`;
+
+  chosen.forEach((rec) => {
+    const col = document.createElement("div");
+    col.className = "compare-col";
+
+    const src = imageSrcForRecord(rec, compareObjectUrls);
+    if (src) {
+      const img = document.createElement("img");
+      img.alt = "Imagen generada el " + formatDate(rec.createdAt);
+      img.referrerPolicy = "no-referrer";
+      img.src = src;
+      col.appendChild(img);
+    }
+
+    const h = document.createElement("h3");
+    h.textContent = formatDate(rec.createdAt);
+    col.appendChild(h);
+
+    const dl = document.createElement("dl");
+    rows.forEach(([label, get]) => {
+      const values = chosen.map(get);
+      const differs = new Set(values).size > 1;
+      const div = document.createElement("div");
+      if (differs) div.className = "diff";
+      const dt = document.createElement("dt"); dt.textContent = label;
+      const dd = document.createElement("dd"); dd.textContent = get(rec);
+      div.append(dt, dd);
+      dl.appendChild(div);
+    });
+    col.appendChild(dl);
+
+    const det = document.createElement("details");
+    const sum = document.createElement("summary");
+    sum.textContent = "Ver prompt de Claude";
+    const p = document.createElement("p");
+    p.textContent = rec.prompt;
+    det.append(sum, p);
+    col.appendChild(det);
+
+    grid.appendChild(col);
+  });
+
+  $("compareWrap").classList.remove("hidden");
+  $("compareWrap").scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function closeComparison() {
+  $("compareWrap").classList.add("hidden");
+  $("compareGrid").innerHTML = "";
+  compareObjectUrls = revokeUrls(compareObjectUrls);
+}
+
+async function clearHistory() {
+  if (!window.confirm("\u00bfVaciar todo el historial de generaciones de este navegador? Esta acci\u00f3n no se puede deshacer.")) return;
+  try { await idbTx("readwrite", (s) => s.clear()); }
+  catch (e) { showError("No se ha podido vaciar el historial."); return; }
+  historySelection.clear();
+  closeComparison();
+  await renderHistory();
+  showStatus("Historial vaciado.", "info");
+}
+
+function initializeHistory() {
+  $("historyCompare").addEventListener("click", renderComparison);
+  $("compareClose").addEventListener("click", closeComparison);
+  $("historyUnselect").addEventListener("click", () => { historySelection.clear(); renderHistory(); });
+  $("historyClear").addEventListener("click", clearHistory);
+  renderHistory();
+}
+
+/* ==========================================================================
+   INICIALIZACI\u00d3N
+   ========================================================================== */
+function loadSettings() {
+  // Modelos de Claude
+  fillSelect($("claudeModel"), [
+    ...CLAUDE_MODELS.map((m) => ({ value: m.id, label: m.label })),
+    { value: OTHER, label: "Otro\u2026" }
+  ]);
+  const savedClaude = storageGet(STORAGE.claudeModel);
+  if (savedClaude) {
+    if (CLAUDE_MODELS.some((m) => m.id === savedClaude)) $("claudeModel").value = savedClaude;
+    else { $("claudeModel").value = OTHER; $("claudeCustom").value = savedClaude; }
+  } else {
+    $("claudeModel").value = APP_CONFIG.anthropic.defaultModel;
+  }
+
+  // Modelos de fal.ai
+  fillSelect($("falModel"), [
+    ...Object.entries(FAL_MODELS).map(([id, m]) => ({ value: id, label: m.label })),
+    { value: OTHER, label: "Otro\u2026" }
+  ]);
+  const savedFal = storageGet(STORAGE.falModel);
+  if (savedFal) {
+    if (FAL_MODELS[savedFal]) $("falModel").value = savedFal;
+    else { $("falModel").value = OTHER; $("falCustom").value = savedFal; }
+  } else {
+    $("falModel").value = APP_CONFIG.fal.defaultModel;
+  }
+
+  // Pasos de inferencia y tama\u00f1o
+  fillSelect($("steps"), INFERENCE_STEP_OPTIONS.map((n) => ({ value: String(n), label: String(n) })));
+  const savedSteps = storageGet(STORAGE.steps);
+  $("steps").value = INFERENCE_STEP_OPTIONS.includes(Number(savedSteps)) ? savedSteps : String(APP_CONFIG.fal.defaultInferenceSteps);
+  refreshImageSizes(storageGet(STORAGE.imageSize) || APP_CONFIG.fal.defaultImageSize);
+  fillSelect($("safety"), SAFETY_TOLERANCE_OPTIONS);
+  $("exportFormat").value = storageGet(STORAGE.exportFormat) === "jpeg" ? "jpeg" : EXPORT_CONFIG.defaultFormat;
+  const savedQ = Number(storageGet(STORAGE.jpegQuality));
+  $("jpegQuality").value = String(Number.isInteger(savedQ) && savedQ >= 1 && savedQ <= 100 ? savedQ : EXPORT_CONFIG.defaultJpegQuality);
+  updateExportUi();
+  const savedSafety = storageGet(STORAGE.safety);
+  $("safety").value = SAFETY_TOLERANCE_OPTIONS.some((o) => o.value === savedSafety) ? savedSafety : APP_CONFIG.fal.defaultSafetyTolerance;
+  const savedTokens = Number(storageGet(STORAGE.maxTokens));
+  $("maxTokens").value = String(Number.isInteger(savedTokens) && savedTokens >= 1 ? savedTokens : APP_CONFIG.anthropic.maxTokens);
+
+  $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT;
+  toggleCustomFields();
+  refreshKeyBadges();
+}
+
+function persistPreferences() {
+  storageSet(STORAGE.claudeModel, getActiveModel("claude"));
+  storageSet(STORAGE.falModel, getActiveModel("fal"));
+  storageSet(STORAGE.steps, $("steps").value);
+  storageSet(STORAGE.imageSize, $("imageSize").value);
+  storageSet(STORAGE.safety, $("safety").value);
+  storageSet(STORAGE.exportFormat, getExportFormat());
+  const q = Number($("jpegQuality").value);
+  if (Number.isInteger(q) && q >= 1 && q <= 100) storageSet(STORAGE.jpegQuality, String(q));
+  if (Number.isFinite(getMaxTokens())) storageSet(STORAGE.maxTokens, String(getMaxTokens()));
+}
+
+function initializeApp() {
+  loadSettings();
+
+  ["anthropic", "fal"].forEach((p) => {
+    $(p + "Save").addEventListener("click", () => saveApiKey(p));
+    $(p + "Delete").addEventListener("click", () => deleteApiKey(p));
+    $(p + "Toggle").addEventListener("click", () => toggleKeyVisibility(p));
+    $(p + "Key").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey(p); } });
+  });
+
+  $("claudeModel").addEventListener("change", () => { toggleCustomFields(); persistPreferences(); validateForm(); });
+  $("claudeCustom").addEventListener("input", () => { persistPreferences(); validateForm(); });
+  $("falModel").addEventListener("change", () => { toggleCustomFields(); refreshImageSizes(); persistPreferences(); validateForm(); });
+  $("falCustom").addEventListener("input", () => { persistPreferences(); validateForm(); });
+  $("steps").addEventListener("change", persistPreferences);
+  $("maxTokens").addEventListener("input", () => { persistPreferences(); validateForm(); });
+  $("imageSize").addEventListener("change", persistPreferences);
+  $("safety").addEventListener("change", persistPreferences);
+  $("exportFormat").addEventListener("change", () => { updateExportUi(); persistPreferences(); });
+  $("jpegQuality").addEventListener("input", persistPreferences);
+
+  $("systemClear").addEventListener("click", () => { $("systemPrompt").value = ""; $("systemPrompt").focus(); });
+  $("systemRestore").addEventListener("click", () => { $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT; });
+  $("ideaClear").addEventListener("click", () => { $("idea").value = ""; $("idea").focus(); validateForm(); });
+  $("idea").addEventListener("input", validateForm);
+
+  $("generate").addEventListener("click", generar);
+  $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
+  $("downloadPrompt").addEventListener("click", downloadPromptOnly);
+  $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, ""); state.lastPrompt = ""; });
+  $("downloadTxt").addEventListener("click", downloadPromptsAsTxt);
+  $("downloadImage").addEventListener("click", downloadImage);
+
+  initializeHistory();
+  validateForm();
+}
+
+initializeApp();
+
+})();
+</script>
+</body>
+</html>
