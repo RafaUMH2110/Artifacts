@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DetectIApdfOne — Análisis forense de un documento PDF</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Source+Serif+4:opsz,wght@8..60,400;8..60,600;8..60,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#eef4fb;
+    --bg-2:#f6fafd;
+    --surface:#ffffff;
+    --surface-2:#e2edf9;
+    --border:#c9dcf0;
+    --border-strong:#9cbfe3;
+    --accent:#2f6fb0;
+    --accent-dark:#1f5590;
+    --accent-deep:#163d68;
+    --ok-bg:#e3f2ea; --ok-fg:#256143; --ok-bd:#a9d4bd;
+    --warn-bg:#fdf1dc; --warn-fg:#8a5a12; --warn-bd:#eac888;
+    --danger-bg:#fbe7e2; --danger-fg:#9c3a26; --danger-bd:#e7ab97;
+    --text:#1b2a3a;
+    --text-muted:#5e7488;
+    --serif:'Source Serif 4', Georgia, 'Times New Roman', serif;
+    --sans:'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+    --mono:'IBM Plex Mono', 'Courier New', monospace;
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.55;
+    padding-bottom:64px;
+  }
+  a{color:var(--accent-dark);}
+  header.app-header{
+    background:linear-gradient(135deg, var(--bg-2), var(--surface-2));
+    color:var(--accent-deep); padding:38px 20px 30px;
+    border-bottom:4px solid var(--accent);
+  }
+  .header-inner{max-width:760px; margin:0 auto;}
+  .header-inner h1{
+    font-family:var(--serif); font-weight:700; font-size:clamp(28px,5vw,38px);
+    margin:0 0 6px; letter-spacing:.2px; color:var(--accent-deep);
+  }
+  .header-inner p{margin:0; color:#3f5a78; font-size:15px; max-width:56ch;}
+  .header-meta{
+    margin-top:16px; font-family:var(--mono); font-size:12px; color:#5c7896;
+  }
+
+  .aviso-banner{
+    max-width:760px; margin:20px auto 0; padding:12px 16px;
+    background:var(--warn-bg); border:1px solid var(--warn-bd); color:var(--warn-fg);
+    border-radius:3px; font-size:14px; display:flex; gap:10px; align-items:flex-start;
+  }
+  .aviso-banner strong{white-space:nowrap;}
+
+  main{max-width:760px; margin:28px auto 0; padding:0 20px;}
+
+  .card{
+    background:var(--surface); border:1px solid var(--border); border-left:4px solid var(--accent);
+    border-radius:2px; margin-bottom:22px; overflow:hidden;
+    box-shadow:0 1px 3px rgba(31,85,144,.06);
+  }
+  .card-tab{
+    font-family:var(--mono); font-size:12px; letter-spacing:.03em; color:var(--accent-dark);
+    background:var(--surface-2); padding:8px 18px; border-bottom:1px solid var(--border);
+  }
+  .card-body{padding:20px 22px 22px;}
+  .card-body h2{
+    font-family:var(--serif); font-size:20px; margin:0 0 4px; font-weight:600; color:var(--accent-deep);
+  }
+  .card-body .subtitle{color:var(--text-muted); font-size:14px; margin:0 0 16px;}
+
+  label{display:block; font-size:13.5px; font-weight:600; margin-bottom:6px; color:var(--accent-deep);}
+  .hint{font-size:12.5px; color:var(--text-muted); margin-top:5px;}
+  input[type="password"], input[type="text"], input[type="number"], select{
+    width:100%; padding:10px 12px; border:1px solid var(--border-strong); border-radius:3px;
+    font-family:var(--sans); font-size:14.5px; background:#fdfeff; color:var(--text);
+  }
+  input:focus-visible, select:focus-visible, button:focus-visible{
+    outline:2px solid var(--accent); outline-offset:1px;
+  }
+  .field{margin-bottom:16px;}
+  .row{display:flex; gap:14px; flex-wrap:wrap;}
+  .row > .field{flex:1 1 200px;}
+
+  .key-row{display:flex; gap:10px; flex-wrap:wrap;}
+  .key-row input{flex:1 1 220px;}
+  .key-status{
+    margin-top:8px; font-size:13px; font-family:var(--mono); display:inline-flex; align-items:center; gap:6px;
+  }
+  .dot{width:8px; height:8px; border-radius:50%; display:inline-block;}
+  .dot.ok{background:#2f8a5b;}
+  .dot.off{background:#a8bccf;}
+
+  button{
+    font-family:var(--sans); font-weight:600; font-size:14.5px; cursor:pointer;
+    border-radius:3px; border:1px solid transparent; padding:10px 16px;
+  }
+  button.primario{background:var(--accent); color:#fff; border-color:var(--accent-dark);}
+  button.primario:hover:not(:disabled){background:var(--accent-dark);}
+  button.secundario{background:var(--surface); color:var(--accent-deep); border-color:var(--border-strong);}
+  button.secundario:hover:not(:disabled){background:var(--surface-2);}
+  button.peligro{background:var(--surface); color:var(--danger-fg); border-color:var(--danger-bd);}
+  button.peligro:hover:not(:disabled){background:var(--danger-bg);}
+  button.chico{padding:5px 10px; font-size:12.5px; border-radius:3px;}
+  button:disabled{opacity:.5; cursor:not-allowed;}
+
+  .dropzone{
+    border:1.5px dashed var(--border-strong); border-radius:4px; padding:22px;
+    text-align:center; background:var(--surface-2); cursor:pointer; transition:border-color .15s, background .15s;
+  }
+  .dropzone:hover, .dropzone.sobre-zona{border-color:var(--accent); background:#dbe9f9;}
+  .dropzone input[type="file"]{display:none;}
+  .dropzone .icono{font-size:26px; margin-bottom:6px;}
+
+  .archivos-cabecera{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    margin-top:14px;
+  }
+  .archivos-cabecera .contador{font-family:var(--mono); font-size:12.5px; color:var(--text-muted);}
+
+  .lista-archivos{list-style:none; margin:10px 0 0; padding:0; font-family:var(--mono); font-size:13px;}
+  .lista-archivos li{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:7px 8px 7px 10px; border:1px solid var(--border); border-radius:3px; margin-bottom:6px; background:var(--bg-2);
+  }
+  .lista-archivos li .info-archivo{display:flex; gap:10px; align-items:center; overflow:hidden;}
+  .lista-archivos li .nombre-archivo{overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .lista-archivos li span.tam{color:var(--text-muted); white-space:nowrap;}
+  .btn-quitar{
+    background:none; border:1px solid var(--border-strong); color:var(--danger-fg);
+    border-radius:3px; width:24px; height:24px; line-height:1; padding:0; font-size:14px; flex-shrink:0;
+  }
+  .btn-quitar:hover{background:var(--danger-bg); border-color:var(--danger-bd);}
+
+  .estado-generar{font-size:13px; color:var(--text-muted); margin-top:10px; min-height:18px;}
+
+  .spinner{
+    width:18px; height:18px; border-radius:50%; border:2.5px solid #cfe0f2; border-top-color:var(--accent);
+    display:inline-block; vertical-align:middle; margin-right:8px;
+  }
+  @media (prefers-reduced-motion: no-preference){
+    .spinner{animation:girar .8s linear infinite;}
+  }
+  @media (prefers-reduced-motion: reduce){
+    .spinner{border-top-color:var(--accent); opacity:.85;}
+  }
+  @keyframes girar{to{transform:rotate(360deg);}}
+
+  .banner{
+    padding:12px 14px; border-radius:3px; font-size:14px; margin-bottom:14px; border:1px solid;
+  }
+  .banner.error{background:var(--danger-bg); color:var(--danger-fg); border-color:var(--danger-bd);}
+  .banner.aviso{background:var(--warn-bg); color:var(--warn-fg); border-color:var(--warn-bd);}
+  .banner.ok{background:var(--ok-bg); color:var(--ok-fg); border-color:var(--ok-bd);}
+
+  #resultado-seccion{display:none;}
+  .informe-ventana{
+    border:1px solid var(--border); border-top:1px solid var(--border);
+    border-radius:3px; background:var(--bg-2);
+    max-height:min(62vh, 620px); overflow-y:auto;
+    padding:16px 18px;
+  }
+  .informe{
+    font-family:var(--serif); font-size:15.5px; line-height:1.68; color:#182430;
+  }
+  .informe h1,.informe h2,.informe h3{font-family:var(--serif); color:var(--accent-deep);}
+  .informe h1{font-size:22px; margin-top:26px;}
+  .informe h2{font-size:19px; margin-top:22px; border-bottom:1px solid var(--border); padding-bottom:4px;}
+  .informe h3{font-size:16.5px; margin-top:18px;}
+  .informe table{border-collapse:collapse; width:100%; margin:14px 0; font-size:13.5px; font-family:var(--sans);}
+  .informe th,.informe td{border:1px solid var(--border-strong); padding:6px 8px; text-align:left; vertical-align:top;}
+  .informe th{background:var(--surface-2);}
+  .informe code{font-family:var(--mono); background:var(--surface-2); padding:1px 4px; border-radius:2px; font-size:.92em;}
+  .informe ul,.informe ol{padding-left:22px;}
+
+  .meta-informe{
+    font-family:var(--mono); font-size:12.5px; color:var(--text-muted);
+    border-top:1px dashed var(--border); margin-top:22px; padding-top:12px;
+  }
+
+  .acciones-informe{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px;}
+
+  footer.app-footer{
+    max-width:760px; margin:34px auto 0; padding:0 20px 14px; font-size:12.5px; color:var(--text-muted);
+  }
+  footer.app-footer .firma{
+    margin-top:10px; padding-top:10px; border-top:1px solid var(--border);
+    font-family:var(--mono); font-size:12px; color:var(--text-muted);
+  }
+  footer.app-footer .firma a{color:var(--accent-dark);}
+
+  @media (max-width:520px){
+    .card-body{padding:16px;}
+    header.app-header{padding:28px 16px 22px;}
+  }
+</style>
+</head>
+<body data-app-title="DetectIApdfOne" data-app-description="Analiza un único documento PDF y genera un informe forense de indicios de uso de IA en su redacción, con exportación a PDF; pensada para profesorado universitario." data-categories="ia,docencia,evaluacion" data-tags="deteccion ia,forense,pdf,informes,anthropic,documento unico" data-client-only="true">
+
+<!--
+  ============================================================================
+  DetectIApdfOne — Notas para el profesorado (instrucciones de configuración)
+  ============================================================================
+
+  QUÉ ES ESTA APP
+  Un único fichero HTML, sin backend, que analiza un documento PDF y
+  emite un informe forense de indicios de uso de IA en su redacción. La
+  llamada a la IA se hace directamente desde el navegador del usuario, con
+  la clave de API que cada persona introduce y guarda en su propio
+  localStorage (nunca viaja a ningún servidor propio).
+
+  1) CÓMO OBTENER UNA CLAVE DE API DE ANTHROPIC
+     - Entra en https://platform.claude.com (antes console.anthropic.com).
+     - Crea una cuenta / inicia sesión y ve a "API Keys".
+     - Genera una clave: empieza siempre por "sk-ant-...". Guárdala en un
+       lugar seguro; solo se muestra una vez.
+     - Anthropic ofrece un pequeño crédito gratuito inicial; el uso posterior
+       se factura por tokens (ver la tabla PRECIOS_ANTHROPIC más abajo).
+
+  2) CÓMO PUBLICAR ESTE FICHERO GRATIS EN GITHUB PAGES
+     - Crea un repositorio en GitHub (puede ser privado o público).
+     - Sube este fichero con el nombre exacto "index.html" a la raíz del
+       repositorio (o a una carpeta, p. ej. /docs).
+     - Ve a Settings → Pages → Build and deployment → Source: "Deploy from
+       a branch" → selecciona la rama (p. ej. main) y la carpeta (/ o /docs).
+     - En uno o dos minutos la app estará disponible en:
+       https://TU-USUARIO.github.io/TU-REPOSITORIO/
+     - Cada alumno o compañero que abra ese enlace introducirá su propia
+       clave de API; nadie comparte la tuya.
+
+  3) QUÉ CONSTANTES EDITAR PARA ADAPTAR LA APP (buscar en el <script> final)
+     - SYSTEM_PROMPT: el rol y las instrucciones exactas que sigue la IA
+       para el análisis forense. Puedes ajustar el rigor, añadir criterios
+       propios de tu asignatura, etc.
+     - MODELOS_ANTHROPIC: lista de modelos ofrecidos en el desplegable, con
+       su precio en USD por millón de tokens (entrada/salida). Actualiza
+       esta tabla cuando Anthropic publique nuevos modelos o precios; la
+       referencia oficial siempre es
+       https://platform.claude.com/docs/en/about-claude/pricing
+     - MAX_ARCHIVOS: número máximo de PDF admitidos (por defecto 1: esta
+       versión analiza un solo documento, sin comparación entre archivos).
+     - TOKENS_POR_DEFECTO / TOKENS_MIN / TOKENS_MAX_GENERICO: límites del
+       campo "Número de tokens de salida". El máximo real se ajusta además
+       automáticamente según el modelo elegido (ver "maxOut" en cada modelo
+       de MODELOS_ANTHROPIC).
+     - TIMEOUT_INACTIVIDAD_MS: la conexión se cancela solo si pasa este
+       tiempo sin recibir ningún dato nuevo de la API (no por duración
+       total), gracias a que la respuesta llega en streaming.
+     - TIMEOUT_ABSOLUTO_MS: tope de seguridad para toda la generación,
+       por si acaso, aunque sigan llegando datos.
+
+  IMPORTANTE: esta herramienta ofrece un análisis de indicios, nunca una
+  prueba concluyente. Debe usarse siempre como apoyo al criterio del
+  profesorado, nunca como acusación automática de fraude académico.
+  ============================================================================
+-->
+
+<header class="app-header">
+  <div class="header-inner">
+    <h1>DetectIApdfOne</h1>
+    <p>Análisis forense de un documento PDF para detectar indicios del uso de IA generativa en su redacción. Pensada para profesorado universitario.</p>
+    <div class="header-meta">un documento · informe descargable en PDF</div>
+  </div>
+</header>
+
+<div class="aviso-banner">
+  <span>⚠️</span>
+  <span><strong>Aviso:</strong> la IA puede cometer errores. Revisa el resultado antes de usarlo; esta herramienta no sustituye el criterio profesional ni constituye una prueba de fraude académico.</span>
+</div>
+
+<main>
+
+  <!-- ============ SECCIÓN 1 · CONFIGURACIÓN ============ -->
+  <section class="card" id="seccion-config">
+    <div class="card-tab">01 · CONFIGURACIÓN</div>
+    <div class="card-body">
+      <h2>Clave de API y modelo</h2>
+      <p class="subtitle">Tu clave se guarda solo en este navegador (localStorage) y se envía exclusivamente al endpoint oficial de Anthropic.</p>
+
+      <div class="field">
+        <label for="apiKeyInput">Clave de API de Anthropic</label>
+        <div class="key-row">
+          <input type="password" id="apiKeyInput" placeholder="sk-ant-…" autocomplete="off" spellcheck="false">
+          <button type="button" class="primario" id="btnGuardarKey">Guardar</button>
+          <button type="button" class="peligro" id="btnBorrarKey">Borrar</button>
+        </div>
+        <div class="key-status"><span class="dot off" id="keyDot"></span><span id="keyStatusTexto">No hay ninguna clave guardada.</span></div>
+        <p class="hint">Consíguela en <a href="https://platform.claude.com" target="_blank" rel="noopener">platform.claude.com</a> → API Keys. Debe empezar por <code style="font-family:var(--mono)">sk-ant-</code>.</p>
+      </div>
+
+      <div class="row">
+        <div class="field">
+          <label for="modeloSelect">Modelo</label>
+          <select id="modeloSelect"></select>
+        </div>
+        <div class="field" id="modeloOtroWrap" hidden>
+          <label for="modeloOtroInput">Identificador del modelo</label>
+          <input type="text" id="modeloOtroInput" placeholder="p. ej. claude-sonnet-4-5-20250929">
+        </div>
+        <div class="field" style="max-width:220px;">
+          <label for="maxTokensInput">Número de tokens (salida)</label>
+          <input type="number" id="maxTokensInput" value="4096" step="256">
+          <p class="hint" id="hintMaxTokens"></p>
+        </div>
+      </div>
+      <p class="hint">Si el informe aparece cortado al final, aumenta el número de tokens y vuelve a generar.</p>
+    </div>
+  </section>
+
+  <!-- ============ SECCIÓN 2 · DOCUMENTOS ============ -->
+  <section class="card" id="seccion-documentos">
+    <div class="card-tab">02 · DOCUMENTOS</div>
+    <div class="card-body">
+      <h2>Documento a analizar</h2>
+      <p class="subtitle">Sube un documento PDF. Si quieres analizar otro, quita el actual con "✕" y añade el nuevo.</p>
+
+      <label class="dropzone" for="pdfInput" id="dropzone">
+        <div class="icono">📄</div>
+        <div><strong>Haz clic o arrastra aquí</strong> un archivo PDF</div>
+        <input type="file" id="pdfInput" accept="application/pdf">
+      </label>
+
+      <div class="archivos-cabecera">
+        <span class="contador" id="contadorArchivos"></span>
+        <button type="button" class="secundario chico" id="btnVaciarArchivos" hidden>Quitar</button>
+      </div>
+      <ul class="lista-archivos" id="listaArchivos"></ul>
+      <p class="hint" id="hintArchivos"></p>
+    </div>
+  </section>
+
+  <!-- ============ SECCIÓN 3 · GENERAR ============ -->
+  <section class="card" id="seccion-generar">
+    <div class="card-tab">03 · GENERAR</div>
+    <div class="card-body">
+      <h2>Generar informe</h2>
+      <p class="subtitle">El informe se genera y se muestra en directo a medida que llega; con documentos largos o varios PDF a la vez puede tardar varios minutos.</p>
+      <p class="subtitle">Si aun así se corta por inactividad, prueba con menos documentos, un modelo más rápido (p. ej. Haiku 4.5) o un límite de tokens menor.</p>
+      <button type="button" class="primario" id="btnGenerar" disabled>Generar informe</button>
+      <div class="estado-generar" id="estadoGenerar"></div>
+      <div id="bannerErrores"></div>
+    </div>
+  </section>
+
+  <!-- ============ SECCIÓN 4 · INFORME ============ -->
+  <section class="card" id="resultado-seccion">
+    <div class="card-tab">04 · INFORME</div>
+    <div class="card-body">
+      <h2>Resultado del análisis</h2>
+      <div id="bannerTruncado"></div>
+      <div class="informe-ventana">
+        <div class="informe" id="informeContenido"></div>
+      </div>
+      <div class="meta-informe" id="metaInforme"></div>
+      <div class="acciones-informe">
+        <button type="button" class="secundario" id="btnCopiar">Copiar informe</button>
+        <button type="button" class="secundario" id="btnExportarPDF">Descargar como PDF</button>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="app-footer">
+  DetectIApdfOne — herramienta de apoyo docente. El análisis se basa en indicios lingüísticos, de metadatos y de estructura; no constituye una prueba concluyente de uso de IA.
+  <div class="firma">Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) · Última modificación: 25 de septiembre de 2026</div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/4.3.0/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============================================================
+     CONSTANTES EDITABLES POR EL PROFESORADO
+     ============================================================ */
+  const APP_NAME       = 'DetectIApdfOne';
+  const STORAGE_KEY    = 'ia_anthropic_key';
+  const MAX_ARCHIVOS   = 1;
+  const MAX_TOTAL_MB   = 30;
+  const TIMEOUT_INACTIVIDAD_MS = 45000;   // aborta si no llega ningún dato nuevo en este tiempo
+  const TIMEOUT_ABSOLUTO_MS    = 600000;  // tope de seguridad para toda la generación (10 min)
+  const TOKENS_POR_DEFECTO = 4096;
+  const TOKENS_MIN     = 256;
+  // Límite genérico usado solo para el modelo "Otro…" (identificador libre,
+  // cuyo límite real no podemos conocer de antemano).
+  const TOKENS_MAX_GENERICO = 128000;
+
+  // Tabla de modelos, precios (USD por millón de tokens) y número máximo de
+  // tokens de salida ("maxOut") admitido por cada uno. Actualizar según
+  // https://platform.claude.com/docs/en/about-claude/pricing y
+  // https://platform.claude.com/docs/en/about-claude/models/overview
+  const MODELOS_ANTHROPIC = [
+    { id: 'claude-sonnet-4-5', label: 'Claude Sonnet 4.5 (equilibrado — por defecto)', in: 3,  out: 15, maxOut: 64000  },
+    { id: 'claude-sonnet-4-6', label: 'Claude Sonnet 4.6',                              in: 3,  out: 15, maxOut: 64000  },
+    { id: 'claude-sonnet-5',   label: 'Claude Sonnet 5',                                in: 2,  out: 10, maxOut: 128000 },
+    { id: 'claude-opus-5-5',   label: 'Claude Opus 5.5 (máxima capacidad)',             in: 4,  out: 20, maxOut: 128000 },
+    { id: 'claude-haiku-4-5',  label: 'Claude Haiku 4.5 (rápido y económico)',          in: 1,  out: 5,  maxOut: 64000  },
+    { id: 'claude-fable-5-1',  label: 'Claude Fable 5.1 (razonamiento avanzado)',       in: 10, out: 50, maxOut: 128000 }
+  ];
+  const MODELO_POR_DEFECTO = 'claude-sonnet-4-5';
+
+  // System prompt completo y literal usado para el análisis.
+  const SYSTEM_PROMPT = [
+"Eres un experto en IA, en analizar texto y metadatos de documentos PDF.",
+"",
+"Tu tarea es dictaminar mediante un porcentaje si un documento PDF ha sido generado con IA o no. Para ello debes realizar el análisis forense que se describe a continuación.",
+"",
+"# ANÁLISIS FORENSE DE UN DOCUMENTO PDF PARA DETECTAR INDICIOS DE USO DE IA",
+"",
+"Analiza exhaustivamente el documento PDF proporcionado para determinar si existen indicios de que su contenido haya sido generado, redactado, traducido, resumido, reformulado o significativamente editado mediante herramientas de inteligencia artificial generativa.",
+"",
+"Se proporciona un único documento PDF. Realiza un análisis individual y completo de ese documento.",
+"",
+"## IMPORTANTE: PRINCIPIOS DEL ANÁLISIS",
+"",
+"No afirmes que un documento ha sido generado por IA únicamente porque presente un estilo formal, una redacción correcta o determinadas características lingüísticas. La detección de contenido generado por IA no puede considerarse una prueba concluyente únicamente mediante análisis estilístico. Por tanto:",
+"- Distingue siempre entre evidencias, indicios, anomalías, hipótesis y conclusiones.",
+"- No presentes una sospecha como un hecho.",
+"- No inventes información que no esté presente en el documento.",
+"- No atribuyas el documento a una herramienta concreta (ChatGPT, Claude, Gemini, Copilot, etc.) salvo que exista evidencia explícita.",
+"- Si no existen evidencias suficientes, indícalo claramente.",
+"- Ten en cuenta que un texto humano puede presentar características similares a las de un texto generado por IA.",
+"- Ten en cuenta que un texto generado inicialmente por IA puede haber sido posteriormente editado por una persona.",
+"- Ten en cuenta que un documento puede ser parcialmente humano y parcialmente generado o editado mediante IA.",
+"- No utilices un único indicador para establecer una conclusión; da mayor importancia a la coincidencia de varios indicios independientes.",
+"- Cuando sea posible, localiza cada indicio mediante página, sección y fragmento concreto.",
+"",
+"Tu objetivo no es «adivinar» si el documento fue escrito por una IA. Tu objetivo es realizar un análisis forense reproducible, transparente y basado en evidencias.",
+"",
+"## 1. IDENTIFICACIÓN DEL ARCHIVO",
+"Identifica el archivo proporcionado (nombre del documento).",
+"",
+"## 2. EXAMEN GENERAL DEL DOCUMENTO",
+"Analiza: número de páginas, número aproximado de palabras, estructura, títulos y subtítulos, índice, tablas, figuras, gráficos, imágenes, referencias bibliográficas, notas al pie, anexos, código u otros elementos técnicos, distribución y maquetación, y metadatos disponibles. Indica si existen elementos que puedan proporcionar información sobre el proceso de creación del documento.",
+"",
+"## 3. ANÁLISIS DE METADATOS",
+"Examina autor, creador, productor, fecha de creación, fecha de modificación, aplicación y versión del software utilizado, título, palabras clave, información XMP y otros metadatos relevantes. Determina si alguno de estos datos puede aportar información sobre el origen o proceso de creación. IMPORTANTE: que el PDF se haya creado con Word, LibreOffice, LaTeX, Google Docs, un navegador u otra herramienta no demuestra por sí mismo que el contenido lo haya escrito una persona o una IA.",
+"",
+"## 4. ANÁLISIS LINGÜÍSTICO",
+"Estilo: uniformidad excesiva, estructuras sintácticas repetitivas, párrafos homogéneos, transiciones artificialmente regulares, repetición de patrones argumentativos, redacción genérica, expresiones formularias, lenguaje innecesariamente elaborado, ausencia de rasgos personales.",
+"Vocabulario: repetición de palabras, uso uniforme del vocabulario, sinónimos poco naturales, terminología genérica, fórmulas recurrentes, expresiones poco habituales repetidas.",
+"Coherencia: cambios inexplicables de estilo, contradicciones, repeticiones, conclusiones que no se derivan del contenido, afirmaciones genéricas sin evidencia, saltos argumentativos, fragmentos con estilos diferentes.",
+"No interpretes automáticamente una redacción académica, correcta o estructurada como evidencia de IA.",
+"",
+"## 5. ANÁLISIS DE PATRONES COMPATIBLES CON TEXTO GENERADO POR IA",
+"Busca: introducciones excesivamente genéricas, conclusiones previsibles o formulaicas, repetición de expresiones, enumeraciones excesivamente simétricas, explicaciones artificialmente equilibradas, lenguaje excesivamente neutral o impersonal, repetición de ideas con distintas palabras, afirmaciones plausibles pero poco concretas, referencias a conceptos no desarrollados, cambios repentinos entre información específica y explicaciones genéricas. Para cada indicio: página, sección, fragmento, explicación y nivel de confianza.",
+"",
+"## 6. ANÁLISIS DE ERRORES Y POSIBLES «ALUCINACIONES»",
+"Comprueba referencias bibliográficas inexistentes, autores dudosos, artículos difíciles de verificar, DOI o URLs sospechosas, citas que no corresponden con las referencias, datos numéricos sin fuente, afirmaciones aparentemente inventadas, instituciones o estudios dudosos, información contradictoria. Diferencia entre error humano, error de edición, error de transcripción, posible información inventada e información que simplemente no puede verificarse. No atribuyas automáticamente una referencia incorrecta a una IA.",
+"",
+"## 7. ANÁLISIS DE ESTRUCTURA Y FORMATO",
+"Cambios de tipografía, de interlineado, espaciados inconsistentes, diferencias entre secciones, encabezados con estilos diferentes, listas con formatos inconsistentes, tablas de fuentes aparentemente distintas, páginas con estructuras visuales anómalas, elementos gráficos inconsistentes, restos de instrucciones o texto de trabajo, fragmentos aparentemente copiados de fuentes diferentes.",
+"",
+"## 8. ANÁLISIS DE COHERENCIA ENTRE TEXTO, IMÁGENES Y GRÁFICOS",
+"Correspondencia entre texto e imágenes/gráficos, etiquetas de figuras, coherencia de los datos, posibles errores visuales, procedencia aparentemente distinta de elementos gráficos. No determines que una imagen ha sido generada por IA únicamente por su apariencia.",
+"",
+"## 9. ANÁLISIS DE CITAS Y REFERENCIAS",
+"Existencia de referencias, autores y publicaciones, fechas, títulos, correspondencia entre citas y bibliografía, referencias no citadas, citas ausentes de la bibliografía, patrones extraños, referencias aparentemente inventadas.",
+"",
+"## 10. IDENTIFICACIÓN DE FRAGMENTOS SOSPECHOSOS",
+"Identifica los fragmentos del documento que presenten mayor densidad de indicios. Para cada fragmento sospechoso: página, sección, primeras palabras del fragmento, tipo de indicio, explicación y nivel de confianza.",
+"",
+"## 11. EVALUACIÓN DEL USO DE IA",
+"Usa exactamente una de estas categorías:",
+"A. Sin indicios significativos.",
+"B. Indicios débiles (explicables también por escritura humana, edición o plantillas).",
+"C. Indicios moderados (varios patrones independientes compatibles con IA).",
+"D. Indicios fuertes (múltiples evidencias independientes y consistentes).",
+"E. Evidencia explícita (información directamente observable; reservar solo para evidencia directa).",
+"",
+"## 12. TABLA GENERAL DE RESULTADOS",
+"Presenta una tabla con columnas Aspecto / Resultado / Evidencia / Página / Confianza, cubriendo metadatos, estilo lingüístico, estructura, referencias, coherencia, imágenes/gráficos y fragmentos sospechosos.",
+"",
+"## 13. INFORME FINAL",
+"Incluye, en este orden: (A) análisis individual del documento; (B) fragmentos sospechosos más relevantes; (C) posibles explicaciones alternativas; (D) evaluación final (categoría A–E); (E) limitaciones del análisis, explicando claramente que: el análisis estilístico no demuestra por sí solo el uso de IA; no es posible determinar qué herramienta de IA se utilizó salvo evidencia explícita; un documento puede ser parcialmente humano y parcialmente generado por IA; y la edición humana posterior puede modificar considerablemente las características originales de un texto generado por IA.",
+"",
+"## 14. RESUMEN EJECUTIVO",
+"Cierra el informe con un resumen de máximo 10 líneas que indique: nivel de indicios de IA del documento; principales evidencias encontradas; principales explicaciones alternativas; y nivel de confianza global del análisis. No realices acusaciones de fraude, plagio o mala conducta académica: limítate a describir objetivamente las evidencias y las posibles interpretaciones.",
+"",
+"## REGLA FINAL",
+"El resultado debe ser un informe de análisis de evidencias, no un detector infalible de IA. Nunca conviertas una probabilidad, patrón lingüístico o indicio aislado en una afirmación categórica de autoría mediante inteligencia artificial. Presenta siempre la interpretación con su nivel de confianza correspondiente.",
+"",
+"Redacta el informe completo en español, en formato Markdown (usa # y ## para títulos y tablas en formato Markdown con | para las tablas de resultados), siguiendo el orden de las secciones anteriores."
+  ].join("\n");
+
+  /* ============================================================
+     ESTADO Y REFERENCIAS AL DOM
+     ============================================================ */
+  const $ = (id) => document.getElementById(id);
+
+  const apiKeyInput     = $('apiKeyInput');
+  const btnGuardarKey   = $('btnGuardarKey');
+  const btnBorrarKey    = $('btnBorrarKey');
+  const keyDot          = $('keyDot');
+  const keyStatusTexto  = $('keyStatusTexto');
+
+  const modeloSelect    = $('modeloSelect');
+  const modeloOtroWrap  = $('modeloOtroWrap');
+  const modeloOtroInput = $('modeloOtroInput');
+  const maxTokensInput  = $('maxTokensInput');
+  const hintMaxTokens   = $('hintMaxTokens');
+
+  const dropzone         = $('dropzone');
+  const pdfInput         = $('pdfInput');
+  const contadorArchivos = $('contadorArchivos');
+  const btnVaciarArchivos = $('btnVaciarArchivos');
+  const listaArchivos    = $('listaArchivos');
+  const hintArchivos     = $('hintArchivos');
+
+  const btnGenerar      = $('btnGenerar');
+  const estadoGenerar   = $('estadoGenerar');
+  const bannerErrores   = $('bannerErrores');
+
+  const resultadoSeccion  = $('resultado-seccion');
+  const bannerTruncado    = $('bannerTruncado');
+  const informeContenido  = $('informeContenido');
+  const metaInforme       = $('metaInforme');
+  const btnCopiar         = $('btnCopiar');
+  const btnExportarPDF    = $('btnExportarPDF');
+
+  let archivosSeleccionados = [];
+  let ultimoInformeTexto = '';
+  let ultimoModeloUsado = '';
+
+  maxTokensInput.min = TOKENS_MIN;
+  maxTokensInput.value = TOKENS_POR_DEFECTO;
+
+  /* ============================================================
+     ERRORES TIPADOS
+     ============================================================ */
+  class ErrorApp extends Error {
+    constructor(tipo, mensaje) {
+      super(mensaje);
+      this.tipo = tipo;
+    }
+  }
+
+  /* ============================================================
+     POBLAR SELECTOR DE MODELOS
+     ============================================================ */
+  function poblarModelos() {
+    MODELOS_ANTHROPIC.forEach(function (m) {
+      const opt = document.createElement('option');
+      opt.value = m.id;
+      opt.textContent = m.label;
+      if (m.id === MODELO_POR_DEFECTO) opt.selected = true;
+      modeloSelect.appendChild(opt);
+    });
+    const otro = document.createElement('option');
+    otro.value = '__otro__';
+    otro.textContent = 'Otro… (escribir identificador manualmente)';
+    modeloSelect.appendChild(otro);
+  }
+  poblarModelos();
+  actualizarLimiteTokens();
+
+  modeloSelect.addEventListener('change', function () {
+    modeloOtroWrap.hidden = modeloSelect.value !== '__otro__';
+    actualizarLimiteTokens();
+    actualizarEstadoGenerar();
+  });
+
+  function getModeloActivo() {
+    if (modeloSelect.value === '__otro__') {
+      return modeloOtroInput.value.trim();
+    }
+    return modeloSelect.value;
+  }
+
+  function getPrecioModelo(id) {
+    return MODELOS_ANTHROPIC.find(function (m) { return m.id === id; }) || null;
+  }
+
+  // Ajusta el máximo del campo "Número de tokens" al límite real del modelo
+  // seleccionado, y recorta el valor actual si lo supera.
+  function actualizarLimiteTokens() {
+    const info = getPrecioModelo(modeloSelect.value);
+    const limite = info ? info.maxOut : TOKENS_MAX_GENERICO;
+    maxTokensInput.max = limite;
+    if (parseInt(maxTokensInput.value, 10) > limite) {
+      maxTokensInput.value = limite;
+    }
+    hintMaxTokens.textContent = info
+      ? ('Máximo para este modelo: ' + limite.toLocaleString('es-ES') + ' tokens.')
+      : ('Límite orientativo: ' + limite.toLocaleString('es-ES') + ' tokens (verifica el máximo real de tu modelo).');
+  }
+
+  /* ============================================================
+     GESTIÓN DE LA CLAVE DE API
+     ============================================================ */
+  function esKeyValida(key) {
+    return typeof key === 'string' && key.indexOf('sk-ant-') === 0 && key.length > 12;
+  }
+
+  function refrescarEstadoKey() {
+    const key = localStorage.getItem(STORAGE_KEY);
+    if (key && esKeyValida(key)) {
+      keyDot.className = 'dot ok';
+      keyStatusTexto.textContent = 'Clave guardada (termina en …' + key.slice(-4) + ').';
+    } else if (key) {
+      keyDot.className = 'dot off';
+      keyStatusTexto.textContent = 'Hay una clave guardada pero no tiene un formato válido (debe empezar por sk-ant-).';
+    } else {
+      keyDot.className = 'dot off';
+      keyStatusTexto.textContent = 'No hay ninguna clave guardada.';
+    }
+    actualizarEstadoGenerar();
+  }
+
+  btnGuardarKey.addEventListener('click', function () {
+    const valor = apiKeyInput.value.trim();
+    if (!esKeyValida(valor)) {
+      mostrarBannerError('La clave introducida no tiene un formato válido. Las claves de Anthropic empiezan por "sk-ant-".');
+      return;
+    }
+    localStorage.setItem(STORAGE_KEY, valor);
+    bannerErrores.innerHTML = '';
+    refrescarEstadoKey();
+  });
+
+  btnBorrarKey.addEventListener('click', function () {
+    localStorage.removeItem(STORAGE_KEY);
+    apiKeyInput.value = '';
+    refrescarEstadoKey();
+  });
+
+  // Si ya había una clave guardada de una sesión anterior, no la mostramos en
+  // claro en el campo (queda oculta); solo indicamos que existe.
+  refrescarEstadoKey();
+
+  /* ============================================================
+     GESTIÓN DE ARCHIVOS PDF
+     Los archivos se ACUMULAN en archivosSeleccionados en lugar de
+     sustituirse: cada nueva selección se añade a los ya subidos (hasta el
+     máximo permitido), y cada documento puede quitarse individualmente o
+     vaciarse toda la lista, para poder repetir el análisis mezclando
+     documentos ya cargados con otros nuevos sin tener que resubir nada.
+     ============================================================ */
+  function agregarArchivos(listaFicheros) {
+    const candidatos = Array.from(listaFicheros || []);
+    const soloPdf = candidatos.filter(function (f) { return f.type === 'application/pdf'; });
+    if (soloPdf.length !== candidatos.length) {
+      mostrarBannerError('Se han ignorado uno o más archivos porque no son PDF.');
+    }
+
+    const espacioLibre = MAX_ARCHIVOS - archivosSeleccionados.length;
+    if (espacioLibre <= 0) {
+      mostrarBannerError('Ya tienes un documento cargado. Quítalo (✕) antes de añadir otro.');
+      return;
+    }
+
+    // Evita duplicar el mismo archivo (mismo nombre y tamaño) si ya está en la lista.
+    const yaPresente = function (f) {
+      return archivosSeleccionados.some(function (a) { return a.name === f.name && a.size === f.size; });
+    };
+    const nuevos = soloPdf.filter(function (f) { return !yaPresente(f); }).slice(0, espacioLibre);
+
+    if (soloPdf.length > nuevos.length && soloPdf.length > 0) {
+      mostrarBannerError('Solo se admite un documento a la vez; se ha usado el primero seleccionado.');
+    }
+
+    archivosSeleccionados = archivosSeleccionados.concat(nuevos);
+    actualizarVistaArchivos();
+  }
+
+  pdfInput.addEventListener('change', function () {
+    agregarArchivos(pdfInput.files);
+    pdfInput.value = ''; // permite volver a elegir el mismo archivo más tarde
+  });
+
+  // Arrastrar y soltar sobre la zona de carga.
+  ['dragenter', 'dragover'].forEach(function (evento) {
+    dropzone.addEventListener(evento, function (e) {
+      e.preventDefault();
+      dropzone.classList.add('sobre-zona');
+    });
+  });
+  ['dragleave', 'dragend', 'drop'].forEach(function (evento) {
+    dropzone.addEventListener(evento, function (e) {
+      dropzone.classList.remove('sobre-zona');
+    });
+  });
+  dropzone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    if (e.dataTransfer && e.dataTransfer.files) {
+      agregarArchivos(e.dataTransfer.files);
+    }
+  });
+
+  function quitarArchivo(indice) {
+    archivosSeleccionados.splice(indice, 1);
+    actualizarVistaArchivos();
+  }
+
+  btnVaciarArchivos.addEventListener('click', function () {
+    archivosSeleccionados = [];
+    actualizarVistaArchivos();
+  });
+
+  function actualizarVistaArchivos() {
+    const totalMB = archivosSeleccionados.reduce(function (s, f) { return s + f.size; }, 0) / (1024 * 1024);
+    hintArchivos.textContent = archivosSeleccionados.length
+      ? ('Tamaño total: ' + totalMB.toFixed(1) + ' MB.' + (totalMB > MAX_TOTAL_MB ? ' Puede ser demasiado grande para la API; si falla, prueba con documentos más pequeños.' : ''))
+      : '';
+    contadorArchivos.textContent = archivosSeleccionados.length ? '1 documento cargado' : 'Ningún documento cargado';
+    btnVaciarArchivos.hidden = archivosSeleccionados.length === 0;
+
+    renderizarListaArchivos();
+    actualizarEstadoGenerar();
+  }
+
+  function renderizarListaArchivos() {
+    listaArchivos.innerHTML = '';
+    archivosSeleccionados.forEach(function (f, i) {
+      const li = document.createElement('li');
+      const kb = (f.size / 1024).toFixed(0);
+      const infoWrap = document.createElement('span');
+      infoWrap.className = 'info-archivo';
+      infoWrap.innerHTML = '<span class="nombre-archivo">Documento: ' + escaparHtml(f.name) + '</span><span class="tam">' + kb + ' KB</span>';
+
+      const btnQuitar = document.createElement('button');
+      btnQuitar.type = 'button';
+      btnQuitar.className = 'btn-quitar';
+      btnQuitar.setAttribute('aria-label', 'Quitar ' + f.name);
+      btnQuitar.title = 'Quitar este documento';
+      btnQuitar.textContent = '✕';
+      btnQuitar.addEventListener('click', function () { quitarArchivo(i); });
+
+      li.appendChild(infoWrap);
+      li.appendChild(btnQuitar);
+      listaArchivos.appendChild(li);
+    });
+  }
+
+  actualizarVistaArchivos();
+
+  function escaparHtml(s) {
+    const d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  /* ============================================================
+     VALIDACIÓN DEL FORMULARIO / ESTADO DEL BOTÓN GENERAR
+     ============================================================ */
+  function actualizarEstadoGenerar() {
+    const key = localStorage.getItem(STORAGE_KEY);
+    const keyOk = esKeyValida(key);
+    const archivosOk = archivosSeleccionados.length >= 1 && archivosSeleccionados.length <= MAX_ARCHIVOS;
+    const modeloOk = getModeloActivo().length > 0;
+    const tokens = parseInt(maxTokensInput.value, 10);
+    const limiteTokens = parseInt(maxTokensInput.max, 10) || TOKENS_MAX_GENERICO;
+    const tokensOk = !isNaN(tokens) && tokens >= TOKENS_MIN && tokens <= limiteTokens;
+
+    const faltan = [];
+    if (!keyOk) faltan.push('una clave de API válida y guardada');
+    if (!archivosOk) faltan.push('un documento PDF');
+    if (!modeloOk) faltan.push('un modelo');
+    if (!tokensOk) faltan.push('un número de tokens entre ' + TOKENS_MIN + ' y ' + limiteTokens);
+
+    btnGenerar.disabled = faltan.length > 0;
+    estadoGenerar.textContent = faltan.length ? ('Falta: ' + faltan.join('; ') + '.') : '';
+  }
+
+  modeloOtroInput.addEventListener('input', actualizarEstadoGenerar);
+  maxTokensInput.addEventListener('input', actualizarEstadoGenerar);
+
+  /* ============================================================
+     UTILIDADES
+     ============================================================ */
+  function fileToBase64(file) {
+    return new Promise(function (resolve, reject) {
+      const reader = new FileReader();
+      reader.onload = function () { resolve(String(reader.result).split(',')[1] || ''); };
+      reader.onerror = function () { reject(new ErrorApp('lectura', 'No se pudo leer el archivo "' + file.name + '".')); };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  function mostrarBannerError(mensaje) {
+    bannerErrores.innerHTML = '<div class="banner error">' + escaparHtml(mensaje) + '</div>';
+  }
+
+  function marcaTemporal() {
+    const d = new Date();
+    const pad = function (n) { return String(n).padStart(2, '0'); };
+    return d.getFullYear() + pad(d.getMonth() + 1) + pad(d.getDate()) + '_' + pad(d.getHours()) + pad(d.getMinutes());
+  }
+
+  /* ============================================================
+     CAPA DE ABSTRACCIÓN DE LLAMADA A LA IA
+     ============================================================ */
+  async function llamarIA(systemPrompt, userContent, opts) {
+    switch (opts.proveedor) {
+      case 'anthropic':
+        return await llamarAnthropic(systemPrompt, userContent, opts);
+      default:
+        throw new ErrorApp('proveedor', 'Proveedor no soportado: ' + opts.proveedor + '.');
+    }
+  }
+
+  async function llamarAnthropic(systemPrompt, userContent, opts) {
+    const controller = new AbortController();
+    let inactividadId = null;
+    // En vez de un tope fijo de tiempo total (que aborta análisis largos
+    // aunque sigan avanzando con normalidad), usamos streaming: la conexión
+    // solo se cancela si pasan TIMEOUT_INACTIVIDAD_MS sin recibir ningún
+    // dato nuevo, o si se supera el tope de seguridad absoluto.
+    const reiniciarInactividad = function () {
+      clearTimeout(inactividadId);
+      inactividadId = setTimeout(function () { controller.abort(); }, TIMEOUT_INACTIVIDAD_MS);
+    };
+    const topeAbsolutoId = setTimeout(function () { controller.abort(); }, TIMEOUT_ABSOLUTO_MS);
+
+    let resp;
+    reiniciarInactividad();
+    try {
+      resp = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          'x-api-key': opts.apiKey,
+          'anthropic-version': '2023-06-01',
+          'anthropic-dangerous-direct-browser-access': 'true'
+        },
+        body: JSON.stringify({
+          model: opts.modelo,
+          max_tokens: opts.maxTokens,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+          stream: true
+        }),
+        signal: controller.signal
+      });
+    } catch (err) {
+      clearTimeout(inactividadId);
+      clearTimeout(topeAbsolutoId);
+      if (err && err.name === 'AbortError') {
+        throw new ErrorApp('timeout', 'Se ha interrumpido la conexión por inactividad (sin recibir datos durante ' + (TIMEOUT_INACTIVIDAD_MS / 1000) + ' s), o se ha superado el tiempo máximo de seguridad. Prueba con documentos más pequeños, menos archivos a la vez, o un modelo más rápido (p. ej. Haiku 4.5).');
+      }
+      throw new ErrorApp('red', 'No se ha podido conectar con la API de Anthropic. Comprueba tu conexión a internet.');
+    }
+
+    if (!resp.ok) {
+      clearTimeout(inactividadId);
+      clearTimeout(topeAbsolutoId);
+      let data = null;
+      try { data = await resp.json(); } catch (e) { /* sin cuerpo interpretable */ }
+      const apiMsg = (data && data.error && data.error.message) ? (' Detalle: ' + data.error.message) : '';
+      if (resp.status === 401 || resp.status === 403) {
+        throw new ErrorApp('auth', 'La clave de API no es válida o no tiene permisos (código ' + resp.status + ').' + apiMsg);
+      }
+      if (resp.status === 429) {
+        throw new ErrorApp('rate', 'Se ha alcanzado el límite de uso de la API (código 429). Espera unos segundos y vuelve a intentarlo.' + apiMsg);
+      }
+      if (resp.status === 404) {
+        throw new ErrorApp('modelo', 'El modelo "' + opts.modelo + '" no existe o no está disponible (código 404). Comprueba el identificador del modelo.' + apiMsg);
+      }
+      throw new ErrorApp('api', 'Error inesperado de la API (código ' + resp.status + ').' + apiMsg);
+    }
+
+    if (!resp.body || !resp.body.getReader) {
+      clearTimeout(inactividadId);
+      clearTimeout(topeAbsolutoId);
+      throw new ErrorApp('formato', 'El navegador no admite lectura de respuestas en streaming (ReadableStream).');
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder('utf-8');
+    let buffer = '';
+    let textoAcumulado = '';
+    let usoAcumulado = null;
+    let stopReason = null;
+    let errorDelModelo = null;
+
+    function procesarBloqueSSE(bloque) {
+      let dataStr = '';
+      bloque.split('\n').forEach(function (linea) {
+        if (linea.indexOf('data:') === 0) dataStr += linea.slice(5).trim();
+      });
+      if (!dataStr) return;
+      let obj;
+      try { obj = JSON.parse(dataStr); } catch (e) { return; }
+
+      if (obj.type === 'content_block_delta' && obj.delta && obj.delta.type === 'text_delta') {
+        textoAcumulado += obj.delta.text;
+        if (typeof opts.onProgreso === 'function') opts.onProgreso(textoAcumulado);
+      } else if (obj.type === 'message_start' && obj.message && obj.message.usage) {
+        usoAcumulado = obj.message.usage;
+      } else if (obj.type === 'message_delta') {
+        if (obj.delta && obj.delta.stop_reason) stopReason = obj.delta.stop_reason;
+        if (obj.usage) usoAcumulado = Object.assign({}, usoAcumulado, obj.usage);
+      } else if (obj.type === 'error' && obj.error) {
+        errorDelModelo = obj.error.message || 'Error desconocido durante la generación.';
+      }
+    }
+
+    try {
+      while (true) {
+        let paso;
+        try {
+          paso = await reader.read();
+        } catch (err) {
+          if (err && err.name === 'AbortError') {
+            throw new ErrorApp('timeout', 'Se ha interrumpido la conexión por inactividad (sin recibir datos durante ' + (TIMEOUT_INACTIVIDAD_MS / 1000) + ' s), o se ha superado el tiempo máximo de seguridad. Prueba con documentos más pequeños, menos archivos a la vez, o un modelo más rápido (p. ej. Haiku 4.5).');
+          }
+          throw new ErrorApp('red', 'Se ha perdido la conexión con la API de Anthropic mientras se recibía el informe.');
+        }
+        if (paso.done) break;
+        reiniciarInactividad();
+        buffer += decoder.decode(paso.value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf('\n\n')) >= 0) {
+          procesarBloqueSSE(buffer.slice(0, idx));
+          buffer = buffer.slice(idx + 2);
+        }
+      }
+      // Por si el último evento SSE llegó sin la doble línea final antes de
+      // cerrarse la conexión, procesamos también lo que quede en el búfer
+      // (ahí puede estar el stop_reason definitivo, p. ej. "max_tokens").
+      if (buffer.trim()) {
+        procesarBloqueSSE(buffer);
+      }
+    } finally {
+      clearTimeout(inactividadId);
+      clearTimeout(topeAbsolutoId);
+    }
+
+    if (errorDelModelo) {
+      throw new ErrorApp('api', 'La API interrumpió la generación: ' + errorDelModelo);
+    }
+    if (!textoAcumulado) {
+      throw new ErrorApp('formato', 'La respuesta de la API no contenía texto (formato inesperado).');
+    }
+
+    return {
+      texto: textoAcumulado,
+      truncado: stopReason === 'max_tokens',
+      uso: usoAcumulado
+    };
+  }
+
+  /* ============================================================
+     CONSTRUCCIÓN DEL MENSAJE DE USUARIO
+     ============================================================ */
+  async function construirContenidoUsuario(archivos) {
+    const content = [{
+      type: 'text',
+      text: 'Analiza el siguiente documento PDF siguiendo estrictamente las instrucciones de tu rol y devuelve el informe completo en Markdown.'
+    }];
+    for (let i = 0; i < archivos.length; i++) {
+      const f = archivos[i];
+      const base64 = await fileToBase64(f);
+      content.push({ type: 'text', text: 'Documento: ' + f.name });
+      content.push({
+        type: 'document',
+        source: { type: 'base64', media_type: 'application/pdf', data: base64 }
+      });
+    }
+    return content;
+  }
+
+  /* ============================================================
+     GENERAR
+     ============================================================ */
+  btnGenerar.addEventListener('click', generar);
+
+  async function generar() {
+    bannerErrores.innerHTML = '';
+    btnGenerar.disabled = true;
+    const textoOriginalBoton = btnGenerar.textContent;
+    btnGenerar.innerHTML = '<span class="spinner" aria-hidden="true"></span>Analizando…';
+
+    // Preparamos la sección de resultado para ir mostrando el informe a
+    // medida que llega (streaming), en lugar de esperar a que termine todo.
+    bannerTruncado.innerHTML = '';
+    metaInforme.textContent = '';
+    informeContenido.innerHTML = '<p class="hint">Generando el informe…</p>';
+    resultadoSeccion.style.display = 'block';
+    resultadoSeccion.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    let ultimaActualizacion = 0;
+    const onProgreso = function (textoParcial) {
+      const ahora = Date.now();
+      // Throttle: no repintar en cada micro-fragmento recibido.
+      if (ahora - ultimaActualizacion < 200) return;
+      ultimaActualizacion = ahora;
+      informeContenido.innerHTML = window.marked ? window.marked.parse(textoParcial) : textoParcial.replace(/\n/g, '<br>');
+      // Durante la generación seguimos el texto nuevo, pegados al final de
+      // la ventana con scroll.
+      const ventana = informeContenido.parentElement;
+      if (ventana) ventana.scrollTop = ventana.scrollHeight;
+    };
+
+    try {
+      const apiKey = localStorage.getItem(STORAGE_KEY);
+      const modelo = getModeloActivo();
+      const maxTokens = parseInt(maxTokensInput.value, 10);
+
+      if (archivosSeleccionados.length === 0) {
+        throw new ErrorApp('validacion', 'Debes seleccionar al menos un archivo PDF.');
+      }
+
+      const contenido = await construirContenidoUsuario(archivosSeleccionados);
+      const respuesta = await llamarIA(SYSTEM_PROMPT, contenido, {
+        proveedor: 'anthropic', modelo: modelo, apiKey: apiKey, maxTokens: maxTokens, onProgreso: onProgreso
+      });
+
+      ultimoModeloUsado = modelo;
+      mostrarResultado(respuesta, modelo);
+    } catch (err) {
+      const mensaje = (err instanceof ErrorApp) ? err.message : ('Error inesperado: ' + (err && err.message ? err.message : err));
+      mostrarBannerError(mensaje);
+      resultadoSeccion.style.display = 'none';
+    } finally {
+      btnGenerar.disabled = false;
+      btnGenerar.textContent = textoOriginalBoton;
+      actualizarEstadoGenerar();
+    }
+  }
+
+  function mostrarResultado(respuesta, modeloUsado) {
+    ultimoInformeTexto = respuesta.texto;
+
+    // "truncado" viene del stop_reason que devuelve la propia API de
+    // Anthropic ("max_tokens" cuando se ha agotado el límite de tokens de
+    // salida antes de que el modelo terminara el informe), así que es una
+    // comprobación fiable, no una suposición basada en el aspecto del texto.
+    bannerTruncado.innerHTML = respuesta.truncado
+      ? '<div class="banner aviso">⚠️ El informe está incompleto: se agotó el número de tokens de salida antes de terminar (código de la API: <code style="font-family:var(--mono)">stop_reason = max_tokens</code>). Sube "Número de tokens" en la sección 01 y vuelve a generar.</div>'
+      : '';
+
+    informeContenido.innerHTML = window.marked ? window.marked.parse(respuesta.texto) : respuesta.texto.replace(/\n/g, '<br>');
+    // Al terminar, volvemos al principio de la ventana de scroll para leer
+    // el informe completo desde el inicio.
+    const ventana = informeContenido.parentElement;
+    if (ventana) ventana.scrollTop = 0;
+
+    let metaTexto = '';
+    if (respuesta.uso) {
+      const inTok = respuesta.uso.input_tokens || 0;
+      const outTok = respuesta.uso.output_tokens || 0;
+      const precio = getPrecioModelo(modeloUsado);
+      let costeTexto;
+      if (precio) {
+        const coste = (inTok * precio.in + outTok * precio.out) / 1e6;
+        costeTexto = '$' + coste.toFixed(4) + ' (estimado, según tarifas de lista vigentes en la app)';
+      } else {
+        costeTexto = 'no disponible para modelos personalizados';
+      }
+      metaTexto = 'Modelo: ' + modeloUsado + ' · Tokens de entrada: ' + inTok + ' · Tokens de salida: ' + outTok + ' · Coste estimado: ' + costeTexto;
+    } else {
+      metaTexto = 'Modelo: ' + modeloUsado;
+    }
+    metaInforme.textContent = metaTexto;
+
+    resultadoSeccion.style.display = 'block';
+  }
+
+  /* ============================================================
+     EXPORTACIÓN: COPIAR AL PORTAPAPELES
+     ============================================================ */
+  btnCopiar.addEventListener('click', async function () {
+    if (!ultimoInformeTexto) return;
+    try {
+      await navigator.clipboard.writeText(ultimoInformeTexto);
+    } catch (e) {
+      const ta = document.createElement('textarea');
+      ta.value = ultimoInformeTexto;
+      document.body.appendChild(ta);
+      ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+    }
+    const original = btnCopiar.textContent;
+    btnCopiar.textContent = 'Copiado ✓';
+    setTimeout(function () { btnCopiar.textContent = original; }, 1600);
+  });
+
+  /* ============================================================
+     EXPORTACIÓN: DESCARGAR COMO PDF
+     ============================================================ */
+  btnExportarPDF.addEventListener('click', async function () {
+    if (!ultimoInformeTexto) return;
+    try {
+      await exportarInformePDF(ultimoInformeTexto, ultimoModeloUsado);
+    } catch (e) {
+      mostrarBannerError('No se ha podido generar el PDF: ' + (e && e.message ? e.message : e));
+    }
+  });
+
+  async function exportarInformePDF(markdown, modeloUsado) {
+    const jsPDFCtor = window.jspdf && window.jspdf.jsPDF;
+    if (!jsPDFCtor) throw new Error('La librería jsPDF no se ha cargado.');
+
+    const doc = new jsPDFCtor({ unit: 'pt', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const marginX = 48, marginTop = 64, marginBottom = 52;
+    const usableWidth = pageW - marginX * 2;
+    let y = marginTop;
+
+    const fechaGeneracion = new Date().toLocaleString('es-ES');
+
+    // La cabecera de cada página (nombre de la app + fecha) se dibuja al
+    // CREAR la página, antes que su contenido, para que el orden interno del
+    // PDF sea el mismo que el orden visual (relevante al copiar texto o al
+    // extraerlo con otras herramientas). El pie con "Página X de Y" sí debe
+    // añadirse al final, porque hasta entonces no se conoce el total.
+    function dibujarCabeceraPagina() {
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text(APP_NAME + ' — Informe de análisis forense de PDF', marginX, 30);
+      doc.text(fechaGeneracion, pageW - marginX, 30, { align: 'right' });
+      doc.setDrawColor(210);
+      doc.line(marginX, 38, pageW - marginX, 38);
+    }
+
+    function nuevaPagina() { doc.addPage(); y = marginTop; dibujarCabeceraPagina(); }
+    function asegurarEspacio(h) { if (y + h > pageH - marginBottom) nuevaPagina(); }
+
+    dibujarCabeceraPagina();
+
+    function escribirParrafo(texto, opts) {
+      opts = opts || {};
+      const size = opts.size || 9.3;
+      const indent = opts.indent || 0;
+      doc.setFont('helvetica', opts.bold ? 'bold' : 'normal');
+      doc.setFontSize(size);
+      doc.setTextColor(30, 30, 30);
+      const lineas = doc.splitTextToSize(texto, usableWidth - indent);
+      const lh = size * 1.35;
+      lineas.forEach(function (linea) {
+        asegurarEspacio(lh);
+        doc.text(linea, marginX + indent, y);
+        y += lh;
+      });
+      y += (opts.gap != null ? opts.gap : 4);
+    }
+
+    // Divide una fila de tabla Markdown respetando los pipes escapados
+    // ("\|") y limpia el formato Markdown de cada celda.
+    function dividirFilaTabla(fila) {
+      const partes = fila.split(/(?<!\\)\|/);
+      return partes.map(function (c) { return limpiarMD(c.trim()); });
+    }
+
+    // Convierte formato Markdown en línea (negrita, cursiva, código, enlaces,
+    // tachado, pipes escapados) a texto plano legible, para que el PDF no
+    // muestre asteriscos, guiones bajos ni corchetes de Markdown sin procesar.
+    function limpiarMD(t) {
+      if (!t) return '';
+      let s = String(t);
+      s = s.replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1');           // imágenes -> texto alternativo
+      s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)');     // enlaces -> texto (url)
+      s = s.replace(/\*\*\*([^*]+)\*\*\*/g, '$1');              // negrita+cursiva ***texto***
+      s = s.replace(/___([^_]+)___/g, '$1');                    // negrita+cursiva ___texto___
+      s = s.replace(/\*\*([^*]+)\*\*/g, '$1');                  // negrita **texto**
+      s = s.replace(/__([^_]+)__/g, '$1');                      // negrita __texto__
+      s = s.replace(/(^|[^*\w])\*([^*\n]+)\*(?!\*)/g, '$1$2');  // cursiva *texto*
+      s = s.replace(/(^|[^_\w])_([^_\n]+)_(?!_)/g, '$1$2');     // cursiva _texto_
+      s = s.replace(/`([^`]+)`/g, '$1');                        // código en línea `texto`
+      s = s.replace(/~~([^~]+)~~/g, '$1');                      // tachado ~~texto~~
+      s = s.replace(/\\\|/g, '|');                              // pipe escapado \| (de celdas de tabla)
+      s = s.replace(/\\([_*`~[\]])/g, '$1');                    // otros caracteres Markdown escapados
+      return s;
+    }
+
+    // Reparte el ancho disponible entre columnas según la longitud media de
+    // su contenido (con un mínimo por columna), en vez de repartir a partes
+    // iguales, para que las columnas de una palabra no ocupen lo mismo que
+    // las columnas con frases largas.
+    function calcularAnchosColumnas(filasCeldas, nCols) {
+      const minColWidth = 54;
+      const pesos = new Array(nCols).fill(0);
+      filasCeldas.forEach(function (fila) {
+        for (let j = 0; j < nCols; j++) {
+          pesos[j] += Math.min((fila[j] || '').length, 200);
+        }
+      });
+      for (let j = 0; j < nCols; j++) { if (pesos[j] < 12) pesos[j] = 12; }
+      const sumaPesos = pesos.reduce(function (a, b) { return a + b; }, 0);
+      const anchosBrutos = pesos.map(function (p) { return Math.max(minColWidth, (p / sumaPesos) * usableWidth); });
+      const sumaBruta = anchosBrutos.reduce(function (a, b) { return a + b; }, 0);
+      const factor = usableWidth / sumaBruta;
+      return anchosBrutos.map(function (a) { return a * factor; });
+    }
+
+    // Dibuja una tabla Markdown como una cuadrícula real (celdas con bordes,
+    // texto envuelto por columna, cabecera resaltada y repetida si la tabla
+    // salta de página), en lugar de una línea de texto con pipes sueltos.
+    function dibujarTabla(filasMarkdown) {
+      const filtradas = filasMarkdown
+        .map(function (l) { return l.trim().replace(/^\||\|$/g, ''); })
+        .filter(function (l) { return !/^[:\-\s|]+$/.test(l); });
+      if (!filtradas.length) return;
+
+      const filasCeldas = filtradas.map(dividirFilaTabla);
+      let nCols = 1;
+      filasCeldas.forEach(function (f) { if (f.length > nCols) nCols = f.length; });
+      filasCeldas.forEach(function (f) { while (f.length < nCols) f.push(''); });
+
+      const headerCells = filasCeldas[0];
+      const dataRows = filasCeldas.slice(1);
+      const anchos = calcularAnchosColumnas(filasCeldas, nCols);
+
+      const PAD_X = 4, PAD_Y = 3, ALTO_LINEA = 8.7, FUENTE = 7.2;
+
+      function calcularAlturaYLineas(celdas, negrita) {
+        doc.setFont('helvetica', negrita ? 'bold' : 'normal');
+        doc.setFontSize(FUENTE);
+        const lineasPorCelda = celdas.map(function (texto, j) {
+          return doc.splitTextToSize(String(texto || ''), Math.max(anchos[j] - PAD_X * 2, 20));
+        });
+        let maxLineas = 1;
+        lineasPorCelda.forEach(function (l) { if (l.length > maxLineas) maxLineas = l.length; });
+        return { lineasPorCelda: lineasPorCelda, altura: maxLineas * ALTO_LINEA + PAD_Y * 2 };
+      }
+
+      function dibujarFila(celdas, negrita) {
+        const calc = calcularAlturaYLineas(celdas, negrita);
+        let x = marginX;
+        if (negrita) {
+          doc.setFillColor(226, 237, 249);
+          doc.rect(marginX, y, usableWidth, calc.altura, 'F');
+        }
+        doc.setFont('helvetica', negrita ? 'bold' : 'normal');
+        doc.setFontSize(FUENTE);
+        doc.setDrawColor(190, 205, 224);
+        doc.setTextColor(27, 42, 58);
+        for (let j = 0; j < nCols; j++) {
+          doc.rect(x, y, anchos[j], calc.altura);
+          let ty = y + PAD_Y + ALTO_LINEA * 0.75;
+          calc.lineasPorCelda[j].forEach(function (linea) {
+            doc.text(linea, x + PAD_X, ty);
+            ty += ALTO_LINEA;
+          });
+          x += anchos[j];
+        }
+        y += calc.altura;
+      }
+
+      asegurarEspacio(20);
+      y += 4;
+      dibujarFila(headerCells, true);
+      dataRows.forEach(function (celdas) {
+        const calc = calcularAlturaYLineas(celdas, false);
+        if (y + calc.altura > pageH - marginBottom) {
+          nuevaPagina();
+          dibujarFila(headerCells, true);
+        }
+        dibujarFila(celdas, false);
+      });
+      y += 8;
+    }
+
+    const lineas = markdown.split('\n');
+    let bufferTabla = [];
+    const flushTabla = function () { if (bufferTabla.length) { dibujarTabla(bufferTabla); bufferTabla = []; } };
+
+    lineas.forEach(function (linea) {
+      const l = linea.replace(/\s+$/, '');
+      if (/^\s*\|.*\|\s*$/.test(l)) { bufferTabla.push(l); return; }
+      flushTabla();
+
+      const encabezado = l.match(/^(#{1,6})\s+(.*)$/);
+      if (encabezado) {
+        const nivel = encabezado[1].length;
+        const tamanos = { 1: 13, 2: 11.5, 3: 10.3 };
+        asegurarEspacio(28);
+        y += nivel === 1 ? 9 : 5;
+        escribirParrafo(limpiarMD(encabezado[2]), { bold: true, size: tamanos[nivel] || 9.6, gap: 7 });
+        return;
+      }
+      const cita = l.match(/^\s*>\s?(.*)$/);
+      if (cita) {
+        escribirParrafo(limpiarMD(cita[1]), { indent: 14, size: 9.3, gap: 4 });
+        return;
+      }
+      const vinieta = l.match(/^(\s*)[-*]\s+(.*)$/);
+      if (vinieta) {
+        const nivel = Math.floor(vinieta[1].length / 2);
+        escribirParrafo('•  ' + limpiarMD(vinieta[2]), { indent: 14 + nivel * 12, size: 9.3, gap: 2 });
+        return;
+      }
+      const numerada = l.match(/^(\s*)(\d+\.\s+.*)$/);
+      if (numerada) {
+        const nivel = Math.floor(numerada[1].length / 2);
+        escribirParrafo(limpiarMD(numerada[2]), { indent: 14 + nivel * 12, size: 9.3, gap: 2 });
+        return;
+      }
+      if (/^\s*(---|\*\*\*|___)\s*$/.test(l)) {
+        asegurarEspacio(14);
+        doc.setDrawColor(190);
+        doc.line(marginX, y, pageW - marginX, y);
+        y += 14;
+        return;
+      }
+      if (l.trim() === '') { y += 5; return; }
+      escribirParrafo(limpiarMD(l), { size: 9.3, gap: 4 });
+    });
+    flushTabla();
+
+    // El pie con "Página X de Y" se añade al final, cuando ya se conoce el
+    // número total de páginas; la cabecera ya se dibujó al crear cada página.
+    const totalPaginas = doc.internal.getNumberOfPages();
+    for (let i = 1; i <= totalPaginas; i++) {
+      doc.setPage(i);
+      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(8);
+      doc.setTextColor(120, 120, 120);
+      doc.text('Página ' + i + ' de ' + totalPaginas + (modeloUsado ? (' · modelo: ' + modeloUsado) : ''), pageW / 2, pageH - 26, { align: 'center' });
+    }
+
+    // En un Artifact publicado, un enlace o descarga iniciada por script no
+    // funciona: hay que ofrecer el archivo a través de la capacidad
+    // "downloads" de la plataforma, que pide confirmación al espectador.
+    const nombreArchivo = 'DetectIApdfOne_informe_' + marcaTemporal() + '.pdf';
+    const downloads = (window.claude && typeof window.claude.use === 'function')
+      ? await window.claude.use('downloads')
+      : null;
+    if (downloads) {
+      await downloads.save({ filename: nombreArchivo, data: doc.output('blob') });
+    } else {
+      // Fuera de claude.ai (por ejemplo, alojado en GitHub Pages) no existe
+      // "downloads", así que se usa el guardado normal del navegador.
+      doc.save(nombreArchivo);
+    }
+  }
+
+  actualizarEstadoGenerar();
+})();
+</script>
+</body>
+</html>
