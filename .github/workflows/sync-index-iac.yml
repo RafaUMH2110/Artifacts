@@ -1,4 +1,4 @@
-name: Sync artifacts index to IAC
+name: Sync artifacts portal to IAC
 
 on:
   push:
@@ -8,12 +8,12 @@ on:
   workflow_dispatch:
 
 jobs:
-  sync-index:
+  sync-portal:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - name: Generate and push index to IAC
+      - name: Generate and push portal to IAC
         env:
           DEST_TOKEN: ${{ secrets.IAC_SYNC_TOKEN }}
         run: python3 .github/scripts/generate_index.py
