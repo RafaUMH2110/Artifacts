@@ -386,7 +386,14 @@ const HISTORY_CONFIG = {
    Formato Anthropic: { "<modelo>": { inputPerMTok: <USD>, outputPerMTok: <USD> } }
    Formato fal:       { "<modelo>": { perImage: <USD> } } */
 const PRICING = {
-  anthropic: {},
+  // Precios oficiales de la API de Anthropic en USD por millon de tokens.
+  // Fuente: paginas de anuncio y documentacion oficial de cada modelo
+  // (docs.claude.com, anthropic.com/news). Verifica las tarifas vigentes
+  // antes de usarlas con fines de facturacion real.
+  anthropic: {
+    "claude-sonnet-4-5-20250929": { inputPerMTok: 3.00, outputPerMTok: 15.00 },
+    "claude-haiku-4-5-20251001": { inputPerMTok: 1.00, outputPerMTok: 5.00 }
+  },
   fal: {}
 };
 
