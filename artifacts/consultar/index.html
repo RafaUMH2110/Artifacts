@@ -817,6 +817,8 @@
 
     <div id="resultado-contenido" tabindex="0" role="region" aria-label="Respuesta generada, con desplazamiento" hidden></div>
 
+    <p class="hint" id="meta-coste" hidden></p>
+
     <div class="btn-row btn-row-split">
       <button type="button" class="btn btn-secondary" id="borrar-resultado-btn" disabled>Borrar resultado</button>
       <button type="button" class="btn btn-secondary" id="exportar-btn" disabled>Exportar fichero</button>
@@ -895,6 +897,24 @@ const MODELOS_DISPONIBLES = [
     notas: 'Modelo legacy, mantenido por compatibilidad.'
   }
 ];
+
+// Precios oficiales de la API de Anthropic en USD por millon de tokens
+// (entrada / salida). Fuente: paginas de anuncio y documentacion oficial
+// de cada modelo (docs.claude.com, anthropic.com/news). Verifica las
+// tarifas vigentes antes de usarlas con fines de facturacion real.
+const PRECIOS_POR_MTOK = {
+  'claude-sonnet-5': { in: 2.00, out: 10.00 },
+  'claude-haiku-4-5-20251001': { in: 1.00, out: 5.00 },
+  'claude-sonnet-4-5-20250929': { in: 3.00, out: 15.00 },
+  'claude-opus-4-5-20251101': { in: 5.00, out: 25.00 },
+  'claude-opus-4-1-20250805': { in: 15.00, out: 75.00 }
+};
+
+function calcularCoste(modeloIdApi, inTok, outTok) {
+  const precio = PRECIOS_POR_MTOK[modeloIdApi];
+  if (!precio) return null;
+  return (inTok / 1e6) * precio.in + (outTok / 1e6) * precio.out;
+}
 
 // Índice seleccionado por defecto: coincide con el valor por defecto de
 // `ConfiguracionModelo.indice_modelo` (2) en el script de referencia,
@@ -979,6 +999,7 @@ const el = {
   resultadoPlaceholder: document.getElementById('resultado-placeholder'),
   avisoTruncado: document.getElementById('aviso-truncado'),
   resultadoContenido: document.getElementById('resultado-contenido'),
+  metaCoste: document.getElementById('meta-coste'),
   borrarResultadoBtn: document.getElementById('borrar-resultado-btn'),
   exportarBtn: document.getElementById('exportar-btn'),
   exportarHint: document.getElementById('exportar-hint')
@@ -1389,6 +1410,7 @@ function showError(mensaje) {
 
 function limpiarEstado() {
   el.statusArea.innerHTML = '';
+  el.metaCoste.hidden = true;
 }
 
 function escapeHtml(texto) {
@@ -1479,7 +1501,7 @@ async function llamarAClaude({ apiKey, modeloIdApi, maxTokens, systemPrompt, use
   // proporciona la propia API para detectar este caso.
   const truncadaPorLimiteDeTokens = datos.stop_reason === 'max_tokens';
 
-  return { texto, truncada: truncadaPorLimiteDeTokens };
+  return { texto, truncada: truncadaPorLimiteDeTokens, usage: datos.usage || null };
 }
 
 
@@ -1545,6 +1567,7 @@ async function manejarClicConsultar() {
     });
 
     renderResult(resultadoFinal.texto, resultadoFinal.truncada);
+    mostrarCoste(modelo.idApi, [resultadoMejora.usage, resultadoFinal.usage]);
     if (resultadoFinal.truncada) {
       showStatus('Respuesta generada, pero truncada por el límite de tokens (ver aviso junto al resultado).', 'info');
     } else {
@@ -1574,6 +1597,29 @@ function ponerCargando(activo, mensaje) {
 /* ------------------------------------------------------------------ *
  * 7. RENDERIZADO DEL RESULTADO (Markdown -> HTML)
  * ------------------------------------------------------------------ */
+
+// Suma el uso (tokens de entrada/salida) de varias llamadas a Claude y
+// muestra el total junto con el coste aproximado para el modelo usado.
+function mostrarCoste(modeloIdApi, listaUsos) {
+  const metaEl = el.metaCoste;
+  const usos = (listaUsos || []).filter(Boolean);
+  if (usos.length === 0) { metaEl.hidden = true; return; }
+
+  const inTok = usos.reduce((acc, u) => acc + (u.input_tokens || 0), 0);
+  const outTok = usos.reduce((acc, u) => acc + (u.output_tokens || 0), 0);
+  const modelo = MODELOS_DISPONIBLES.find(m => m.idApi === modeloIdApi);
+  const coste = calcularCoste(modeloIdApi, inTok, outTok);
+
+  const costeTexto = coste === null
+    ? 'no disponible (modelo sin tarifa configurada)'
+    : '$' + coste.toFixed(4) + ' (estimado, según tarifas de lista vigentes en la app)';
+
+  metaEl.textContent = 'Modelo: ' + (modelo ? modelo.nombre : modeloIdApi) +
+    ' · Tokens de entrada: ' + inTok.toLocaleString('es-ES') +
+    ' · Tokens de salida: ' + outTok.toLocaleString('es-ES') +
+    ' · Coste estimado: ' + costeTexto;
+  metaEl.hidden = false;
+}
 
 function renderResult(markdownTexto, truncada) {
   estado.ultimoResultadoMarkdown = markdownTexto;
@@ -2443,7 +2489,7 @@ async function generarEsquemaPresentacion({ apiKey, modeloIdApi, fuenteCompleta 
   if (resultado.truncada) {
     throw new Error('La planificación de la presentación se ha cortado por el límite de tokens. Prueba con un modelo de mayor capacidad o con una consulta/adjuntos más breves.');
   }
-  return resultado.texto;
+  return { texto: resultado.texto, usage: resultado.usage };
 }
 
 function parsearEsquemaPresentacion(textoRespuesta) {
@@ -2831,14 +2877,14 @@ async function manejarClicGenerarPptx() {
   showStatus('Analizando la consulta y los documentos adjuntos para planificar la presentación…', 'info');
 
   try {
-    const textoEsquema = await generarEsquemaPresentacion({
+    const resultadoEsquema = await generarEsquemaPresentacion({
       apiKey, modeloIdApi: modelo.idApi, fuenteCompleta: fuente.fuenteCompleta,
     });
 
     el.generarPptxBtn.innerHTML = '<span class="spinner" aria-hidden="true"></span><span>Generando diapositivas…</span>';
     showStatus('Generando las diapositivas…', 'info');
 
-    const esquema = parsearEsquemaPresentacion(textoEsquema);
+    const esquema = parsearEsquemaPresentacion(resultadoEsquema.texto);
     const pptx = construirPresentacionPptx(esquema);
 
     await validarPaquetePptx(pptx, esquema.diapositivas.length);
@@ -2846,6 +2892,7 @@ async function manejarClicGenerarPptx() {
     const nombreArchivo = sanitizeFilenameBase(esquema.titulo || 'presentacion') + '.pptx';
     await pptx.writeFile({ fileName: nombreArchivo });
 
+    mostrarCoste(modelo.idApi, [resultadoEsquema.usage]);
     showStatus(`Presentación generada correctamente: «${nombreArchivo}» (${esquema.diapositivas.length} diapositivas). Descarga iniciada.`, 'success');
   } catch (error) {
     showError(error && error.message ? error.message : 'No se ha podido generar la presentación por un error inesperado.');
