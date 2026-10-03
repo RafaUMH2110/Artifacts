@@ -60,10 +60,11 @@ def extract_app_metadata(html_text):
     title = get_attr("data-app-title")
     if not title:
         return None
+    title = html.unescape(title)
 
-    description = get_attr("data-app-description") or ""
-    categories = [c.strip() for c in (get_attr("data-categories") or "").split(",") if c.strip()]
-    tags = [t.strip() for t in (get_attr("data-tags") or "").split(",") if t.strip()]
+    description = html.unescape(get_attr("data-app-description") or "")
+    categories = [c.strip() for c in html.unescape(get_attr("data-categories") or "").split(",") if c.strip()]
+    tags = [html.unescape(t.strip()) for t in (get_attr("data-tags") or "").split(",") if t.strip()]
     client_only = (get_attr("data-client-only") or "").strip().lower() == "true"
 
     return {
