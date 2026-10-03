@@ -259,11 +259,6 @@
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
-    <div class="field" id="modelo-otro-wrap" style="display:none;">
-      <label for="input-modelo-otro">Identificador de modelo</label>
-      <input type="text" id="input-modelo-otro" placeholder="Ej: claude-sonnet-4-5">
-    </div>
-
     <div class="field">
       <label for="input-apikey">API key del proveedor activo</label>
       <input type="password" id="input-apikey" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu API key">
@@ -445,15 +440,13 @@ const MODELOS_POR_PROVEEDOR = {
     porDefecto: "gemini-1.5-flash"
   }
 };
-// La lista de modelos de cada proveedor cambia con frecuencia: revisa la
-// documentación oficial y usa "Otro…" con el identificador exacto si el
-// modelo que quieres usar no aparece en la lista.
+// Version alumnos: lista cerrada de modelos (sin opcion "Otro..."), fijada
+// por el profesor. Para anadir o quitar un modelo, edita este objeto.
 
 // --- Límite de tokens de salida de cada modelo (orientativo) -----------------
 // Se usa para no dejar pedir al usuario más tokens de los que el modelo puede
-// devolver. Si un modelo no aparece aquí (p. ej. uno escrito a mano en "Otro…"),
-// se aplica LIMITE_TOKENS_DEFECTO. Verifica los límites vigentes en la
-// documentación de cada proveedor si vas a cambiar de modelo con frecuencia.
+// devolver. Si un modelo no aparece aquí se aplica LIMITE_TOKENS_DEFECTO.
+// limiteTokensModelo() ademas aplica un tope global de 8192 (ver mas abajo).
 const LIMITE_TOKENS_DEFECTO = 8000;
 const LIMITES_TOKENS_MODELO = {
   "claude-sonnet-4-5": 64000,
@@ -527,8 +520,6 @@ const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_k
 const $ = (id) => document.getElementById(id);
 const selProveedor = $("sel-proveedor");
 const selModelo = $("sel-modelo");
-const modeloOtroWrap = $("modelo-otro-wrap");
-const inputModeloOtro = $("input-modelo-otro");
 const inputApiKey = $("input-apikey");
 const inputMaxTokens = $("input-max-tokens");
 const limiteTokensModeloDiv = $("limite-tokens-modelo");
@@ -581,7 +572,7 @@ function ajustarLimiteTokens(){
 }
 
 function modeloActivo(){
-  return selModelo.value === "__otro__" ? inputModeloOtro.value.trim() : selModelo.value;
+  return selModelo.value;
 }
 
 function repintarModelos(){
@@ -593,10 +584,6 @@ function repintarModelos(){
     if (m === cfg.porDefecto) op.selected = true;
     selModelo.appendChild(op);
   });
-  const opOtro = document.createElement("option");
-  opOtro.value = "__otro__"; opOtro.textContent = "Otro…";
-  selModelo.appendChild(opOtro);
-  modeloOtroWrap.style.display = "none";
 }
 
 function cargarKeyGuardada(){
@@ -621,11 +608,7 @@ function validarFormatoKey(proveedor, key){
 }
 
 selProveedor.addEventListener("change", () => { repintarModelos(); cargarKeyGuardada(); ajustarLimiteTokens(); });
-selModelo.addEventListener("change", () => {
-  modeloOtroWrap.style.display = selModelo.value === "__otro__" ? "block" : "none";
-  ajustarLimiteTokens();
-});
-inputModeloOtro.addEventListener("input", ajustarLimiteTokens);
+selModelo.addEventListener("change", ajustarLimiteTokens);
 
 $("btn-guardar-key").addEventListener("click", () => {
   const key = inputApiKey.value.trim();
@@ -1423,14 +1406,7 @@ function cargarDesdeHistorial(rec){
     repintarModelos();
     cargarKeyGuardada();
     const cfg = MODELOS_POR_PROVEEDOR[rec.proveedor];
-    if (cfg.modelos.includes(rec.modelo)){
-      selModelo.value = rec.modelo;
-      modeloOtroWrap.style.display = "none";
-    } else {
-      selModelo.value = "__otro__";
-      inputModeloOtro.value = rec.modelo;
-      modeloOtroWrap.style.display = "block";
-    }
+    if (cfg.modelos.includes(rec.modelo)) selModelo.value = rec.modelo;
     ajustarLimiteTokens();
   }
   panelResultado.style.display = "block";
