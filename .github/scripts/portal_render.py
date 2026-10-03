@@ -95,6 +95,7 @@ PORTAL_TEMPLATE = r"""<!DOCTYPE html>
   body { margin:0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
   .header { background: linear-gradient(135deg, var(--blue-900), var(--blue-700)); color:#fff; padding: 56px 24px 92px; }
   .header-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+  .header-logo { margin: 0 auto 18px; display:block; filter: drop-shadow(0 4px 14px rgba(0,0,0,.18)); }
   .eyebrow { font-size: .85rem; letter-spacing:.03em; opacity:.85; margin-bottom: 14px; }
   .header h1 { font-size: 2.1rem; margin: 0 0 14px; font-weight: 700; }
   .header p.lede { max-width: 640px; margin: 0 auto 32px; opacity:.92; line-height:1.6; }
@@ -138,6 +139,37 @@ PORTAL_TEMPLATE = r"""<!DOCTYPE html>
 <body>
   <header class="header">
     <div class="header-inner">
+      <svg class="header-logo" width="96" height="96" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="hiadCapGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#E0E7FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.32)" stroke-width="2"/>
+        <path d="M 38 66 L 38 80 C 38 88 82 88 82 80 L 82 66 L 60 76 Z" fill="#E0E7FF"/>
+        <line x1="94" y1="48" x2="94" y2="72" stroke="#FDE68A" stroke-width="2.4"/>
+        <circle cx="94" cy="75" r="4" fill="#FDE68A"/>
+        <polygon points="60,34 100,50 60,66 20,50" fill="url(#hiadCapGrad)"/>
+        <g stroke="#4F46E5" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.85">
+          <path d="M38 50 L50 50 L54 44 L60 50 L66 44 L70 50 L82 50"/>
+          <path d="M50 50 L50 56 L44 60"/>
+          <path d="M70 50 L70 56 L76 60"/>
+          <path d="M60 50 L60 58"/>
+        </g>
+        <g fill="#4F46E5">
+          <circle cx="38" cy="50" r="2.1"/>
+          <circle cx="82" cy="50" r="2.1"/>
+          <circle cx="54" cy="44" r="1.8"/>
+          <circle cx="66" cy="44" r="1.8"/>
+          <circle cx="44" cy="60" r="1.8"/>
+          <circle cx="76" cy="60" r="1.8"/>
+          <circle cx="60" cy="58" r="2.1"/>
+        </g>
+        <g transform="translate(92,30)" fill="#FDE68A">
+          <path d="M0 -9 L2.4 -1.6 L10 0 L2.4 1.6 L0 9 L-2.4 1.6 L-10 0 L-2.4 -1.6 Z"/>
+        </g>
+      </svg>
       <div class="eyebrow">__EYEBROW__</div>
       <h1>__TITLE__</h1>
       <p class="lede">__SUBTITLE__</p>
