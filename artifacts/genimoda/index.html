@@ -162,6 +162,26 @@
     <strong>Aviso de seguridad:</strong> esta aplicaci&#243;n funciona directamente desde el navegador. Las API keys se almacenan localmente en este dispositivo y se env&#237;an &#250;nicamente al proveedor correspondiente para realizar las solicitudes. Almacenar una API key en <code>localStorage</code> es c&#243;modo, pero no equivale a guardar un secreto en un servidor. No se recomienda este mecanismo para secretos institucionales ni para aplicaciones p&#250;blicas de producci&#243;n; para esos entornos se recomienda utilizar un backend o proxy seguro.
   </div>
 
+  <!-- SECCI&#211;N EDUCATIVA -->
+  <details class="card">
+    <summary>&#191;C&#243;mo funciona GenImOda?</summary>
+    <ol>
+      <li>El usuario introduce una idea inicial.</li>
+      <li>Si la casilla &#171;Mejorar el prompt con Claude&#187; est&#225; activada, Claude analiza la idea y genera un prompt especializado en ingl&#233;s; si est&#225; desactivada, se usa la idea inicial tal cual, sin llamar a Claude.</li>
+      <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
+      <li>FLUX genera la imagen.</li>
+      <li>GenImOda muestra el resultado, lo guarda en el historial de este navegador y permite descargarlo en PNG.</li>
+    </ol>
+    <p>La imagen resultante depende de:</p>
+    <ul>
+      <li>La idea inicial.</li>
+      <li>Si se mejora el prompt: las instrucciones del sistema, el modelo de Claude y el m&#225;ximo de tokens (entre 1 y 8192).</li>
+      <li>El modelo de generaci&#243;n de imagen.</li>
+      <li>El n&#250;mero de pasos de inferencia (10 o 20 en esta versi&#243;n).</li>
+    </ul>
+    <p>Prueba a cambiar solo una de estas variables cada vez para observar su efecto sobre el resultado. El historial guarda cada generaci&#243;n con su idea, su prompt y sus par&#225;metros, para que puedas compararlas entre s&#237;.</p>
+  </details>
+
   <!-- SECCI&#211;N 1 &#8212; CONFIGURACI&#211;N -->
   <section class="card" aria-labelledby="h-config">
     <h2 id="h-config">1. Configuraci&#243;n de las API keys</h2>
@@ -305,28 +325,6 @@
       <div class="row"><button type="button" id="compareClose">Cerrar comparaci&#243;n</button></div>
     </div>
   </section>
-
-  <!-- SECCI&#211;N EDUCATIVA -->
-  <details class="card">
-    <summary>&#191;C&#243;mo funciona GenImOd?</summary>
-    <ol>
-      <li>El usuario introduce una idea inicial.</li>
-      <li>Claude analiza y mejora la idea.</li>
-      <li>Claude genera un prompt especializado en ingl&#233;s.</li>
-      <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
-      <li>FLUX genera la imagen.</li>
-      <li>GenImOd muestra y permite descargar el resultado.</li>
-    </ol>
-    <p>La imagen resultante depende de:</p>
-    <ul>
-      <li>La idea inicial.</li>
-      <li>Las instrucciones del sistema.</li>
-      <li>El modelo de Claude seleccionado.</li>
-      <li>El modelo FLUX seleccionado.</li>
-      <li>Los par&#225;metros de inferencia.</li>
-    </ul>
-    <p>Prueba a cambiar solo una de estas variables cada vez para observar su efecto sobre el resultado.</p>
-  </details>
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
