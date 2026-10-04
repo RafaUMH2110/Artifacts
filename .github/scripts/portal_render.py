@@ -60,10 +60,11 @@ def extract_app_metadata(html_text):
     title = get_attr("data-app-title")
     if not title:
         return None
+    title = html.unescape(title)
 
-    description = get_attr("data-app-description") or ""
-    categories = [c.strip() for c in (get_attr("data-categories") or "").split(",") if c.strip()]
-    tags = [t.strip() for t in (get_attr("data-tags") or "").split(",") if t.strip()]
+    description = html.unescape(get_attr("data-app-description") or "")
+    categories = [c.strip() for c in html.unescape(get_attr("data-categories") or "").split(",") if c.strip()]
+    tags = [html.unescape(t.strip()) for t in (get_attr("data-tags") or "").split(",") if t.strip()]
     client_only = (get_attr("data-client-only") or "").strip().lower() == "true"
 
     return {
@@ -81,6 +82,7 @@ PORTAL_TEMPLATE = r"""<!DOCTYPE html>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>__TITLE__</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzRGNDZFNSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM3QzNBRUQiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgoKICA8IS0tIEZvbmRvIHJlZG9uZGVhZG8gLS0+CiAgPHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTQiIGZpbGw9InVybCgjYmcpIi8+CgogIDwhLS0gQmlycmV0ZSAoZ29ycm8gZGUgZ3JhZHVhY2nDs24pIC0tPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMyLDI1KSI+CiAgICA8cG9seWdvbiBwb2ludHM9IjAsLTkgMjIsLTEuNSAwLDYgLTIyLC0xLjUiIGZpbGw9IiNGRkZGRkYiLz4KICAgIDxwb2x5Z29uIHBvaW50cz0iMCwtOSAyMiwtMS41IDAsNiAtMjIsLTEuNSIgZmlsbD0iI0ZGRkZGRiIgb3BhY2l0eT0iMCIvPgogICAgPHBhdGggZD0iTSAtMTEgMyBMIC0xMSAxMiBDIC0xMSAxNiAxMSAxNiAxMSAxMiBMIDExIDMgTCAwIDcgWiIgZmlsbD0iI0UwRTdGRiIvPgogICAgPGxpbmUgeDE9IjE4IiB5MT0iLTIuNSIgeDI9IjE4IiB5Mj0iMTAiIHN0cm9rZT0iI0ZERTY4QSIgc3Ryb2tlLXdpZHRoPSIxLjYiLz4KICAgIDxjaXJjbGUgY3g9IjE4IiBjeT0iMTEuNSIgcj0iMi4xIiBmaWxsPSIjRkRFNjhBIi8+CiAgPC9nPgoKICA8IS0tIENoaXNwYSBkZSBJQSAtLT4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NiwxNikiIGZpbGw9IiNGREU2OEEiPgogICAgPHBhdGggZD0iTTAgLTcgTDIgLTEgTDggMCBMMiAxIEwwIDcgTC0yIDEgTC04IDAgTC0yIC0xIFoiLz4KICA8L2c+Cjwvc3ZnPgo=">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
   :root {
@@ -93,6 +95,7 @@ PORTAL_TEMPLATE = r"""<!DOCTYPE html>
   body { margin:0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
   .header { background: linear-gradient(135deg, var(--blue-900), var(--blue-700)); color:#fff; padding: 56px 24px 92px; }
   .header-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+  .header-logo { margin: 0 auto 18px; display:block; filter: drop-shadow(0 4px 14px rgba(0,0,0,.18)); }
   .eyebrow { font-size: .85rem; letter-spacing:.03em; opacity:.85; margin-bottom: 14px; }
   .header h1 { font-size: 2.1rem; margin: 0 0 14px; font-weight: 700; }
   .header p.lede { max-width: 640px; margin: 0 auto 32px; opacity:.92; line-height:1.6; }
@@ -136,6 +139,37 @@ PORTAL_TEMPLATE = r"""<!DOCTYPE html>
 <body>
   <header class="header">
     <div class="header-inner">
+      <svg class="header-logo" width="96" height="96" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="hiadCapGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#E0E7FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.32)" stroke-width="2"/>
+        <path d="M 38 66 L 38 80 C 38 88 82 88 82 80 L 82 66 L 60 76 Z" fill="#E0E7FF"/>
+        <line x1="94" y1="48" x2="94" y2="72" stroke="#FDE68A" stroke-width="2.4"/>
+        <circle cx="94" cy="75" r="4" fill="#FDE68A"/>
+        <polygon points="60,34 100,50 60,66 20,50" fill="url(#hiadCapGrad)"/>
+        <g stroke="#4F46E5" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.85">
+          <path d="M38 50 L50 50 L54 44 L60 50 L66 44 L70 50 L82 50"/>
+          <path d="M50 50 L50 56 L44 60"/>
+          <path d="M70 50 L70 56 L76 60"/>
+          <path d="M60 50 L60 58"/>
+        </g>
+        <g fill="#4F46E5">
+          <circle cx="38" cy="50" r="2.1"/>
+          <circle cx="82" cy="50" r="2.1"/>
+          <circle cx="54" cy="44" r="1.8"/>
+          <circle cx="66" cy="44" r="1.8"/>
+          <circle cx="44" cy="60" r="1.8"/>
+          <circle cx="76" cy="60" r="1.8"/>
+          <circle cx="60" cy="58" r="2.1"/>
+        </g>
+        <g transform="translate(92,30)" fill="#FDE68A">
+          <path d="M0 -9 L2.4 -1.6 L10 0 L2.4 1.6 L0 9 L-2.4 1.6 L-10 0 L-2.4 -1.6 Z"/>
+        </g>
+      </svg>
       <div class="eyebrow">__EYEBROW__</div>
       <h1>__TITLE__</h1>
       <p class="lede">__SUBTITLE__</p>
