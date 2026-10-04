@@ -264,7 +264,7 @@
     <ol>
       <li>Subes (o arrastras) la foto de una prenda.</li>
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
-      <li>La IA (Claude, GPT o Gemini, a tu elección) analiza la foto y devuelve una descripción breve y un prompt en inglés, listo para FLUX, de cada pieza del outfit.</li>
+      <li>La IA (Claude, GPT o Gemini, a tu elección) analiza la foto y devuelve una descripción breve y un prompt en español, listo para FLUX, de cada pieza del outfit.</li>
       <li>Puedes revisar y editar cada prompt antes de continuar.</li>
       <li>Al pulsar "Continuar", GenOutFit genera con FLUX una imagen PNG de cada pieza (y la del modelo, si la pediste).</li>
       <li>Puedes descargar cada imagen por separado o exportarlas todas juntas en un PDF.</li>
@@ -289,7 +289,7 @@
       </div>
       <div class="field">
         <label for="input-max-tokens">Nº máx. tokens de salida</label>
-        <input type="number" id="input-max-tokens" min="256" max="8192" step="1" value="8192">
+        <input type="number" id="input-max-tokens" min="256" max="8192" step="1" value="4096">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -333,7 +333,7 @@
 
     <div class="field">
       <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 4)</label>
-      <input type="number" id="input-num-piezas" min="1" max="4" step="1" value="4">
+      <input type="number" id="input-num-piezas" min="1" max="4" step="1" value="2">
       <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido. Los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados por el profesor en esta versión.</p>
     </div>
     <div class="field">
@@ -410,8 +410,7 @@ Para cada pieza del outfit:
 Si el usuario solicita una imagen adicional de un/a modelo vistiendo el outfit completo, redacta ese prompt con los mismos criterios de realismo, textura e iluminación que el resto, describiendo también la pose, la actitud y el entorno de forma natural, no forzada.
 
 Reglas de idioma (estrictas):
-- El contenido de cada prompt descriptivo debe estar redactado íntegramente en inglés, listo para usarse directamente en un modelo de difusión (FLUX).
-- Cualquier otro texto que generes (nombres de las piezas, explicaciones) debe estar en español.`;
+- Todo el contenido que generes, incluido el prompt descriptivo de cada pieza para el modelo de difusión (FLUX), debe estar redactado íntegramente en español.`;
 
 const NUM_PIEZAS_MIN = 1;
 const NUM_PIEZAS_MAX = 4; // Versión alumnos: tope fijado por el profesor
@@ -791,9 +790,9 @@ ${incluirModelo ? "Incluye además un prompt adicional para una fotografía de u
 
 FORMATO DE RESPUESTA (obligatorio):
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin comentarios y sin bloques de código, con este esquema EXACTO:
-{"pieces": [{"name": "<nombre breve de la pieza, en español>", "prompt": "<prompt descriptivo en inglés para FLUX>"}]${incluirModelo ? `, "model_shot_prompt": "<prompt en inglés para la foto del modelo con el outfit completo>"` : ""}}
+{"pieces": [{"name": "<nombre breve de la pieza, en español>", "prompt": "<prompt descriptivo en español para FLUX>"}]${incluirModelo ? `, "model_shot_prompt": "<prompt en español para la foto del modelo con el outfit completo>"` : ""}}
 
-Cada "prompt" debe estar íntegramente en inglés y seguir las instrucciones del sistema (imperfecciones, texturas táctiles, micro-detalles, configuración de cámara, iluminación natural, estilo documental, sin palabras vacías).`;
+Cada "prompt" debe estar íntegramente en español y seguir las instrucciones del sistema (imperfecciones, texturas táctiles, micro-detalles, configuración de cámara, iluminación natural, estilo documental, sin palabras vacías).`;
 }
 
 async function analizarYGenerarPrompts(){
