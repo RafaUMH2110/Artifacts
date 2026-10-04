@@ -346,11 +346,23 @@
         <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai.</p>
       </div>
       <div class="field">
-        <label class="pick-row" for="chk-incluir-modelo">
-          <input type="checkbox" id="chk-incluir-modelo">
-          <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
-        </label>
+        <label for="sel-safety-tolerance">Tolerancia del filtro de seguridad (FLUX)</label>
+        <select id="sel-safety-tolerance">
+          <option value="1">1 — más estricto</option>
+          <option value="2">2</option>
+          <option value="3" selected>3 — por defecto</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6 — más permisivo</option>
+        </select>
+        <p class="hint">1 bloquea más contenido sensible; 6 es el más permisivo. Define el parámetro <code>safety_tolerance</code> de fal.ai.</p>
       </div>
+    </div>
+    <div class="field">
+      <label class="pick-row" for="chk-incluir-modelo">
+        <input type="checkbox" id="chk-incluir-modelo">
+        <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
+      </label>
     </div>
 
     <div class="field">
@@ -494,6 +506,7 @@ const previewWrap = $("preview-wrap");
 const previewImg = $("preview-img");
 const inputNumPiezas = $("input-num-piezas");
 const selPasosInferencia = $("sel-pasos-inferencia");
+const selSafetyTolerance = $("sel-safety-tolerance");
 const chkIncluirModelo = $("chk-incluir-modelo");
 const inputSystemPrompt = $("input-system-prompt");
 const btnGenerar = $("btn-generar");
@@ -898,6 +911,10 @@ function obtenerPasosInferencia(){
   const v = parseInt(selPasosInferencia.value, 10);
   return APP_CONFIG.fal.inferenceStepsOpciones.includes(v) ? v : APP_CONFIG.fal.inferenceStepsDefecto;
 }
+function obtenerSafetyTolerance(){
+  const opciones = ["1","2","3","4","5","6"];
+  return opciones.includes(selSafetyTolerance.value) ? selSafetyTolerance.value : APP_CONFIG.fal.safetyTolerance;
+}
 async function generarImagenFal(prompt){
   const key = inputApiKeyFal.value.trim() || localStorage.getItem(CLAVE_FAL) || "";
   const headers = {"Authorization": "Key " + key, "Content-Type": "application/json"};
@@ -908,7 +925,7 @@ async function generarImagenFal(prompt){
     num_images: APP_CONFIG.fal.numImages,
     output_format: APP_CONFIG.fal.outputFormat,
     image_size: APP_CONFIG.fal.imageSize,
-    safety_tolerance: APP_CONFIG.fal.safetyTolerance
+    safety_tolerance: obtenerSafetyTolerance()
   };
   const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
   let data; try { data = await resp.json(); } catch(e){ data = {}; }
@@ -954,7 +971,7 @@ function actualizarTarjetaImagen(card, dataUrl, error){
     return;
   }
   wrap.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(card.dataset.nombre)}">`;
-  meta.textContent = `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos de inferencia`;
+  meta.textContent = `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
   btn.disabled = false;
   btn.addEventListener("click", () => {
     const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + ".png";
@@ -1081,6 +1098,7 @@ async function guardarEnHistorial(){
     numPiezas: piezasActuales.length,
     incluirModelo: !!modeloShotPrompt,
     pasosInferencia: obtenerPasosInferencia(),
+    safetyTolerance: obtenerSafetyTolerance(),
     items
   };
   await historyTx("readwrite", s => s.put(registro));
@@ -1143,7 +1161,7 @@ async function renderHistorial(){
     ).join("");
     div.innerHTML = `
       <h4>${rec.numPiezas} pieza(s)${rec.incluirModelo ? " + modelo" : ""}</h4>
-      <p>${formatearFechaHist(rec.createdAt)} · ${rec.pasosInferencia || "?"} pasos</p>
+      <p>${formatearFechaHist(rec.createdAt)} · ${rec.pasosInferencia || "?"} pasos · seg. ${rec.safetyTolerance || "?"}</p>
       <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin:.5rem 0;">${miniaturas}</div>
       <div class="botones">
         <button type="button" class="secundario btn-cargar-hist">Ver / recuperar</button>
