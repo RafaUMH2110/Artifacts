@@ -255,7 +255,7 @@
       </div>
       <div class="field">
         <label for="input-max-tokens">Nº máx. tokens de salida</label>
-        <input type="number" id="input-max-tokens" min="256" max="8192" step="1" value="4096">
+        <input type="number" id="input-max-tokens" min="256" max="10000" step="1" value="4096">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -446,7 +446,7 @@ const MODELOS_POR_PROVEEDOR = {
 // --- Límite de tokens de salida de cada modelo (orientativo) -----------------
 // Se usa para no dejar pedir al usuario más tokens de los que el modelo puede
 // devolver. Si un modelo no aparece aquí se aplica LIMITE_TOKENS_DEFECTO.
-// limiteTokensModelo() ademas aplica un tope global de 8192 (ver mas abajo).
+// limiteTokensModelo() ademas aplica un tope global de 10000 (ver mas abajo).
 const LIMITE_TOKENS_DEFECTO = 8000;
 const LIMITES_TOKENS_MODELO = {
   "claude-sonnet-4-5": 64000,
@@ -462,8 +462,8 @@ const LIMITES_TOKENS_MODELO = {
 };
 
 function limiteTokensModelo(modelo){
-  // Version alumnos: tope global de 8192 tokens, aunque el modelo admita mas.
-  return Math.min(LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO, 8192);
+  // Version alumnos: tope global de 10000 tokens, aunque el modelo admita mas.
+  return Math.min(LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO, 10000);
 }
 
 // --- Precios orientativos (USD por millón de tokens) ------------------------
