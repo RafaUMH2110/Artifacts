@@ -329,11 +329,21 @@
       </div>
     </div>
 
-    <div class="grid2">
+    <div class="grid3">
       <div class="field">
         <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original)</label>
         <input type="number" id="input-num-piezas" min="1" max="8" step="1" value="4">
         <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido.</p>
+      </div>
+      <div class="field">
+        <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
+        <select id="sel-pasos-inferencia">
+          <option value="10">10 — más rápido</option>
+          <option value="20" selected>20 — por defecto</option>
+          <option value="30">30</option>
+          <option value="40">40 — más detalle</option>
+        </select>
+        <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai.</p>
       </div>
       <div class="field">
         <label class="pick-row" for="chk-incluir-modelo">
@@ -376,7 +386,7 @@
 
   <section class="panel" aria-labelledby="h-historial">
     <h2 id="h-historial">Historial de generaciones</h2>
-    <p class="hint" style="margin-top:0">Cada outfit generado se anota automáticamente en este navegador (nombre de la prenda, nº de piezas y fecha). No incluye API keys ni las imágenes.</p>
+    <p class="hint" style="margin-top:0">Cada outfit generado se guarda automáticamente en este navegador (IndexedDB), con sus prompts y las imágenes generadas. No incluye API keys.</p>
     <div class="hist-toolbar">
       <span class="hist-contador" id="historial-contador" aria-live="polite">0 generaciones</span>
       <button type="button" class="peligro" id="historial-vaciar" disabled>Vaciar historial</button>
@@ -409,7 +419,8 @@ const APP_CONFIG = {
   fal: {
     baseUrl: "https://fal.run/",
     defaultModel: "fal-ai/flux-pro/v1.1",
-    inferenceSteps: 28,
+    inferenceStepsDefecto: 20,
+    inferenceStepsOpciones: [10, 20, 30, 40],
     imageSize: "portrait_4_3",
     safetyTolerance: "3",
     outputFormat: "png",
@@ -461,7 +472,6 @@ const PRECIOS_POR_MTOK = {
 
 const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_key", gemini: "ia_gemini_key"};
 const CLAVE_FAL = "ia_fal_key";
-const CLAVE_HISTORIAL = "genoutfit_historial";
 const HISTORIAL_MAX = 30;
 
 /* ============================================================================
@@ -483,6 +493,7 @@ const inputImagen = $("input-imagen");
 const previewWrap = $("preview-wrap");
 const previewImg = $("preview-img");
 const inputNumPiezas = $("input-num-piezas");
+const selPasosInferencia = $("sel-pasos-inferencia");
 const chkIncluirModelo = $("chk-incluir-modelo");
 const inputSystemPrompt = $("input-system-prompt");
 const btnGenerar = $("btn-generar");
@@ -883,13 +894,17 @@ async function esperarColaFal(encolado, headers){
   }
   throw new Error("Tiempo de espera agotado mientras fal.ai procesaba la imagen en cola.");
 }
+function obtenerPasosInferencia(){
+  const v = parseInt(selPasosInferencia.value, 10);
+  return APP_CONFIG.fal.inferenceStepsOpciones.includes(v) ? v : APP_CONFIG.fal.inferenceStepsDefecto;
+}
 async function generarImagenFal(prompt){
   const key = inputApiKeyFal.value.trim() || localStorage.getItem(CLAVE_FAL) || "";
   const headers = {"Authorization": "Key " + key, "Content-Type": "application/json"};
   const url = APP_CONFIG.fal.baseUrl + APP_CONFIG.fal.defaultModel;
   const body = {
     prompt,
-    num_inference_steps: APP_CONFIG.fal.inferenceSteps,
+    num_inference_steps: obtenerPasosInferencia(),
     num_images: APP_CONFIG.fal.numImages,
     output_format: APP_CONFIG.fal.outputFormat,
     image_size: APP_CONFIG.fal.imageSize,
@@ -939,7 +954,7 @@ function actualizarTarjetaImagen(card, dataUrl, error){
     return;
   }
   wrap.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(card.dataset.nombre)}">`;
-  meta.textContent = "Formato PNG · fal.ai / FLUX";
+  meta.textContent = `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos de inferencia`;
   btn.disabled = false;
   btn.addEventListener("click", () => {
     const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + ".png";
@@ -1017,39 +1032,135 @@ async function exportarPdf(){
 }
 
 /* ============================================================================
- * HISTORIAL LOCAL (solo metadatos, sin imágenes ni API keys)
+ * HISTORIAL LOCAL (IndexedDB) — guarda prompts e imágenes generadas.
+ * Nunca guarda API keys. Solo existe en este navegador.
  * ==========================================================================*/
-function leerHistorial(){ try { return JSON.parse(storageGet(CLAVE_HISTORIAL) || "[]"); } catch(e){ return []; } }
-function guardarEntradaHistorial(numPiezas, incluirModelo){
-  const hist = leerHistorial();
-  hist.unshift({fecha: new Date().toISOString(), numPiezas, incluirModelo});
-  storageSet(CLAVE_HISTORIAL, JSON.stringify(hist.slice(0, HISTORIAL_MAX)));
-  pintarHistorial();
+const HISTORY_DB = "genoutfit_history";
+const HISTORY_STORE = "generaciones";
+
+function abrirHistoryDb(){
+  return new Promise((resolve, reject) => {
+    if (!window.indexedDB){ reject(new Error("IndexedDB no disponible")); return; }
+    const req = indexedDB.open(HISTORY_DB, 1);
+    req.onupgradeneeded = () => req.result.createObjectStore(HISTORY_STORE, {keyPath: "id"});
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
 }
-function pintarHistorial(){
-  const hist = leerHistorial();
+async function historyTx(modo, accion){
+  const db = await abrirHistoryDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(HISTORY_STORE, modo);
+    const store = tx.objectStore(HISTORY_STORE);
+    let resultado;
+    const req = accion(store);
+    if (req) req.onsuccess = () => { resultado = req.result; };
+    tx.oncomplete = () => { db.close(); resolve(resultado); };
+    tx.onerror = () => { db.close(); reject(tx.error); };
+  });
+}
+async function historyGetAll(){
+  const todos = await historyTx("readonly", s => s.getAll());
+  return (todos || []).sort((a, b) => b.createdAt - a.createdAt);
+}
+async function guardarEnHistorial(){
+  // imagenesGeneradas: [{nombre, dataUrl}] ya generadas con FLUX en este turno.
+  const items = imagenesGeneradas.map(img => {
+    const piezaOrig = piezasActuales.find(p => p.nombre === img.nombre);
+    const esModelo = !piezaOrig && modeloShotPrompt !== null && img.nombre === "Modelo con el outfit completo";
+    return {
+      nombre: img.nombre,
+      prompt: esModelo ? modeloShotPrompt : (piezaOrig ? piezaOrig.prompt : ""),
+      esModelo,
+      blob: dataUrlABlob(img.dataUrl)
+    };
+  });
+  const registro = {
+    id: Date.now() + "-" + Math.random().toString(36).slice(2, 8),
+    createdAt: Date.now(),
+    numPiezas: piezasActuales.length,
+    incluirModelo: !!modeloShotPrompt,
+    pasosInferencia: obtenerPasosInferencia(),
+    items
+  };
+  await historyTx("readwrite", s => s.put(registro));
+  const todos = await historyGetAll();
+  const extra = todos.slice(HISTORIAL_MAX);
+  if (extra.length) await historyTx("readwrite", s => { extra.forEach(r => s.delete(r.id)); });
+  await renderHistorial();
+}
+function formatearFechaHist(ts){
+  return new Date(ts).toLocaleString("es-ES", {day:"2-digit", month:"2-digit", year:"numeric", hour:"2-digit", minute:"2-digit"});
+}
+async function eliminarDeHistorial(id){
+  await historyTx("readwrite", s => s.delete(id));
+  await renderHistorial();
+}
+function cargarDesdeHistorial(rec){
+  // Vuelca las imágenes y prompts guardados en el panel de resultado, sin
+  // volver a llamar a ninguna API: permite revisar, descargar o exportar a
+  // PDF una generación anterior.
+  piezasActuales = rec.items.filter(it => !it.esModelo).map(it => ({nombre: it.nombre, prompt: it.prompt}));
+  modeloShotPrompt = rec.incluirModelo ? (rec.items.find(it => it.esModelo)?.prompt || null) : null;
+  pintarPrompts();
+
+  resultadoDiv.innerHTML = "";
+  imagenesGeneradas = [];
+  rec.items.forEach(it => {
+    const card = pintarImagenPlaceholder(it.nombre, it.esModelo);
+    const dataUrl = URL.createObjectURL(it.blob);
+    actualizarTarjetaImagen(card, dataUrl, null);
+    imagenesGeneradas.push({nombre: it.nombre, dataUrl});
+  });
+  btnExportarPdf.disabled = imagenesGeneradas.length === 0;
+  panelImagenes.style.display = "block";
+  panelImagenes.scrollIntoView({behavior: "smooth", block: "start"});
+}
+async function renderHistorial(){
   const lista = $("historial-lista");
   const contador = $("historial-contador");
   const btnVaciar = $("historial-vaciar");
-  contador.textContent = `${hist.length} generación(es)`;
-  btnVaciar.disabled = hist.length === 0;
+  let registros = [];
+  try { registros = await historyGetAll(); }
+  catch(e){
+    lista.innerHTML = '<div class="hist-vacio">El historial no está disponible en este navegador.</div>';
+    contador.textContent = "0 generaciones";
+    btnVaciar.disabled = true;
+    return;
+  }
+  contador.textContent = `${registros.length} generación(es)`;
+  btnVaciar.disabled = registros.length === 0;
   lista.innerHTML = "";
-  if (hist.length === 0){
+  if (registros.length === 0){
     lista.innerHTML = `<div class="hist-vacio">Todavía no has generado ningún outfit en este navegador.</div>`;
     return;
   }
-  hist.forEach(h => {
+  registros.forEach(rec => {
     const div = document.createElement("div");
     div.className = "hist-item";
-    const fecha = new Date(h.fecha).toLocaleString("es-ES");
-    div.innerHTML = `<h4>${h.numPiezas} pieza(s)${h.incluirModelo ? " + modelo" : ""}</h4><p>${fecha}</p>`;
+    const miniaturas = rec.items.slice(0, 4).map(it =>
+      `<img src="${URL.createObjectURL(it.blob)}" alt="${escapeHTML(it.nombre)}" style="width:48px;height:48px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">`
+    ).join("");
+    div.innerHTML = `
+      <h4>${rec.numPiezas} pieza(s)${rec.incluirModelo ? " + modelo" : ""}</h4>
+      <p>${formatearFechaHist(rec.createdAt)} · ${rec.pasosInferencia || "?"} pasos</p>
+      <div style="display:flex;gap:.3rem;flex-wrap:wrap;margin:.5rem 0;">${miniaturas}</div>
+      <div class="botones">
+        <button type="button" class="secundario btn-cargar-hist">Ver / recuperar</button>
+        <button type="button" class="peligro btn-eliminar-hist">Eliminar</button>
+      </div>`;
+    div.querySelector(".btn-cargar-hist").addEventListener("click", () => cargarDesdeHistorial(rec));
+    div.querySelector(".btn-eliminar-hist").addEventListener("click", () => {
+      if (confirm("¿Eliminar esta generación del historial?")) eliminarDeHistorial(rec.id);
+    });
     lista.appendChild(div);
   });
 }
-$("historial-vaciar").addEventListener("click", () => {
-  if (!confirm("¿Vaciar todo el historial de este navegador?")) return;
-  storageRemove(CLAVE_HISTORIAL);
-  pintarHistorial();
+$("historial-vaciar").addEventListener("click", async () => {
+  if (!confirm("¿Vaciar todo el historial de este navegador? Esta acción no se puede deshacer.")) return;
+  const registros = await historyGetAll();
+  await historyTx("readwrite", s => { registros.forEach(r => s.delete(r.id)); });
+  await renderHistorial();
 });
 
 /* ============================================================================
@@ -1096,7 +1207,7 @@ btnContinuar.addEventListener("click", async () => {
   try {
     await generarTodasLasImagenes();
     ocultarCargando(btnContinuar);
-    guardarEntradaHistorial(piezasActuales.length, !!modeloShotPrompt);
+    await guardarEnHistorial();
   } catch(err){
     mostrarError(btnContinuar, err);
   } finally {
@@ -1120,7 +1231,7 @@ cargarKeyGuardada();
 ajustarLimiteTokens();
 actualizarEstadoKeyFal();
 inputApiKeyFal.value = localStorage.getItem(CLAVE_FAL) || "";
-pintarHistorial();
+renderHistorial();
 actualizarBotonGenerar();
 
 </script>
