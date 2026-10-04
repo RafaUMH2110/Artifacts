@@ -117,6 +117,7 @@ def main():
     for rel, meta in local_apps:
         meta["url"] = path_to_url(pages_owner, pages_repo, rel)
         catalog.append(meta)
+    catalog.sort(key=lambda m: m["title"].casefold())
 
     html_out = render_portal_html(
         catalog, TITLE, SUBTITLE, EYEBROW,
