@@ -1,0 +1,1128 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<!--
+  GenOutFit — generador de outfits completos a partir de una prenda, con IA.
+
+  INSTRUCCIONES PARA CUALQUIER PROFESOR QUE QUIERA ADAPTAR O ALOJAR ESTA APP
+  ============================================================================
+  1. Qué es: un único fichero HTML autocontenido (HTML + CSS + JS vanilla,
+     sin backend, sin build). Funciona abriéndolo directamente en el
+     navegador o subido a cualquier alojamiento estático (GitHub Pages,
+     servidor propio...). Cada usuario pega su propia API key, que se guarda
+     solo en su navegador (localStorage) y se envía únicamente al endpoint
+     oficial del proveedor elegido.
+
+  2. Cómo conseguir una API key de cada proveedor:
+       - Anthropic (Claude):  https://console.anthropic.com/settings/keys
+       - OpenAI (GPT):        https://platform.openai.com/api-keys
+       - Google (Gemini):     https://aistudio.google.com/app/apikey
+       - fal.ai (FLUX):       https://fal.ai/dashboard/keys
+
+  3. Cómo publicar gratis en GitHub Pages:
+       a) Crea (o usa) un repositorio en GitHub.
+       b) Sube este fichero como "index.html" (puede ir en la raíz o en una
+          subcarpeta, p. ej. "genoutfit/index.html").
+       c) En Settings → Pages, elige la rama y la carpeta donde está el
+          fichero y guarda. La URL pública tarda uno o dos minutos en estar
+          lista.
+
+  4. Qué constantes editar para adaptar esta app a tu asignatura (busca estos
+     nombres en el bloque <script>):
+       - SYSTEM_PROMPT_OUTFIT: el "rol" que sigue la IA al describir el
+         outfit (BLOQUE 0 del encargo original). Determina el estilo de los
+         prompts generados para FLUX.
+       - MODELOS_POR_PROVEEDOR / LIMITES_TOKENS_MODELO / PRECIOS_POR_MTOK:
+         listas de modelos de texto/visión disponibles, su límite de tokens
+         de salida y su precio orientativo por millón de tokens.
+       - APP_CONFIG.fal: modelo de FLUX usado por defecto y parámetros fijos
+         de generación de imagen (pasos de inferencia, tamaño, tolerancia de
+         seguridad).
+       - NUM_PIEZAS_MIN / NUM_PIEZAS_MAX: rango permitido para el número de
+         prendas del outfit.
+
+  5. Aviso: la IA puede cometer errores (en la identificación de la prenda
+     o en los prompts generados). Revisa siempre el resultado antes de
+     usarlo; esta herramienta no sustituye el criterio profesional del
+     diseñador.
+-->
+
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GenOutFit &#8212; Generador de Outfits con IA</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%236fb3e8'/%3E%3Cstop offset='1' stop-color='%232b6cb0'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='2' y='2' width='60' height='60' rx='14' fill='%23eaf3fc'/%3E%3Cpath d='M20 14 L26 10 L32 14 L38 10 L44 14 L44 20 L38 17 L38 50 L26 50 L26 17 L20 20 Z' fill='url(%23g)' stroke='%2321568f' stroke-width='1.6' stroke-linejoin='round'/%3E%3Ccircle cx='32' cy='12' r='2.2' fill='%23fff'/%3E%3C/svg%3E">
+
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+
+<style>
+  :root {
+    --bg: #f5f9fe;
+    --card: #ffffff;
+    --border: #d9e6f5;
+    --border-strong: #b7cfe9;
+    --text: #14283f;
+    --muted: #55708d;
+    --blue-50: #eaf3fc;
+    --blue-100: #d5e7f9;
+    --blue-500: #3b82c4;
+    --blue-600: #2b6cb0;
+    --blue-700: #21568f;
+    --ok: #1d7a4b;
+    --ok-bg: #e8f6ee;
+    --err: #b3261e;
+    --err-bg: #fdecea;
+    --warn-bg: #fff7e0;
+    --warn-border: #ecd48a;
+    --radius: 14px;
+    --shadow: 0 2px 10px rgba(33, 86, 143, 0.07);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.55;
+  }
+  main { max-width: 860px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+
+  header.hero { max-width: 860px; margin: 0 auto; padding: 2.5rem 1.25rem 1.25rem; text-align: left; }
+  header.hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 5vw, 2.8rem); margin: 0; letter-spacing: -0.02em; color: var(--blue-700); font-weight: 700; }
+  header.hero p { margin: .3rem 0 1rem; font-size: 1.1rem; color: var(--muted); }
+  .flow { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .9rem; }
+  .flow .step { background: var(--blue-50); border: 1px solid var(--blue-100); color: var(--blue-700); padding: .25rem .7rem; border-radius: 999px; font-weight: 600; }
+  .flow .sep { color: var(--blue-500); }
+
+  .aviso {
+    max-width: 860px; margin: 0 auto 1.25rem; padding: .8rem 1.25rem;
+    background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px;
+    color: #7a5b12; font-size: .88rem;
+  }
+
+  section.panel {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.4rem 1.5rem; margin-bottom: 1.25rem;
+  }
+  section.panel h2 { margin: 0 0 .9rem; font-size: 1.15rem; color: var(--blue-700); }
+
+  details.panel-guia {
+    background: var(--card); border: 1px solid var(--border); border-radius: var(--radius);
+    box-shadow: var(--shadow); padding: 1.1rem 1.5rem; margin-bottom: 1.25rem;
+  }
+  details.panel-guia summary { cursor: pointer; font-weight: 700; color: var(--blue-700); font-size: 1.1rem; padding: .25rem 0; }
+  details.panel-guia[open] summary { margin-bottom: .6rem; }
+  details.panel-guia ol, details.panel-guia ul { padding-left: 1.3rem; margin: .6rem 0; }
+  details.panel-guia li { margin-bottom: .35rem; }
+  details.panel-guia p { line-height: 1.55; margin: .6rem 0; }
+  details.panel-guia strong { color: var(--text); }
+
+  label { display: block; font-size: .92rem; font-weight: 600; margin: .7rem 0 .35rem; color: var(--text); }
+  select, input[type=password], input[type=text], input[type=number], textarea {
+    width: 100%; padding: .6rem .75rem; border: 1px solid var(--border-strong); border-radius: 10px;
+    font-size: .95rem; font-family: inherit; background: #fff; color: var(--text);
+  }
+  textarea { min-height: 90px; resize: vertical; }
+  textarea.tall { min-height: 150px; }
+  textarea.mono { font-family: ui-monospace, Consolas, monospace; font-size: .82rem; }
+  input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
+    outline: 3px solid var(--blue-500); outline-offset: 2px;
+  }
+
+  .fila { display: flex; gap: .75rem; flex-wrap: wrap; }
+  .fila > div { flex: 1; min-width: 180px; }
+  .field { margin-bottom: .9rem; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.1rem; }
+  .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.1rem; }
+  @media (max-width: 700px) { .grid2, .grid3 { grid-template-columns: 1fr; } }
+
+  .pick-row { display: flex; align-items: flex-start; gap: .5rem; font-weight: 600; margin: .3rem 0 .2rem; cursor: pointer; }
+  .pick-row input { width: 1.15rem; height: 1.15rem; margin-top: .15rem; flex-shrink: 0; }
+  .hint { font-size: .85rem; color: var(--muted); margin: .35rem 0 0; font-weight: 400; }
+
+  .botones { display: flex; gap: .6rem; margin-top: .8rem; flex-wrap: wrap; }
+  button {
+    cursor: pointer; border: 1px solid var(--border-strong); border-radius: 10px;
+    padding: .55rem 1rem; font-size: .92rem; font-weight: 600; font-family: inherit;
+    background: #fff; color: var(--blue-700);
+  }
+  button:hover:not(:disabled) { background: var(--blue-50); }
+  button.primario { background: var(--blue-600); color: #fff; border-color: var(--blue-600); }
+  button.primario:hover:not(:disabled) { background: var(--blue-700); }
+  button.primario:disabled { background: #bcd3ea; border-color: #bcd3ea; color: #fff; cursor: not-allowed; }
+  button.secundario { background: var(--blue-50); color: var(--blue-700); border-color: var(--blue-100); }
+  button.secundario:hover:not(:disabled) { background: var(--blue-100); }
+  button.peligro { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; }
+  button.peligro:hover:not(:disabled) { background: #fadbd8; }
+  button.grande { width: 100%; font-size: 1.1rem; padding: .9rem 1rem; display: flex; align-items: center; justify-content: center; gap: .6rem; }
+  button:disabled { cursor: not-allowed; opacity: .6; }
+
+  .estado-key { font-size: .85rem; margin-top: .5rem; color: var(--muted); }
+  .estado-key.si { color: var(--ok); font-weight: 600; }
+
+  #estado-generacion {
+    display: none; margin-top: 1rem; padding: .75rem 1rem; border-radius: 10px;
+    background: var(--blue-50); color: var(--blue-700); font-size: .9rem;
+    align-items: center; gap: .6rem; border: 1px solid var(--blue-100);
+  }
+  #estado-generacion.visible { display: flex; }
+  #estado-generacion.error { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; }
+
+  #aviso-truncado {
+    margin-top: .9rem; padding: .7rem 1rem; border-radius: 10px;
+    background: var(--warn-bg); border: 1px solid var(--warn-border); color: #7a5b12; font-size: .88rem;
+  }
+
+  .spinner {
+    width: 16px; height: 16px; border: 3px solid rgba(43,108,176,.25);
+    border-top-color: currentColor; border-radius: 50%;
+    animation: girar .8s linear infinite; flex-shrink: 0;
+  }
+  button .spinner { border-color: rgba(255,255,255,.4); border-top-color: #fff; display: none; }
+  button.busy .spinner { display: inline-block; }
+  @keyframes girar { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+  /* Zona de subida de imagen */
+  .dropzone {
+    border: 2px dashed var(--border-strong); border-radius: 12px; padding: 1.4rem;
+    text-align: center; background: var(--blue-50); cursor: pointer; color: var(--blue-700);
+    font-weight: 600; transition: background .15s, border-color .15s;
+  }
+  .dropzone.dragover { background: var(--blue-100); border-color: var(--blue-600); }
+  .dropzone p { margin: .3rem 0 0; font-weight: 400; color: var(--muted); font-size: .85rem; }
+  .preview-wrap { margin-top: 1rem; text-align: center; }
+  .preview-wrap img { max-width: 100%; max-height: 320px; border-radius: 10px; border: 1px solid var(--border); box-shadow: var(--shadow); }
+  .preview-wrap .botones { justify-content: center; }
+
+  /* Tarjetas de piezas del outfit */
+  .pieza-card {
+    border: 1px solid var(--border); border-radius: 12px; padding: 1rem;
+    margin-bottom: 1rem; background: var(--blue-50);
+  }
+  .pieza-card h3 { margin: 0 0 .5rem; font-size: 1rem; color: var(--blue-700); }
+  .pieza-card.modelo h3 { color: #7a5b12; }
+  .pieza-card.modelo { background: var(--warn-bg); border-color: var(--warn-border); }
+  .pieza-card .img-wrap { max-width: 320px; margin: .7rem auto 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-height: 60px; display: flex; align-items: center; justify-content: center; }
+  .pieza-card .img-wrap img { display: block; width: 100%; height: auto; }
+  .pieza-card .img-wrap .placeholder { color: var(--muted); font-size: .82rem; padding: 1rem; }
+  .pieza-card .meta-pieza { font-size: .8rem; color: var(--muted); margin-top: .4rem; }
+
+  #resultado { margin-top: 1rem; }
+  .contador-coste { font-size: .82rem; color: var(--muted); margin-top: .8rem; border-top: 1px dashed var(--border); padding-top: .6rem; }
+
+  footer { text-align: center; font-size: .82rem; color: var(--muted); padding: 1.5rem 1.25rem 3rem; max-width: 860px; margin: 0 auto; }
+  footer a { color: var(--blue-600); }
+
+  /* Historial */
+  .hist-toolbar { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin-bottom: 1rem; }
+  .hist-toolbar .hist-contador { color: var(--muted); font-size: .9rem; margin-right: auto; }
+  .hist-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 1rem; }
+  .hist-item { border: 1px solid var(--border); border-radius: 12px; padding: .8rem; background: #fff; }
+  .hist-item h4 { margin: 0 0 .3rem; font-size: .95rem; color: var(--blue-700); }
+  .hist-item p { margin: 0; font-size: .8rem; color: var(--muted); }
+  .hist-vacio { grid-column: 1 / -1; color: var(--muted); padding: 1rem; text-align: center; background: var(--blue-50); border: 2px dashed var(--border-strong); border-radius: 12px; }
+
+  .hidden { display: none !important; }
+  @media (max-width: 640px) { section.panel, details.panel-guia { padding: 1.1rem; } header.hero { padding: 2rem 1rem 1rem; } }
+</style>
+</head>
+<body
+  data-app-title="GenOutFit"
+  data-app-description="A partir de la foto de una prenda, genera con IA (Claude/GPT/Gemini + FLUX vía fal.ai) los prompts y las imágenes de un outfit completo a juego, con un número de piezas configurable."
+  data-categories="ia,diseno-creatividad,generacion-contenido,docencia"
+  data-tags="Claude,OpenAI,Gemini,fal.ai,FLUX,Moda,Outfit"
+  data-client-only="true"
+>
+
+<header class="hero">
+  <h1>GenOutFit</h1>
+  <p>Sube la foto de una prenda y genera, con IA, un outfit completo a juego</p>
+  <div class="flow" aria-label="Flujo de trabajo">
+    <span class="step">Foto de la prenda</span><span class="sep" aria-hidden="true">&#8594;</span>
+    <span class="step">Análisis + prompts (IA)</span><span class="sep" aria-hidden="true">&#8594;</span>
+    <span class="step">Revisión</span><span class="sep" aria-hidden="true">&#8594;</span>
+    <span class="step">Imágenes (FLUX)</span>
+  </div>
+</header>
+
+<div class="aviso">
+  <strong>Avisos:</strong> la IA puede cometer errores al identificar la prenda o al describir el outfit; revisa siempre el resultado antes de usarlo profesionalmente — esta herramienta no sustituye el criterio del diseñador. Tu API key se guarda solo en este navegador (<code>localStorage</code>) y se envía únicamente al endpoint oficial del proveedor elegido; no se recomienda este mecanismo para secretos institucionales ni aplicaciones públicas de producción.
+</div>
+
+<main>
+
+  <details class="panel-guia">
+    <summary>&#191;Cómo funciona GenOutFit?</summary>
+    <p><strong>GenOutFit</strong> es una aplicación de un solo archivo HTML pensada para diseñadores de moda: a partir de la fotografía de una prenda, usa IA para identificar sus características y proponer un outfit completo de prendas afines, y genera una imagen de cada pieza con FLUX (fal.ai).</p>
+    <ol>
+      <li>Subes (o arrastras) la foto de una prenda.</li>
+      <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
+      <li>La IA (Claude, GPT o Gemini, a tu elección) analiza la foto y devuelve una descripción breve y un prompt en inglés, listo para FLUX, de cada pieza del outfit.</li>
+      <li>Puedes revisar y editar cada prompt antes de continuar.</li>
+      <li>Al pulsar "Continuar", GenOutFit genera con FLUX una imagen PNG de cada pieza (y la del modelo, si la pediste).</li>
+      <li>Puedes descargar cada imagen por separado o exportarlas todas juntas en un PDF.</li>
+    </ol>
+    <p><strong>Avisos frecuentes:</strong> error 401/403 &#8594; la clave no es válida o no tiene permisos. Error 429 &#8594; límite de uso alcanzado, espera e inténtalo de nuevo. Error 404 &#8594; el modelo no existe o no está disponible en tu cuenta. "La respuesta no tiene el formato esperado" &#8594; GenOutFit reintenta automáticamente una vez; si persiste, prueba con otro modelo o una foto más clara de la prenda.</p>
+  </details>
+
+  <section class="panel" aria-labelledby="h-config">
+    <h2 id="h-config">1. Proveedor de IA (análisis de la prenda)</h2>
+    <div class="grid3">
+      <div class="field">
+        <label for="sel-proveedor">Proveedor</label>
+        <select id="sel-proveedor">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+          <option value="gemini">Google (Gemini)</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="sel-modelo">Modelo</label>
+        <select id="sel-modelo"></select>
+      </div>
+      <div class="field">
+        <label for="input-max-tokens">Nº máx. tokens de salida</label>
+        <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="4096">
+        <p class="hint" id="limite-tokens-modelo"></p>
+      </div>
+    </div>
+    <div class="field" id="modelo-otro-wrap" style="display:none;">
+      <label for="input-modelo-otro">Identificador de modelo</label>
+      <input type="text" id="input-modelo-otro" placeholder="Ej: claude-sonnet-4-5">
+    </div>
+
+    <div class="field">
+      <label for="input-apikey">API key del proveedor activo</label>
+      <input type="password" id="input-apikey" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu API key">
+      <div class="botones">
+        <button type="button" class="secundario" id="btn-guardar-key">Guardar clave</button>
+        <button type="button" class="secundario" id="btn-mostrar-key" aria-pressed="false">Mostrar</button>
+        <button type="button" class="peligro" id="btn-borrar-key">Borrar clave</button>
+      </div>
+      <p class="estado-key" id="estado-key">No hay ninguna clave guardada para este proveedor.</p>
+    </div>
+
+    <div class="field">
+      <label for="input-apikey-fal">API key de fal.ai (generación de imagen)</label>
+      <input type="password" id="input-apikey-fal" autocomplete="off" spellcheck="false" placeholder="Pega aquí tu API key de fal.ai">
+      <div class="botones">
+        <button type="button" class="secundario" id="btn-guardar-key-fal">Guardar clave</button>
+        <button type="button" class="secundario" id="btn-mostrar-key-fal" aria-pressed="false">Mostrar</button>
+        <button type="button" class="peligro" id="btn-borrar-key-fal">Borrar clave</button>
+      </div>
+      <p class="estado-key" id="estado-key-fal">No hay ninguna clave guardada para fal.ai.</p>
+    </div>
+    <p class="hint">Cada clave solo se envía a su proveedor oficial. La validez definitiva la confirma la respuesta de la API.</p>
+  </section>
+
+  <section class="panel" aria-labelledby="h-prenda">
+    <h2 id="h-prenda">2. Foto de la prenda</h2>
+    <div class="field">
+      <div class="dropzone" id="dropzone" tabindex="0" role="button" aria-label="Subir foto de la prenda">
+        <span id="dropzone-texto">Arrastra aquí la foto de la prenda, o haz clic para elegir un archivo</span>
+        <p>Formatos admitidos: JPG, PNG, WEBP</p>
+      </div>
+      <input type="file" id="input-imagen" accept="image/png,image/jpeg,image/webp" class="hidden">
+      <div class="preview-wrap hidden" id="preview-wrap">
+        <img id="preview-img" alt="Vista previa de la prenda subida">
+        <div class="botones"><button type="button" class="secundario" id="btn-quitar-imagen">Quitar imagen</button></div>
+      </div>
+    </div>
+
+    <div class="grid2">
+      <div class="field">
+        <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original)</label>
+        <input type="number" id="input-num-piezas" min="1" max="8" step="1" value="4">
+        <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido.</p>
+      </div>
+      <div class="field">
+        <label class="pick-row" for="chk-incluir-modelo">
+          <input type="checkbox" id="chk-incluir-modelo">
+          <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
+        </label>
+      </div>
+    </div>
+
+    <div class="field">
+      <label for="input-system-prompt">Instrucciones del sistema</label>
+      <textarea id="input-system-prompt" class="tall mono"></textarea>
+      <div class="botones">
+        <button type="button" class="secundario" id="btn-restaurar-system">Restaurar predeterminado</button>
+      </div>
+      <p class="hint">Rol que sigue la IA al analizar la prenda y redactar los prompts. Puedes editarlo; por defecto es el definido para esta app.</p>
+    </div>
+
+    <button type="button" class="primario grande" id="btn-generar" disabled>
+      <span class="spinner"></span><span id="btn-generar-texto">Generar Outfit</span>
+    </button>
+    <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span></div>
+  </section>
+
+  <section class="panel" id="panel-resultado" style="display:none;" aria-labelledby="h-resultado">
+    <h2 id="h-resultado">3. Prompts generados — revisa y edita antes de continuar</h2>
+    <div id="aviso-truncado" style="display:none;"></div>
+    <div id="lista-prompts"></div>
+    <button type="button" class="primario grande" id="btn-continuar" disabled>Continuar: generar imágenes con FLUX</button>
+  </section>
+
+  <section class="panel" id="panel-imagenes" style="display:none;" aria-labelledby="h-imagenes">
+    <h2 id="h-imagenes">4. Resultado — outfit generado</h2>
+    <div id="resultado"></div>
+    <div class="botones">
+      <button type="button" class="primario" id="btn-exportar-pdf" disabled>Exportar todas en PDF</button>
+    </div>
+    <div class="contador-coste" id="contador-coste"></div>
+  </section>
+
+  <section class="panel" aria-labelledby="h-historial">
+    <h2 id="h-historial">Historial de generaciones</h2>
+    <p class="hint" style="margin-top:0">Cada outfit generado se anota automáticamente en este navegador (nombre de la prenda, nº de piezas y fecha). No incluye API keys ni las imágenes.</p>
+    <div class="hist-toolbar">
+      <span class="hist-contador" id="historial-contador" aria-live="polite">0 generaciones</span>
+      <button type="button" class="peligro" id="historial-vaciar" disabled>Vaciar historial</button>
+    </div>
+    <div id="historial-lista" class="hist-grid"></div>
+  </section>
+
+</main>
+
+<footer>
+  GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 04/10/2026
+</footer>
+
+<script>
+"use strict";
+
+/* ============================================================================
+ * CONSTANTES EDITABLES
+ * ==========================================================================*/
+
+// --- System prompt de la app (rol del modelo). Literal del BLOQUE 0. --------
+const SYSTEM_PROMPT_OUTFIT = `Eres un experto en moda y estás entrenado para extraer las características más importantes de una prenda que aparece en una fotografía. Tu trabajo es generar las descripciones de prendas afines para crear un 'outfit' con la cantidad de piezas que creas necesarias pero tambien seleccionable por el usuario. Genera cada prompt de cada pieza para ser utilizado como prompt descriptivo para un modelo de difusión (FLUX). Enfócate en describir imperfecciones, texturas táctiles, poros, polvo, micro-detalles, configuración de cámara (ej. 85mm lens, f/1.4), iluminación natural y estilo documental. Evita palabras vacías como 'photorealistic' o 'hyperdetailed'; en su lugar, describe los detalles que hacen que algo sea real. Las fotografías generadas deben mostrar cada una de las prendas y se deja como opcional utilizar un/una modelo vestido/a con todas las prendas. Devuelve ÚNICAMENTE los prompts finales en inglés. Sigue siempre estas reglas: el idioma de todo el documento debe ser español-es`;
+
+const NUM_PIEZAS_MIN = 1;
+const NUM_PIEZAS_MAX = 8;
+
+const APP_CONFIG = {
+  requestTimeoutMs: 60000,
+  fal: {
+    baseUrl: "https://fal.run/",
+    defaultModel: "fal-ai/flux-pro/v1.1",
+    inferenceSteps: 28,
+    imageSize: "portrait_4_3",
+    safetyTolerance: "3",
+    outputFormat: "png",
+    numImages: 1,
+    queueMaxWaitMs: 120000,
+    queuePollIntervalMs: 2000
+  }
+};
+
+// --- Modelos por proveedor (texto/visión) ------------------------------------
+const MODELOS_POR_PROVEEDOR = {
+  anthropic: {
+    modelos: ["claude-sonnet-4-5", "claude-sonnet-5", "claude-opus-5-5", "claude-haiku-4-5-20251001", "claude-fable-5-1"],
+    porDefecto: "claude-sonnet-4-5" // valor definido en el BLOQUE 0 del encargo
+  },
+  openai: {
+    modelos: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
+    porDefecto: "gpt-4o"
+  },
+  gemini: {
+    modelos: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
+    porDefecto: "gemini-1.5-flash"
+  }
+};
+// La lista de modelos cambia con frecuencia: revisa la documentación oficial
+// y usa "Otro…" con el identificador exacto si el modelo no aparece.
+
+const LIMITE_TOKENS_DEFECTO = 8000;
+const LIMITES_TOKENS_MODELO = {
+  "claude-sonnet-4-5": 64000, "claude-sonnet-5": 64000, "claude-opus-5-5": 64000,
+  "claude-haiku-4-5-20251001": 64000, "claude-fable-5-1": 64000,
+  "gpt-4o": 16384, "gpt-4o-mini": 16384, "gpt-4.1": 32768, "gpt-4.1-mini": 32768,
+  "gemini-1.5-pro": 8192, "gemini-1.5-flash": 8192, "gemini-2.0-flash": 8192
+};
+function limiteTokensModelo(modelo){ return LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO; }
+
+// --- Precios orientativos (USD por millón de tokens) -------------------------
+// AVISO: precios aproximados en el momento de escribir esta app. Verifica las
+// tarifas vigentes antes de usarlos con fines de facturación real.
+const PRECIOS_POR_MTOK = {
+  "claude-sonnet-4-5": {in: 3.00, out: 15.00}, "claude-sonnet-5": {in: 2.00, out: 10.00},
+  "claude-opus-5-5": {in: 4.00, out: 20.00}, "claude-haiku-4-5-20251001": {in: 1.00, out: 5.00},
+  "claude-fable-5-1": {in: 10.00, out: 50.00},
+  "gpt-4o": {in: 2.50, out: 10.00}, "gpt-4o-mini": {in: 0.15, out: 0.60},
+  "gpt-4.1": {in: 2.00, out: 8.00}, "gpt-4.1-mini": {in: 0.40, out: 1.60},
+  "gemini-1.5-pro": {in: 1.25, out: 5.00}, "gemini-1.5-flash": {in: 0.075, out: 0.30},
+  "gemini-2.0-flash": {in: 0.10, out: 0.40}
+};
+
+const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_key", gemini: "ia_gemini_key"};
+const CLAVE_FAL = "ia_fal_key";
+const CLAVE_HISTORIAL = "genoutfit_historial";
+const HISTORIAL_MAX = 30;
+
+/* ============================================================================
+ * ESTADO Y REFERENCIAS DE UI
+ * ==========================================================================*/
+const $ = (id) => document.getElementById(id);
+const selProveedor = $("sel-proveedor");
+const selModelo = $("sel-modelo");
+const modeloOtroWrap = $("modelo-otro-wrap");
+const inputModeloOtro = $("input-modelo-otro");
+const inputApiKey = $("input-apikey");
+const inputMaxTokens = $("input-max-tokens");
+const limiteTokensModeloDiv = $("limite-tokens-modelo");
+const estadoKey = $("estado-key");
+const inputApiKeyFal = $("input-apikey-fal");
+const estadoKeyFal = $("estado-key-fal");
+const dropzone = $("dropzone");
+const inputImagen = $("input-imagen");
+const previewWrap = $("preview-wrap");
+const previewImg = $("preview-img");
+const inputNumPiezas = $("input-num-piezas");
+const chkIncluirModelo = $("chk-incluir-modelo");
+const inputSystemPrompt = $("input-system-prompt");
+const btnGenerar = $("btn-generar");
+const btnGenerarTexto = $("btn-generar-texto");
+const estadoGeneracion = $("estado-generacion");
+const estadoTexto = $("estado-texto");
+const panelResultado = $("panel-resultado");
+const avisoTruncadoDiv = $("aviso-truncado");
+const listaPrompts = $("lista-prompts");
+const btnContinuar = $("btn-continuar");
+const panelImagenes = $("panel-imagenes");
+const resultadoDiv = $("resultado");
+const btnExportarPdf = $("btn-exportar-pdf");
+const contadorCoste = $("contador-coste");
+
+let imagenBase64 = null;   // sin el prefijo "data:...;base64,"
+let imagenMediaType = null;
+let costeAcumulado = {entrada: 0, salida: 0, usd: 0};
+let piezasActuales = null; // [{nombre, prompt}], mantenidas en orden tras edición
+let modeloShotPrompt = null;
+let imagenesGeneradas = []; // [{nombre, dataUrl}] tras llamar a FLUX
+
+/* ============================================================================
+ * ALMACENAMIENTO LOCAL
+ * ==========================================================================*/
+function storageGet(k){ try { return localStorage.getItem(k) || ""; } catch(e){ return ""; } }
+function storageSet(k, v){ try { localStorage.setItem(k, v); return true; } catch(e){ return false; } }
+function storageRemove(k){ try { localStorage.removeItem(k); } catch(e){} }
+
+/* ============================================================================
+ * GESTIÓN DE PROVEEDOR / MODELO / API KEY (texto-visión)
+ * ==========================================================================*/
+function proveedorActivo(){ return selProveedor.value; }
+function modeloActivo(){ return selModelo.value === "__otro__" ? inputModeloOtro.value.trim() : selModelo.value; }
+
+function obtenerMaxTokens(){
+  const valor = parseInt(inputMaxTokens.value, 10);
+  const limite = limiteTokensModelo(modeloActivo());
+  if (!valor || valor < 256) return Math.min(4096, limite);
+  return Math.min(valor, limite);
+}
+function ajustarLimiteTokens(){
+  const limite = limiteTokensModelo(modeloActivo());
+  inputMaxTokens.max = String(limite);
+  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
+  limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+}
+function repintarModelos(){
+  const cfg = MODELOS_POR_PROVEEDOR[proveedorActivo()];
+  selModelo.innerHTML = "";
+  cfg.modelos.forEach(m => {
+    const op = document.createElement("option");
+    op.value = m; op.textContent = m;
+    if (m === cfg.porDefecto) op.selected = true;
+    selModelo.appendChild(op);
+  });
+  const opOtro = document.createElement("option");
+  opOtro.value = "__otro__"; opOtro.textContent = "Otro…";
+  selModelo.appendChild(opOtro);
+  modeloOtroWrap.style.display = "none";
+}
+function cargarKeyGuardada(){
+  inputApiKey.value = localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || "";
+  actualizarEstadoKey();
+}
+function actualizarEstadoKey(){
+  const hay = !!localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]);
+  estadoKey.textContent = hay ? "✅ Hay una clave guardada para este proveedor." : "No hay ninguna clave guardada para este proveedor.";
+  estadoKey.className = "estado-key" + (hay ? " si" : "");
+  actualizarBotonGenerar();
+}
+function actualizarEstadoKeyFal(){
+  const hay = !!localStorage.getItem(CLAVE_FAL);
+  estadoKeyFal.textContent = hay ? "✅ Hay una clave de fal.ai guardada." : "No hay ninguna clave guardada para fal.ai.";
+  estadoKeyFal.className = "estado-key" + (hay ? " si" : "");
+  actualizarBotonGenerar();
+}
+function validarFormatoKey(proveedor, key){
+  if (!key) return false;
+  if (proveedor === "anthropic") return key.startsWith("sk-ant-");
+  if (proveedor === "openai") return key.startsWith("sk-");
+  if (proveedor === "gemini") return key.startsWith("AIza");
+  return true;
+}
+
+selProveedor.addEventListener("change", () => { repintarModelos(); cargarKeyGuardada(); ajustarLimiteTokens(); });
+selModelo.addEventListener("change", () => {
+  modeloOtroWrap.style.display = selModelo.value === "__otro__" ? "block" : "none";
+  ajustarLimiteTokens();
+});
+inputModeloOtro.addEventListener("input", ajustarLimiteTokens);
+
+$("btn-guardar-key").addEventListener("click", () => {
+  const key = inputApiKey.value.trim();
+  if (!key){ alert("Escribe una API key antes de guardar."); return; }
+  if (!validarFormatoKey(proveedorActivo(), key)){
+    if (!confirm("El formato de la clave no parece habitual para este proveedor. ¿Guardarla igualmente?")) return;
+  }
+  localStorage.setItem(CLAVES_LOCALSTORAGE[proveedorActivo()], key);
+  actualizarEstadoKey();
+});
+$("btn-borrar-key").addEventListener("click", () => {
+  localStorage.removeItem(CLAVES_LOCALSTORAGE[proveedorActivo()]);
+  inputApiKey.value = "";
+  actualizarEstadoKey();
+});
+$("btn-mostrar-key").addEventListener("click", () => {
+  const mostrar = inputApiKey.type === "password";
+  inputApiKey.type = mostrar ? "text" : "password";
+  $("btn-mostrar-key").textContent = mostrar ? "Ocultar" : "Mostrar";
+  $("btn-mostrar-key").setAttribute("aria-pressed", String(mostrar));
+});
+
+$("btn-guardar-key-fal").addEventListener("click", () => {
+  const key = inputApiKeyFal.value.trim();
+  if (!key){ alert("Escribe una API key de fal.ai antes de guardar."); return; }
+  localStorage.setItem(CLAVE_FAL, key);
+  actualizarEstadoKeyFal();
+});
+$("btn-borrar-key-fal").addEventListener("click", () => {
+  localStorage.removeItem(CLAVE_FAL);
+  inputApiKeyFal.value = "";
+  actualizarEstadoKeyFal();
+});
+$("btn-mostrar-key-fal").addEventListener("click", () => {
+  const mostrar = inputApiKeyFal.type === "password";
+  inputApiKeyFal.type = mostrar ? "text" : "password";
+  $("btn-mostrar-key-fal").textContent = mostrar ? "Ocultar" : "Mostrar";
+  $("btn-mostrar-key-fal").setAttribute("aria-pressed", String(mostrar));
+});
+
+/* ============================================================================
+ * SUBIDA DE IMAGEN
+ * ==========================================================================*/
+function manejarArchivoImagen(file){
+  if (!file) return;
+  if (!/^image\/(png|jpeg|webp)$/.test(file.type)){
+    alert("Formato no admitido. Usa JPG, PNG o WEBP.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    const dataUrl = reader.result;
+    const m = /^data:([^;]+);base64,(.*)$/.exec(dataUrl);
+    if (!m) { alert("No se ha podido leer la imagen."); return; }
+    imagenMediaType = m[1];
+    imagenBase64 = m[2];
+    previewImg.src = dataUrl;
+    previewWrap.classList.remove("hidden");
+    dropzone.classList.add("hidden");
+    actualizarBotonGenerar();
+  };
+  reader.onerror = () => alert("No se ha podido leer la imagen.");
+  reader.readAsDataURL(file);
+}
+dropzone.addEventListener("click", () => inputImagen.click());
+dropzone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") inputImagen.click(); });
+dropzone.addEventListener("dragover", (e) => { e.preventDefault(); dropzone.classList.add("dragover"); });
+dropzone.addEventListener("dragleave", () => dropzone.classList.remove("dragover"));
+dropzone.addEventListener("drop", (e) => {
+  e.preventDefault(); dropzone.classList.remove("dragover");
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) manejarArchivoImagen(e.dataTransfer.files[0]);
+});
+inputImagen.addEventListener("change", () => { if (inputImagen.files[0]) manejarArchivoImagen(inputImagen.files[0]); });
+$("btn-quitar-imagen").addEventListener("click", () => {
+  imagenBase64 = null; imagenMediaType = null;
+  inputImagen.value = "";
+  previewWrap.classList.add("hidden");
+  dropzone.classList.remove("hidden");
+  actualizarBotonGenerar();
+});
+
+/* ============================================================================
+ * FORMULARIO — validación
+ * ==========================================================================*/
+function actualizarBotonGenerar(){
+  const hayKeyTexto = !!(localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || inputApiKey.value.trim());
+  const hayKeyFal = !!(localStorage.getItem(CLAVE_FAL) || inputApiKeyFal.value.trim());
+  const hayImagen = !!imagenBase64;
+  const numPiezasOk = (() => {
+    const n = parseInt(inputNumPiezas.value, 10);
+    return n >= NUM_PIEZAS_MIN && n <= NUM_PIEZAS_MAX;
+  })();
+  btnGenerar.disabled = !(hayKeyTexto && hayKeyFal && hayImagen && numPiezasOk);
+}
+inputApiKey.addEventListener("input", actualizarBotonGenerar);
+inputApiKeyFal.addEventListener("input", actualizarBotonGenerar);
+inputNumPiezas.addEventListener("input", actualizarBotonGenerar);
+
+$("btn-restaurar-system").addEventListener("click", () => { inputSystemPrompt.value = SYSTEM_PROMPT_OUTFIT; });
+
+/* ============================================================================
+ * LLAMADA UNIFICADA A LA IA DE TEXTO/VISIÓN (Anthropic / OpenAI / Gemini)
+ * ==========================================================================*/
+async function fetchConTimeout(url, opciones, timeoutMs = APP_CONFIG.requestTimeoutMs){
+  const controlador = new AbortController();
+  const id = setTimeout(() => controlador.abort(), timeoutMs);
+  try{
+    return await fetch(url, {...opciones, signal: controlador.signal});
+  } catch(e){
+    if (e.name === "AbortError") throw new Error("La petición ha superado el tiempo máximo de espera (60 s). Inténtalo de nuevo.");
+    throw new Error("Error de red: no se ha podido contactar con el servidor de la IA. Revisa tu conexión.");
+  } finally { clearTimeout(id); }
+}
+function mensajeErrorHttp(status, cuerpo){
+  if (status === 401 || status === 403) return "La API key no es válida o no tiene permisos (código " + status + ").";
+  if (status === 429) return "Se ha alcanzado el límite de uso de la API (código 429). Espera unos segundos e inténtalo de nuevo.";
+  if (status === 404) return "El modelo indicado no existe o no está disponible en tu cuenta (código 404). Revisa el identificador del modelo.";
+  const detalle = cuerpo && (cuerpo.error && cuerpo.error.message ? cuerpo.error.message : JSON.stringify(cuerpo).slice(0,200));
+  return "Error del proveedor (código " + status + ")" + (detalle ? ": " + detalle : ".");
+}
+
+// userPrompt: texto. imagen: {mediaType, base64} opcional (solo en la 1ª llamada).
+async function llamarIA(systemPrompt, userPrompt, opts, imagen){
+  const {proveedor, modelo, apiKey, maxTokens} = opts;
+  let url, headers, body, extraerTexto, extraerUso, estaTruncado;
+
+  if (proveedor === "anthropic"){
+    url = "https://api.anthropic.com/v1/messages";
+    headers = {"content-type":"application/json","x-api-key": apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+    const content = [];
+    if (imagen) content.push({type:"image", source:{type:"base64", media_type: imagen.mediaType, data: imagen.base64}});
+    content.push({type:"text", text: userPrompt});
+    body = {model: modelo, max_tokens: maxTokens, system: systemPrompt, messages: [{role:"user", content}]};
+    extraerTexto = (d) => (d.content && d.content[0] && d.content[0].text) || "";
+    extraerUso = (d) => ({entrada: d.usage?.input_tokens || 0, salida: d.usage?.output_tokens || 0});
+    estaTruncado = (d) => d.stop_reason === "max_tokens";
+  } else if (proveedor === "openai"){
+    url = "https://api.openai.com/v1/chat/completions";
+    headers = {"content-type":"application/json","Authorization":"Bearer " + apiKey};
+    const content = [{type:"text", text: userPrompt}];
+    if (imagen) content.push({type:"image_url", image_url:{url: `data:${imagen.mediaType};base64,${imagen.base64}`}});
+    body = {model: modelo, max_tokens: maxTokens, messages: [{role:"system", content: systemPrompt},{role:"user", content}]};
+    extraerTexto = (d) => (d.choices && d.choices[0] && d.choices[0].message && d.choices[0].message.content) || "";
+    extraerUso = (d) => ({entrada: d.usage?.prompt_tokens || 0, salida: d.usage?.completion_tokens || 0});
+    estaTruncado = (d) => d.choices && d.choices[0] && d.choices[0].finish_reason === "length";
+  } else if (proveedor === "gemini"){
+    url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    headers = {"content-type":"application/json"};
+    const parts = [{text: userPrompt}];
+    if (imagen) parts.unshift({inline_data:{mime_type: imagen.mediaType, data: imagen.base64}});
+    body = {system_instruction: {parts: [{text: systemPrompt}]}, contents: [{role:"user", parts}], generationConfig: {maxOutputTokens: maxTokens}};
+    extraerTexto = (d) => (d.candidates && d.candidates[0] && d.candidates[0].content && d.candidates[0].content.parts && d.candidates[0].content.parts[0].text) || "";
+    extraerUso = (d) => ({entrada: d.usageMetadata?.promptTokenCount || 0, salida: d.usageMetadata?.candidatesTokenCount || 0});
+    estaTruncado = (d) => d.candidates && d.candidates[0] && d.candidates[0].finishReason === "MAX_TOKENS";
+  } else {
+    throw new Error("Proveedor desconocido: " + proveedor);
+  }
+
+  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let data; try { data = await resp.json(); } catch(e){ data = {}; }
+  if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+
+  const texto = extraerTexto(data);
+  const uso = extraerUso(data);
+  const truncado = !!estaTruncado(data);
+  acumularCoste(modelo, uso.entrada, uso.salida);
+  return {texto, truncado, uso};
+}
+function acumularCoste(modelo, entrada, salida){
+  costeAcumulado.entrada += entrada; costeAcumulado.salida += salida;
+  const precios = PRECIOS_POR_MTOK[modelo];
+  if (precios) costeAcumulado.usd += (entrada/1e6)*precios.in + (salida/1e6)*precios.out;
+  pintarContadorCoste();
+}
+function pintarContadorCoste(){
+  const {entrada, salida, usd} = costeAcumulado;
+  const precioConocido = !!PRECIOS_POR_MTOK[modeloActivo()];
+  contadorCoste.textContent = `Tokens usados en esta sesión — entrada: ${entrada.toLocaleString("es-ES")}, salida: ${salida.toLocaleString("es-ES")}.` +
+    (precioConocido ? ` Coste estimado (solo texto/visión): $${usd.toFixed(4)} (aproximado; la generación de imagen con FLUX se factura aparte, verifica tarifas vigentes).` : " (no hay precio de referencia cargado para este modelo).");
+}
+
+/* ============================================================================
+ * EXTRACCIÓN DE JSON DE LA RESPUESTA
+ * ==========================================================================*/
+function extraerJSON(texto){
+  let limpio = texto.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
+  try { return JSON.parse(limpio); } catch(e){}
+  const inicio = limpio.indexOf("{");
+  const fin = limpio.lastIndexOf("}");
+  if (inicio >= 0 && fin > inicio){
+    try { return JSON.parse(limpio.slice(inicio, fin+1)); } catch(e){}
+  }
+  return null;
+}
+function esquemaValido(obj){
+  return obj && Array.isArray(obj.pieces) && obj.pieces.length > 0 &&
+    obj.pieces.every(p => p && typeof p.name === "string" && typeof p.prompt === "string");
+}
+
+/* ============================================================================
+ * PASO 1 — ANALIZAR LA PRENDA Y GENERAR LOS PROMPTS DEL OUTFIT
+ * ==========================================================================*/
+function construirMensajeUsuario(numPiezas, incluirModelo){
+  return `Analiza la prenda que aparece en la imagen adjunta.
+
+Genera un outfit completo compuesto por ${numPiezas} prenda(s) afines a la prenda de la imagen (sin incluir la propia prenda de la imagen), siguiendo tu rol y reglas del sistema.
+${incluirModelo ? "Incluye además un prompt adicional para una fotografía de un/a modelo vistiendo el outfit completo (la prenda original más las piezas generadas)." : "No generes ningún prompt de modelo: el usuario no lo ha solicitado."}
+
+FORMATO DE RESPUESTA (obligatorio):
+Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin comentarios y sin bloques de código, con este esquema EXACTO:
+{"pieces": [{"name": "<nombre breve de la pieza, en español>", "prompt": "<prompt descriptivo en inglés para FLUX>"}]${incluirModelo ? `, "model_shot_prompt": "<prompt en inglés para la foto del modelo con el outfit completo>"` : ""}}
+
+Cada "prompt" debe estar íntegramente en inglés y seguir las instrucciones del sistema (imperfecciones, texturas táctiles, micro-detalles, configuración de cámara, iluminación natural, estilo documental, sin palabras vacías).`;
+}
+
+async function analizarYGenerarPrompts(){
+  const opts = {
+    proveedor: proveedorActivo(),
+    modelo: modeloActivo(),
+    apiKey: (inputApiKey.value.trim() || localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || ""),
+    maxTokens: obtenerMaxTokens()
+  };
+  if (!opts.modelo) throw new Error("Indica un identificador de modelo válido.");
+
+  const numPiezas = Math.min(NUM_PIEZAS_MAX, Math.max(NUM_PIEZAS_MIN, parseInt(inputNumPiezas.value, 10) || 1));
+  const incluirModelo = chkIncluirModelo.checked;
+  const systemPrompt = inputSystemPrompt.value.trim() || SYSTEM_PROMPT_OUTFIT;
+  const userPrompt = construirMensajeUsuario(numPiezas, incluirModelo);
+  const imagen = {mediaType: imagenMediaType, base64: imagenBase64};
+
+  estadoTexto.textContent = "Analizando la prenda y generando los prompts del outfit…";
+  let resp = await llamarIA(systemPrompt, userPrompt, opts, imagen);
+  let datos = extraerJSON(resp.texto);
+
+  if (!esquemaValido(datos)){
+    // Reintento único: se reenvía la respuesta defectuosa pidiendo solo el JSON correcto.
+    estadoTexto.textContent = "La respuesta no tenía el formato esperado — reintentando una vez…";
+    const correccion = `Tu respuesta anterior no es un JSON válido con el esquema pedido. Respuesta recibida:\n\n${resp.texto}\n\nDevuelve ÚNICAMENTE el JSON correcto con el esquema exacto indicado antes, sin texto adicional, sin comentarios ni bloques de código markdown.`;
+    resp = await llamarIA(systemPrompt, correccion, opts);
+    datos = extraerJSON(resp.texto);
+  }
+  if (!esquemaValido(datos)) throw new Error("La IA no ha devuelto un JSON con el formato esperado tras dos intentos. Prueba con otro modelo o reformula el nº de piezas.");
+
+  if (resp.truncado){
+    avisoTruncadoDiv.style.display = "block";
+    avisoTruncadoDiv.textContent = "Aviso: la respuesta de la IA parece haberse quedado corta (límite de tokens alcanzado). Si faltan piezas, sube el número máximo de tokens de salida y vuelve a generar.";
+  } else {
+    avisoTruncadoDiv.style.display = "none";
+  }
+
+  piezasActuales = datos.pieces.map(p => ({nombre: p.name, prompt: p.prompt}));
+  modeloShotPrompt = incluirModelo ? (datos.model_shot_prompt || null) : null;
+}
+
+/* ============================================================================
+ * RENDERIZADO DE LOS PROMPTS (EDITABLES) — PASO 3 DEL FORMULARIO
+ * ==========================================================================*/
+function pintarPrompts(){
+  listaPrompts.innerHTML = "";
+  piezasActuales.forEach((pieza, i) => {
+    const card = document.createElement("div");
+    card.className = "pieza-card";
+    card.innerHTML = `<h3>${escapeHTML(pieza.nombre)}</h3>
+      <textarea class="tall mono" data-idx="${i}" data-tipo="pieza">${escapeHTML(pieza.prompt)}</textarea>`;
+    listaPrompts.appendChild(card);
+  });
+  if (modeloShotPrompt !== null){
+    const card = document.createElement("div");
+    card.className = "pieza-card modelo";
+    card.innerHTML = `<h3>Modelo con el outfit completo</h3>
+      <textarea class="tall mono" data-tipo="modelo">${escapeHTML(modeloShotPrompt)}</textarea>`;
+    listaPrompts.appendChild(card);
+  }
+  panelResultado.style.display = "block";
+  btnContinuar.disabled = false;
+}
+function recogerPromptsEditados(){
+  listaPrompts.querySelectorAll("textarea").forEach(ta => {
+    if (ta.dataset.tipo === "pieza") piezasActuales[parseInt(ta.dataset.idx, 10)].prompt = ta.value;
+    else if (ta.dataset.tipo === "modelo") modeloShotPrompt = ta.value;
+  });
+}
+function escapeHTML(s){
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+/* ============================================================================
+ * PASO 2 — GENERACIÓN DE IMÁGENES CON FAL (FLUX)
+ * ==========================================================================*/
+function extraerImagenFal(data){
+  if (data && Array.isArray(data.images) && data.images[0] && data.images[0].url) return data.images[0].url;
+  throw new Error("fal.ai no ha devuelto ninguna imagen en la respuesta.");
+}
+async function esperarColaFal(encolado, headers){
+  const inicio = Date.now();
+  let statusUrl = encolado.status_url;
+  let responseUrl = encolado.response_url;
+  while (Date.now() - inicio < APP_CONFIG.fal.queueMaxWaitMs){
+    await new Promise(r => setTimeout(r, APP_CONFIG.fal.queuePollIntervalMs));
+    const r = await fetchConTimeout(statusUrl, {headers});
+    const d = await r.json().catch(() => ({}));
+    if (d && d.status === "COMPLETED"){
+      const r2 = await fetchConTimeout(responseUrl, {headers});
+      return await r2.json().catch(() => ({}));
+    }
+    if (d && d.status === "ERROR") throw new Error("fal.ai ha devuelto un error al procesar la imagen.");
+  }
+  throw new Error("Tiempo de espera agotado mientras fal.ai procesaba la imagen en cola.");
+}
+async function generarImagenFal(prompt){
+  const key = inputApiKeyFal.value.trim() || localStorage.getItem(CLAVE_FAL) || "";
+  const headers = {"Authorization": "Key " + key, "Content-Type": "application/json"};
+  const url = APP_CONFIG.fal.baseUrl + APP_CONFIG.fal.defaultModel;
+  const body = {
+    prompt,
+    num_inference_steps: APP_CONFIG.fal.inferenceSteps,
+    num_images: APP_CONFIG.fal.numImages,
+    output_format: APP_CONFIG.fal.outputFormat,
+    image_size: APP_CONFIG.fal.imageSize,
+    safety_tolerance: APP_CONFIG.fal.safetyTolerance
+  };
+  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let data; try { data = await resp.json(); } catch(e){ data = {}; }
+  if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+  if (!Array.isArray(data.images) && (data.status_url || data.response_url)){
+    data = await esperarColaFal(data, headers);
+  }
+  return extraerImagenFal(data);
+}
+
+async function dataUrlDesdeImagenUrl(url){
+  // La imagen de fal.ai se descarga y se convierte a data URL para poder
+  // previsualizarla, descargarla como PNG y exportarla a PDF sin depender
+  // de que el enlace remoto siga disponible más adelante.
+  const resp = await fetchConTimeout(url, {});
+  const blob = await resp.blob();
+  return await new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+function pintarImagenPlaceholder(nombre, esModelo){
+  const card = document.createElement("div");
+  card.className = "pieza-card" + (esModelo ? " modelo" : "");
+  card.dataset.nombre = nombre;
+  card.innerHTML = `<h3>${escapeHTML(nombre)}</h3>
+    <div class="img-wrap"><span class="placeholder">Generando…</span></div>
+    <div class="meta-pieza"></div>
+    <div class="botones"><button type="button" class="secundario btn-descargar-png" disabled>Descargar PNG</button></div>`;
+  resultadoDiv.appendChild(card);
+  return card;
+}
+function actualizarTarjetaImagen(card, dataUrl, error){
+  const wrap = card.querySelector(".img-wrap");
+  const meta = card.querySelector(".meta-pieza");
+  const btn = card.querySelector(".btn-descargar-png");
+  if (error){
+    wrap.innerHTML = `<span class="placeholder">⚠️ ${escapeHTML(error)}</span>`;
+    meta.textContent = "";
+    return;
+  }
+  wrap.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(card.dataset.nombre)}">`;
+  meta.textContent = "Formato PNG · fal.ai / FLUX";
+  btn.disabled = false;
+  btn.addEventListener("click", () => {
+    const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + ".png";
+    guardarArchivo(nombreArchivo, dataUrlABlob(dataUrl), "image/png");
+  });
+}
+function dataUrlABlob(dataUrl){
+  const [cab, datos] = dataUrl.split(",");
+  const mime = /data:([^;]+);/.exec(cab)[1];
+  const bin = atob(datos);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], {type: mime});
+}
+async function guardarArchivo(nombreArchivo, contenido, tipoMime){
+  // Dentro de un Artifact publicado se usa la capacidad "downloads" del
+  // visor; fuera de ese entorno (fichero abierto directamente, o alojado en
+  // un servidor propio o GitHub Pages) se recurre a la descarga normal.
+  let downloads = null;
+  if (window.claude && window.claude.use){
+    try { downloads = await window.claude.use("downloads"); } catch(e){ downloads = null; }
+  }
+  const datos = contenido instanceof Blob ? contenido : new Blob([contenido], {type: tipoMime});
+  if (downloads){
+    try { await downloads.save({filename: nombreArchivo, data: datos}); }
+    catch(err){ if (!err || err.code !== "declined") alert(`No se ha podido guardar "${nombreArchivo}".`); }
+    return;
+  }
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(datos);
+  a.download = nombreArchivo;
+  a.click();
+}
+
+async function generarTodasLasImagenes(){
+  resultadoDiv.innerHTML = "";
+  imagenesGeneradas = [];
+  const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false}));
+  if (modeloShotPrompt) tareas.push({nombre: "Modelo con el outfit completo", prompt: modeloShotPrompt, modelo: true});
+
+  for (const tarea of tareas){
+    const card = pintarImagenPlaceholder(tarea.nombre, tarea.modelo);
+    estadoTexto.textContent = `Generando imagen: ${tarea.nombre}…`;
+    try {
+      const urlRemota = await generarImagenFal(tarea.prompt);
+      const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
+      actualizarTarjetaImagen(card, dataUrl, null);
+      imagenesGeneradas.push({nombre: tarea.nombre, dataUrl});
+    } catch(err){
+      actualizarTarjetaImagen(card, null, err.message || String(err));
+    }
+  }
+  btnExportarPdf.disabled = imagenesGeneradas.length === 0;
+  panelImagenes.style.display = "block";
+}
+
+/* ============================================================================
+ * EXPORTAR TODAS LAS IMÁGENES EN UN PDF
+ * ==========================================================================*/
+async function exportarPdf(){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({unit: "mm", format: "a4"});
+  const anchoUtil = 180, margen = 15;
+  imagenesGeneradas.forEach((img, i) => {
+    if (i > 0) doc.addPage();
+    doc.setFontSize(14);
+    doc.text(img.nombre, margen, 20);
+    const propiedades = doc.getImageProperties(img.dataUrl);
+    let w = anchoUtil, h = (propiedades.height / propiedades.width) * w;
+    const altoMax = 240;
+    if (h > altoMax){ h = altoMax; w = (propiedades.width / propiedades.height) * h; }
+    doc.addImage(img.dataUrl, "PNG", margen, 30, w, h);
+  });
+  await guardarArchivo("genoutfit_outfit.pdf", doc.output("blob"), "application/pdf");
+}
+
+/* ============================================================================
+ * HISTORIAL LOCAL (solo metadatos, sin imágenes ni API keys)
+ * ==========================================================================*/
+function leerHistorial(){ try { return JSON.parse(storageGet(CLAVE_HISTORIAL) || "[]"); } catch(e){ return []; } }
+function guardarEntradaHistorial(numPiezas, incluirModelo){
+  const hist = leerHistorial();
+  hist.unshift({fecha: new Date().toISOString(), numPiezas, incluirModelo});
+  storageSet(CLAVE_HISTORIAL, JSON.stringify(hist.slice(0, HISTORIAL_MAX)));
+  pintarHistorial();
+}
+function pintarHistorial(){
+  const hist = leerHistorial();
+  const lista = $("historial-lista");
+  const contador = $("historial-contador");
+  const btnVaciar = $("historial-vaciar");
+  contador.textContent = `${hist.length} generación(es)`;
+  btnVaciar.disabled = hist.length === 0;
+  lista.innerHTML = "";
+  if (hist.length === 0){
+    lista.innerHTML = `<div class="hist-vacio">Todavía no has generado ningún outfit en este navegador.</div>`;
+    return;
+  }
+  hist.forEach(h => {
+    const div = document.createElement("div");
+    div.className = "hist-item";
+    const fecha = new Date(h.fecha).toLocaleString("es-ES");
+    div.innerHTML = `<h4>${h.numPiezas} pieza(s)${h.incluirModelo ? " + modelo" : ""}</h4><p>${fecha}</p>`;
+    lista.appendChild(div);
+  });
+}
+$("historial-vaciar").addEventListener("click", () => {
+  if (!confirm("¿Vaciar todo el historial de este navegador?")) return;
+  storageRemove(CLAVE_HISTORIAL);
+  pintarHistorial();
+});
+
+/* ============================================================================
+ * ESTADOS DE CARGA / ERRORES
+ * ==========================================================================*/
+function mostrarCargando(boton, texto){
+  boton.classList.add("busy");
+  boton.disabled = true;
+  estadoGeneracion.classList.remove("error");
+  estadoGeneracion.classList.add("visible");
+  estadoTexto.textContent = texto;
+}
+function ocultarCargando(boton){
+  boton.classList.remove("busy");
+  estadoGeneracion.classList.remove("visible");
+}
+function mostrarError(boton, err){
+  boton.classList.remove("busy");
+  estadoGeneracion.classList.add("visible", "error");
+  estadoTexto.textContent = "Error: " + (err && err.message ? err.message : String(err));
+}
+
+/* ============================================================================
+ * BOTONES PRINCIPALES
+ * ==========================================================================*/
+btnGenerar.addEventListener("click", async () => {
+  mostrarCargando(btnGenerar, "Analizando la prenda…");
+  panelResultado.style.display = "none";
+  panelImagenes.style.display = "none";
+  try {
+    await analizarYGenerarPrompts();
+    pintarPrompts();
+    ocultarCargando(btnGenerar);
+    btnGenerar.disabled = false;
+  } catch(err){
+    mostrarError(btnGenerar, err);
+    btnGenerar.disabled = false;
+  }
+});
+
+btnContinuar.addEventListener("click", async () => {
+  recogerPromptsEditados();
+  mostrarCargando(btnContinuar, "Generando imágenes con FLUX…");
+  try {
+    await generarTodasLasImagenes();
+    ocultarCargando(btnContinuar);
+    guardarEntradaHistorial(piezasActuales.length, !!modeloShotPrompt);
+  } catch(err){
+    mostrarError(btnContinuar, err);
+  } finally {
+    btnContinuar.disabled = false;
+  }
+});
+
+btnExportarPdf.addEventListener("click", async () => {
+  btnExportarPdf.disabled = true;
+  try { await exportarPdf(); }
+  catch(err){ alert("No se ha podido generar el PDF: " + (err.message || err)); }
+  finally { btnExportarPdf.disabled = false; }
+});
+
+/* ============================================================================
+ * INICIALIZACIÓN
+ * ==========================================================================*/
+inputSystemPrompt.value = SYSTEM_PROMPT_OUTFIT;
+repintarModelos();
+cargarKeyGuardada();
+ajustarLimiteTokens();
+actualizarEstadoKeyFal();
+inputApiKeyFal.value = localStorage.getItem(CLAVE_FAL) || "";
+pintarHistorial();
+actualizarBotonGenerar();
+
+</script>
+</body>
+</html>
