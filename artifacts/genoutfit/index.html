@@ -212,6 +212,9 @@
   .pieza-card h3 { margin: 0 0 .5rem; font-size: 1rem; color: var(--blue-700); }
   .pieza-card.modelo h3 { color: #7a5b12; }
   .pieza-card.modelo { background: var(--warn-bg); border-color: var(--warn-border); }
+  .pieza-card.analisis { background: #f3f4f6; border-color: var(--border); }
+  .pieza-card.analisis h3 { color: var(--muted); }
+  .pieza-card.analisis textarea[readonly] { background: #e9eaec; color: var(--muted); cursor: default; }
   .pieza-card .img-wrap { max-width: 320px; margin: .7rem auto 0; background: #fff; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; min-height: 60px; display: flex; align-items: center; justify-content: center; }
   .pieza-card .img-wrap img { display: block; width: 100%; height: auto; }
   .pieza-card .img-wrap .placeholder { color: var(--muted); font-size: .82rem; padding: 1rem; }
@@ -434,7 +437,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 14:13
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 16:05
 </footer>
 
 <script>
@@ -601,6 +604,7 @@ let imagenMediaType = null;
 let costeAcumulado = {entrada: 0, salida: 0, usd: 0};
 let piezasActuales = null; // [{nombre, prompt}], mantenidas en orden tras edición
 let modeloShotPrompt = null;
+let promptAnalisisImagen = null; // prompt de texto enviado junto a la imagen subida, para visualizarlo en "Prompts generados"
 let imagenesGeneradas = []; // [{nombre, dataUrl}] tras llamar a FLUX
 
 /* ============================================================================
@@ -1047,6 +1051,7 @@ async function analizarYGenerarPrompts(){
 
   piezasActuales = datos.pieces.map(p => ({nombre: p.name, prompt: p.prompt}));
   modeloShotPrompt = incluirModelo ? (datos.model_shot_prompt || null) : null;
+  promptAnalisisImagen = userPrompt;
 }
 
 /* ============================================================================
@@ -1054,6 +1059,14 @@ async function analizarYGenerarPrompts(){
  * ==========================================================================*/
 function pintarPrompts(){
   listaPrompts.innerHTML = "";
+  if (promptAnalisisImagen){
+    const card = document.createElement("div");
+    card.className = "pieza-card analisis";
+    card.innerHTML = `<h3>Prompt de análisis de la imagen subida</h3>
+      <textarea class="tall mono" readonly>${escapeHTML(promptAnalisisImagen)}</textarea>
+      <p class="hint" style="margin-top:.4rem">Texto enviado junto con la prenda subida para pedir el análisis y los prompts del outfit. Es de solo lectura: ya se usó en esta generación, mostrarlo no la repite.</p>`;
+    listaPrompts.appendChild(card);
+  }
   piezasActuales.forEach((pieza, i) => {
     const card = document.createElement("div");
     card.className = "pieza-card";
@@ -1084,7 +1097,11 @@ function recogerPromptsEditados(){
 // en los textarea, para que el TXT refleje siempre la última versión.
 function descargarPromptsTxt(){
   recogerPromptsEditados();
-  const bloques = piezasActuales.map(pieza => `### ${pieza.nombre}\n${pieza.prompt}`);
+  const bloques = [];
+  if (promptAnalisisImagen){
+    bloques.push(`### Prompt de análisis de la imagen subida\n${promptAnalisisImagen}`);
+  }
+  piezasActuales.forEach(pieza => bloques.push(`### ${pieza.nombre}\n${pieza.prompt}`));
   if (modeloShotPrompt !== null){
     bloques.push(`### Modelo con el outfit completo\n${modeloShotPrompt}`);
   }
@@ -1456,6 +1473,7 @@ async function guardarEnHistorial(){
     createdAt: Date.now(),
     numPiezas: piezasActuales.length,
     incluirModelo: !!modeloShotPrompt,
+    promptAnalisis: promptAnalisisImagen || null,
     pasosInferencia: obtenerPasosInferencia(),
     safetyTolerance: obtenerSafetyTolerance(),
     items
@@ -1480,6 +1498,7 @@ function cargarDesdeHistorial(rec){
   // exportarlas a PDF — ver el aviso que se pinta más abajo.
   piezasActuales = rec.items.filter(it => !it.esModelo && !it.esOriginal).map(it => ({nombre: it.nombre, prompt: it.prompt}));
   modeloShotPrompt = rec.incluirModelo ? (rec.items.find(it => it.esModelo)?.prompt || null) : null;
+  promptAnalisisImagen = rec.promptAnalisis || null; // ausente en generaciones guardadas antes de añadir esta visualización
   pintarPrompts();
 
   resultadoDiv.innerHTML = "";
