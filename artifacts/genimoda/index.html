@@ -283,6 +283,11 @@
       <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
     </button>
     <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
+    <div class="row">
+      <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
+    </div>
+    <p class="hint">La estimaci&#243;n consulta solo el conteo de tokens de ENTRADA de Anthropic (gratuito) con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Solo disponible si "Mejorar el prompt con Claude" est&#225; marcado (si no, no hay llamada a Claude que estimar). Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
+    <div id="tokenEstimate" class="status" role="status" aria-live="polite"></div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="error" class="status error" role="alert"></div>
   </section>
@@ -328,7 +333,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 03/10/2026</p>
+    <p>&#218;ltima modificaci&#243;n: 08/10/2026 14:40</p>
   </footer>
 </div>
 
@@ -602,6 +607,7 @@ function validateForm() {
     if (!tokensOk) missing.push(`un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
+  $("estimateTokens").disabled = !(improve && hasAnthropicKey && hasIdea && modelsOk && tokensOk && !state.busy);
   return ok;
 }
 
@@ -738,6 +744,46 @@ function extractClaudeText(data) {
     .trim();
   if (!text) throw new AppError("Claude no ha generado un prompt v\u00e1lido.");
   return text;
+}
+
+/* ==========================================================================
+   ESTIMACI\u00d3N PREVIA DE TOKENS DE ENTRADA (antes de generar)
+   ========================================================================== */
+/* Cuenta los tokens de ENTRADA que consumir\u00eda mejorarPromptConClaude() con
+   esta misma idea e instrucciones, usando el endpoint gratuito y exacto de
+   Anthropic (no genera nada ni gasta tokens de salida). Solo tiene sentido
+   si "Mejorar el prompt con Claude" est\u00e1 activado: si no, no hay llamada a
+   Claude que estimar. Los tokens de SALIDA nunca se pueden conocer de
+   antemano: lo \u00fanico mostrable de la salida es el techo configurado
+   (maxTokens). */
+async function contarTokensEntrada(systemPrompt, idea, model) {
+  const body = { model, messages: [{ role: "user", content: buildUserMessage(idea) }] };
+  if (systemPrompt.trim()) body.system = systemPrompt;
+  const data = await fetchJson("https://api.anthropic.com/v1/messages/count_tokens", {
+    method: "POST",
+    headers: {
+      "x-api-key": storageGet(STORAGE.anthropicKey),
+      "anthropic-version": APP_CONFIG.anthropic.version,
+      "anthropic-dangerous-direct-browser-access": "true",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify(body)
+  });
+  return data && Number.isFinite(data.input_tokens) ? data.input_tokens : 0;
+}
+
+function formatearEstimacionTokens(entrada, maxTokens, model) {
+  const p = PRICING.anthropic[model];
+  let texto = `${entrada.toLocaleString("es-ES")} tokens de entrada (conteo exacto facilitado por Anthropic; esta consulta no tiene coste). ` +
+    `Techo de tokens de salida configurado: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere Claude y nunca se puede conocer de antemano).`;
+  if (p && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
+    const costeEntrada = (entrada / 1e6) * p.inputPerMTok;
+    const costeSalidaMax = (maxTokens / 1e6) * p.outputPerMTok;
+    texto += ` Coste estimado: $${costeEntrada.toFixed(4)} de entrada + hasta $${costeSalidaMax.toFixed(4)} de salida si se agotara el techo configurado (la generaci\u00f3n de imagen con FLUX se factura aparte).`;
+  } else {
+    texto += " (no hay precio de referencia cargado para este modelo).";
+  }
+  return texto;
 }
 
 /* ==========================================================================
@@ -1016,6 +1062,33 @@ async function generar() {
     showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");
   } finally {
     showLoading(false);
+  }
+}
+
+async function estimarTokens() {
+  const btn = $("estimateTokens");
+  const out = $("tokenEstimate");
+  btn.disabled = true;
+  out.className = "status";
+  out.textContent = "";
+  try {
+    if (!wantsImprove()) throw new AppError("Marca antes \"Mejorar el prompt con Claude\": si no, no hay ninguna llamada a Claude que estimar.");
+    const systemPrompt = $("systemPrompt").value;
+    const idea = $("idea").value.trim();
+    const model = getActiveModel("claude");
+    const maxTokens = getMaxTokens();
+    if (!storageGet(STORAGE.anthropicKey)) throw new AppError("Indica y guarda antes la API key de Anthropic.");
+    if (!idea) throw new AppError("Describe antes la idea inicial.");
+    if (!model) throw new AppError("Indica un identificador de modelo de Claude válido.");
+    if (!Number.isFinite(maxTokens)) throw new AppError(`Indica un máximo de tokens válido (1-${APP_CONFIG.anthropic.maxAllowedTokens}).`);
+    const entrada = await contarTokensEntrada(systemPrompt, idea, model);
+    out.textContent = formatearEstimacionTokens(entrada, maxTokens, model);
+    out.className = "status show ok";
+  } catch (err) {
+    out.textContent = err instanceof AppError ? err.message : "No se ha podido estimar los tokens.";
+    out.className = "status show error";
+  } finally {
+    validateForm();
   }
 }
 
@@ -1450,6 +1523,7 @@ function initializeApp() {
   $("idea").addEventListener("input", validateForm);
 
   $("generate").addEventListener("click", generar);
+  $("estimateTokens").addEventListener("click", estimarTokens);
   $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
   $("downloadPrompt").addEventListener("click", downloadPromptOnly);
   $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, ""); state.lastPrompt = ""; });
