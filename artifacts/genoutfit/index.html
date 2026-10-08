@@ -43,8 +43,9 @@
          prenda original y las imágenes ya generadas de cada pieza, para que
          el modelo salga vistiendo EXACTAMENTE esas prendas (no una
          reinterpretación nueva a partir de texto).
-       - NUM_PIEZAS_MIN / NUM_PIEZAS_MAX: rango permitido para el número de
-         prendas del outfit.
+       - NUM_PIEZAS_MIN / NUM_PIEZAS_MAX_CON_MODELO / NUM_PIEZAS_MAX_SIN_MODELO:
+         rango permitido para el número de prendas del outfit (el máximo
+         depende de si se incluye también la foto del modelo).
 
   5. Aviso: la IA puede cometer errores (en la identificación de la prenda
      o en los prompts generados). Revisa siempre el resultado antes de
@@ -290,12 +291,8 @@
         <select id="sel-modelo"></select>
       </div>
       <div class="field">
-        <label for="input-max-tokens">Nº máx. tokens de salida</label>
-        <select id="input-max-tokens">
-          <option value="4096">4096</option>
-          <option value="8192" selected>8192 (Recomendado)</option>
-          <option value="9216">9216</option>
-        </select>
+        <label for="input-max-tokens">Nº máx. tokens de salida (Recomendado: 8192)</label>
+        <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="8192">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -344,9 +341,9 @@
 
     <div class="grid3" id="grid-piezas-flux">
       <div class="field">
-        <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 3)</label>
-        <input type="number" id="input-num-piezas" min="1" max="3" step="1" value="2">
-        <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido. El máximo es 3 para que, junto a la prenda original, nunca se superen las 4 imágenes de referencia que fal.ai admite por llamada: así la foto del modelo se genera siempre en una sola llamada, sin pasos intermedios que puedan perder fidelidad.</p>
+        <label for="input-num-piezas" id="label-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 4)</label>
+        <input type="number" id="input-num-piezas" min="1" max="4" step="1" value="2">
+        <p class="hint" id="hint-num-piezas">Cuántas prendas afines debe proponer la IA, además de la que has subido. Como no vas a incluir la foto del modelo, el máximo es 4.</p>
       </div>
       <div class="field">
         <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
@@ -376,7 +373,7 @@
         <input type="checkbox" id="chk-incluir-modelo">
         <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
       </label>
-      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. Con el máximo de 3 piezas, la prenda original más las piezas nunca supera las 4 imágenes de referencia que admite fal.ai por llamada, así que se genera siempre en una sola llamada.</p>
+      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. Si la incluyes, el máximo de piezas pasa a 3, para que la prenda original más las piezas nunca supere las 4 imágenes de referencia que admite fal.ai por llamada y la foto del modelo se genere siempre en una sola llamada.</p>
     </div>
 
     <div class="field">
@@ -432,7 +429,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 07:01
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 07:36
 </footer>
 
 <script>
@@ -460,11 +457,17 @@ Reglas de idioma (estrictas):
 - Todo el contenido que generes, incluido el prompt descriptivo de cada pieza para el modelo de difusión (FLUX), debe estar redactado íntegramente en español.`;
 
 const NUM_PIEZAS_MIN = 1;
-// Limitado a 3 para que, sumando la prenda original, nunca se superen las 4
-// imágenes de referencia que fal.ai admite por llamada a FLUX Kontext
-// multi-imagen (ver FAL_KONTEXT_MAX_IMAGES): la foto del modelo se genera
-// así siempre en una única llamada, con la máxima fidelidad posible.
-const NUM_PIEZAS_MAX = 3;
+// El máximo de piezas depende de si se va a generar también la foto del
+// modelo: si se incluye, se limita a 3 para que, sumando la prenda
+// original, nunca se superen las 4 imágenes de referencia que fal.ai
+// admite por llamada a FLUX Kontext multi-imagen (ver FAL_KONTEXT_MAX_IMAGES)
+// y la foto del modelo se genere siempre en una única llamada. Si no se
+// incluye, ese límite no aplica y se permite una pieza más.
+const NUM_PIEZAS_MAX_CON_MODELO = 3;
+const NUM_PIEZAS_MAX_SIN_MODELO = 4;
+function numPiezasMaxActual(){
+  return chkIncluirModelo.checked ? NUM_PIEZAS_MAX_CON_MODELO : NUM_PIEZAS_MAX_SIN_MODELO;
+}
 
 const APP_CONFIG = {
   requestTimeoutMs: 60000,
@@ -565,6 +568,8 @@ const inputImagen = $("input-imagen");
 const previewWrap = $("preview-wrap");
 const previewImg = $("preview-img");
 const inputNumPiezas = $("input-num-piezas");
+const labelNumPiezas = $("label-num-piezas");
+const hintNumPiezas = $("hint-num-piezas");
 const selPasosInferencia = $("sel-pasos-inferencia");
 const selSafetyTolerance = $("sel-safety-tolerance");
 const chkIncluirModelo = $("chk-incluir-modelo");
@@ -606,27 +611,20 @@ function modeloActivo(){ return selModelo.value === "__otro__" ? inputModeloOtro
 
 // El nº máx. de tokens de salida solo admite estos 3 valores fijos; 8192 es
 // el recomendado (y el valor por defecto) para el prompt de esta app.
+// Nº de tokens de salida recomendado (y valor por defecto); el campo admite
+// cualquier valor dentro del límite del modelo activo, sin otro tope fijo.
 const MAX_TOKENS_RECOMENDADO = 8192;
 
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
-  if (!valor) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
+  if (!valor || valor < 256) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
-  // Deshabilita las opciones que superen el límite del modelo activo (p.ej.
-  // Gemini 1.5, con un límite de 8192, deja fuera el valor 9216); si el
-  // valor seleccionado deja de estar permitido, se cae al permitido más
-  // alto disponible.
-  Array.from(inputMaxTokens.options).forEach(op => {
-    op.disabled = parseInt(op.value, 10) > limite;
-  });
-  if (inputMaxTokens.options[inputMaxTokens.selectedIndex].disabled){
-    const permitidos = Array.from(inputMaxTokens.options).filter(op => !op.disabled);
-    inputMaxTokens.value = permitidos.length ? permitidos[permitidos.length - 1].value : inputMaxTokens.options[0].value;
-  }
+  inputMaxTokens.max = String(limite);
+  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
   limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
 }
 function repintarModelos(){
@@ -763,13 +761,28 @@ function actualizarBotonGenerar(){
   const hayImagen = !!imagenBase64;
   const numPiezasOk = (() => {
     const n = parseInt(inputNumPiezas.value, 10);
-    return n >= NUM_PIEZAS_MIN && n <= NUM_PIEZAS_MAX;
+    return n >= NUM_PIEZAS_MIN && n <= numPiezasMaxActual();
   })();
   btnGenerar.disabled = !(hayKeyTexto && hayKeyFal && hayImagen && numPiezasOk);
+}
+// El máximo de piezas cambia según si se va a incluir la foto del modelo
+// (ver numPiezasMaxActual): actualiza el atributo "max" del campo, su
+// etiqueta y su texto de ayuda, y recorta el valor actual si deja de ser
+// válido.
+function actualizarLimitePiezas(){
+  const max = numPiezasMaxActual();
+  inputNumPiezas.max = String(max);
+  if (parseInt(inputNumPiezas.value, 10) > max) inputNumPiezas.value = max;
+  labelNumPiezas.textContent = `Nº de piezas del outfit (sin contar la prenda original, máximo ${max})`;
+  hintNumPiezas.textContent = chkIncluirModelo.checked
+    ? "Cuántas prendas afines debe proponer la IA, además de la que has subido. Como vas a incluir la foto del modelo, el máximo es 3 para que, junto a la prenda original, nunca se superen las 4 imágenes de referencia que fal.ai admite por llamada: así la foto del modelo se genera siempre en una sola llamada, sin pasos intermedios que puedan perder fidelidad."
+    : "Cuántas prendas afines debe proponer la IA, además de la que has subido. Como no vas a incluir la foto del modelo, ese límite de fal.ai no aplica y el máximo es 4.";
+  actualizarBotonGenerar();
 }
 inputApiKey.addEventListener("input", actualizarBotonGenerar);
 inputApiKeyFal.addEventListener("input", actualizarBotonGenerar);
 inputNumPiezas.addEventListener("input", actualizarBotonGenerar);
+chkIncluirModelo.addEventListener("change", actualizarLimitePiezas);
 
 $("btn-restaurar-system").addEventListener("click", () => { inputSystemPrompt.value = SYSTEM_PROMPT_OUTFIT; });
 
@@ -900,7 +913,7 @@ async function analizarYGenerarPrompts(){
   };
   if (!opts.modelo) throw new Error("Indica un identificador de modelo válido.");
 
-  const numPiezas = Math.min(NUM_PIEZAS_MAX, Math.max(NUM_PIEZAS_MIN, parseInt(inputNumPiezas.value, 10) || 1));
+  const numPiezas = Math.min(numPiezasMaxActual(), Math.max(NUM_PIEZAS_MIN, parseInt(inputNumPiezas.value, 10) || 1));
   const incluirModelo = chkIncluirModelo.checked;
   const systemPrompt = inputSystemPrompt.value.trim() || SYSTEM_PROMPT_OUTFIT;
   const userPrompt = construirMensajeUsuario(numPiezas, incluirModelo);
@@ -919,7 +932,7 @@ async function analizarYGenerarPrompts(){
   }
   if (!esquemaValido(datos)){
     if (resp.truncado){
-      throw new Error("La respuesta se ha cortado por alcanzar el límite de tokens de salida antes de completar el JSON. Sube el valor de \"Nº máx. tokens de salida\" (a 9216, el máximo disponible) y vuelve a generar.");
+      throw new Error("La respuesta se ha cortado por alcanzar el límite de tokens de salida antes de completar el JSON. Sube el valor de \"Nº máx. tokens de salida\" (por ejemplo a 16000) y vuelve a generar.");
     }
     const muestra = (resp.texto || "").trim().slice(0, 500) || "(respuesta vacía)";
     throw new Error(`La IA no ha devuelto un JSON con el formato esperado tras dos intentos. Esto es lo que ha respondido el modelo (primeros 500 caracteres), revísalo para ver si lo explica:\n\n${muestra}`);
@@ -1071,8 +1084,9 @@ async function generarImagenModeloFal(prompt, imageUrls){
 }
 
 // La API de fal.ai para FLUX Kontext multi-imagen exige entre 1 y 4
-// "image_urls" por llamada. Con la prenda original más el número máximo de
-// piezas (NUM_PIEZAS_MAX) puede haber más de 4 imágenes de referencia.
+// "image_urls" por llamada. Si no se incluye la foto del modelo se permiten
+// hasta 4 piezas además de la prenda original (NUM_PIEZAS_MAX_SIN_MODELO),
+// así que puede haber más de 4 imágenes de referencia en total.
 const FAL_KONTEXT_MAX_IMAGES = 4;
 
 // Prompt fijo para cada paso de "vestir" al modelo con una prenda adicional
@@ -1506,6 +1520,7 @@ inputSystemPrompt.value = SYSTEM_PROMPT_OUTFIT;
 repintarModelos();
 cargarKeyGuardada();
 ajustarLimiteTokens();
+actualizarLimitePiezas();
 actualizarEstadoKeyFal();
 inputApiKeyFal.value = localStorage.getItem(CLAVE_FAL) || "";
 renderHistorial();
