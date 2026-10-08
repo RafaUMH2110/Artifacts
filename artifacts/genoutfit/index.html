@@ -372,7 +372,7 @@
         <input type="checkbox" id="chk-incluir-modelo">
         <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
       </label>
-      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos.</p>
+      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. fal.ai admite hasta 4 imágenes de referencia por llamada; con más piezas, GenOutFit las combina antes en varias llamadas adicionales (tarda algo más, pero el resultado final sigue siendo fiel a todas las piezas).</p>
     </div>
 
     <div class="field">
@@ -458,7 +458,8 @@ const APP_CONFIG = {
     // Modelo FLUX Kontext multi-imagen: genera la foto del modelo a partir de
     // la prenda original y de las imágenes de cada pieza ya generadas, en
     // lugar de reinterpretarlas de nuevo solo a partir de texto. Acepta
-    // "image_urls" (URLs o data URIs) + "prompt" y "aspect_ratio" en vez de
+    // "image_urls" (URLs o data URIs, máx. 4 por llamada — ver
+    // FAL_KONTEXT_MAX_IMAGES) + "prompt" y "aspect_ratio" en vez de
     // "image_size" / "num_inference_steps". https://fal.ai/models/fal-ai/flux-pro/kontext/multi
     multiModel: "fal-ai/flux-pro/kontext/multi",
     inferenceStepsDefecto: 20,
@@ -1018,6 +1019,43 @@ async function generarImagenModeloFal(prompt, imageUrls){
   return extraerImagenFal(data);
 }
 
+// La API de fal.ai para FLUX Kontext multi-imagen exige entre 1 y 4
+// "image_urls" por llamada. Con la prenda original más el número máximo de
+// piezas (NUM_PIEZAS_MAX) puede haber más de 4 imágenes de referencia, así
+// que si no caben en una sola llamada se combinan antes en varias tandas.
+const FAL_KONTEXT_MAX_IMAGES = 4;
+
+// Combina progresivamente varias imágenes de referencia (prenda original +
+// piezas) en un único collage de "producto" (sin modelo) que las reúne
+// todas, respetando el límite de 4 imágenes por llamada: la primera tanda
+// usa hasta 4 imágenes de partida, y cada tanda siguiente añade hasta 3
+// imágenes más al collage ya generado (collage + hasta 3 nuevas = 4). El
+// resultado es una única URL que puede usarse como referencia final.
+async function componerCollageReferencia(imagenes){
+  let collage = null;
+  let pendientes = imagenes.slice();
+  while (pendientes.length > 0){
+    const huecoDisponible = collage ? FAL_KONTEXT_MAX_IMAGES - 1 : FAL_KONTEXT_MAX_IMAGES;
+    const lote = pendientes.splice(0, huecoDisponible);
+    const entrada = collage ? [collage, ...lote] : lote;
+    const prompt = collage
+      ? "Añade estas prendas y complementos adicionales a la composición de producto ya existente (primera imagen), sin modificar en nada las piezas que ya aparecían en ella (mismo color, textura, forma y diseño). Muestra también las piezas nuevas exactamente como aparecen en sus imágenes de referencia. Fotografía de producto tipo flat lay sobre fondo neutro, sin ningún modelo ni persona."
+      : "Combina estas prendas y complementos en una única fotografía de producto tipo flat lay, mostrando cada pieza exactamente como aparece en su imagen de referencia, sin modificar su color, textura, forma ni diseño, ordenadas con claridad sobre un fondo neutro, sin ningún modelo ni persona.";
+    collage = await generarImagenModeloFal(prompt, entrada);
+  }
+  return collage;
+}
+
+// Prepara la lista final de imágenes de referencia para la foto del modelo,
+// respetando el límite de 4 "image_urls" de fal.ai: si hay 4 o menos, se
+// usan directamente; si hay más (p. ej. muchas piezas), se combinan antes en
+// un collage único mediante componerCollageReferencia().
+async function prepararReferenciasModelo(imagenes){
+  if (imagenes.length <= FAL_KONTEXT_MAX_IMAGES) return imagenes;
+  const collage = await componerCollageReferencia(imagenes);
+  return [collage];
+}
+
 async function dataUrlDesdeImagenUrl(url){
   // La imagen de fal.ai se descarga y se convierte a data URL para poder
   // previsualizarla, descargarla como PNG y exportarla a PDF sin depender
@@ -1124,7 +1162,12 @@ async function generarTodasLasImagenes(){
       if (imagenesReferenciaModelo.length === 0){
         throw new Error("No hay ninguna imagen de referencia disponible (ni la prenda original ni las piezas generadas); no se puede componer la foto del modelo.");
       }
-      const urlRemota = await generarImagenModeloFal(modeloShotPrompt, imagenesReferenciaModelo);
+      if (imagenesReferenciaModelo.length > FAL_KONTEXT_MAX_IMAGES){
+        estadoTexto.textContent = `Combinando ${imagenesReferenciaModelo.length} prendas de referencia (máx. ${FAL_KONTEXT_MAX_IMAGES} por llamada a fal.ai)…`;
+      }
+      const referencias = await prepararReferenciasModelo(imagenesReferenciaModelo);
+      estadoTexto.textContent = `Generando imagen: ${nombreModelo}…`;
+      const urlRemota = await generarImagenModeloFal(modeloShotPrompt, referencias);
       const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
       actualizarTarjetaImagen(card, dataUrl, null, true);
       imagenesGeneradas.push({nombre: nombreModelo, dataUrl});
