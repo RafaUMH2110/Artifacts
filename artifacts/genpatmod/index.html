@@ -303,7 +303,12 @@
       <p class="hint">Si se desactiva, la IA genera las piezas directamente sin pausar para tu revisión.</p>
     </div>
 
-    <button type="button" class="primario grande" id="btn-generar" disabled>Generar patrón</button>
+    <div class="botones">
+      <button type="button" class="primario grande" id="btn-generar" disabled>Generar patrón</button>
+      <button type="button" class="secundario" id="btn-estimar-tokens" disabled>Estimar tokens de entrada</button>
+    </div>
+    <p class="hint">La estimación consulta solo el conteo de tokens de ENTRADA (gratuito en los proveedores que lo ofrecen) del paso de planificación, con la misma idea que se enviaría; los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
+    <div class="contador-coste" id="estimacion-tokens" style="display:none;"></div>
     <div class="botones">
       <button type="button" class="secundario" id="btn-exportar-txt" disabled>Exportar prompts (.txt)</button>
     </div>
@@ -355,7 +360,7 @@
 
 <footer>
   GenPatMod &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 03/10/2026
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 14:13
 </footer>
 
 
@@ -558,6 +563,8 @@ const btnDescargarPdf = $("btn-descargar-pdf");
 const pdfPreview = $("pdf-preview");
 const contadorCoste = $("contador-coste");
 const svgRenderHost = $("svg-render-host");
+const btnEstimarTokens = $("btn-estimar-tokens");
+const estimacionTokensDiv = $("estimacion-tokens");
 
 let costeAcumulado = {entrada: 0, salida: 0, usd: 0};
 let ultimosPrompts = null; // para exportar a .txt
@@ -662,6 +669,7 @@ function actualizarBotonGenerar(){
   const hayKey = !!(localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || inputApiKey.value.trim());
   const hayIdea = inputIdea.value.trim().length > 0;
   btnGenerar.disabled = !(hayKey && hayIdea);
+  btnEstimarTokens.disabled = !(hayKey && hayIdea);
 }
 
 repintarModelos();
@@ -752,6 +760,90 @@ function pintarContadorCoste(){
   contadorCoste.textContent = `Tokens usados en esta sesión — entrada: ${entrada.toLocaleString("es-ES")}, salida: ${salida.toLocaleString("es-ES")}.` +
     (precioConocido ? ` Coste estimado: $${usd.toFixed(4)} (aproximado, verifica las tarifas vigentes).` : " (no hay precio de referencia cargado para este modelo).");
 }
+
+/* ============================================================================
+ * ESTIMACIÓN PREVIA DE TOKENS DE ENTRADA (antes de lanzar la generación real)
+ * ==========================================================================*/
+// Cuenta los tokens de ENTRADA que consumiría el paso 1 (planificación de
+// piezas) con esta misma idea, sin generar nada ni gastar tokens de salida.
+// Anthropic y Gemini ofrecen un endpoint gratuito de conteo exacto; OpenAI
+// no lo ofrece y se recurre a una estimación aproximada. Los tokens de
+// SALIDA nunca se pueden conocer de antemano (dependen de lo que decida
+// generar el modelo, y aquí además hay varias llamadas posteriores por cada
+// pieza): lo único mostrable de la salida es el techo configurado por
+// llamada (maxTokens).
+async function contarTokensEntrada(systemPrompt, userPrompt, opts){
+  const {proveedor, modelo, apiKey} = opts;
+
+  if (proveedor === "anthropic"){
+    const url = "https://api.anthropic.com/v1/messages/count_tokens";
+    const headers = {"content-type":"application/json","x-api-key": apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+    const body = {model: modelo, system: systemPrompt, messages: [{role:"user", content: userPrompt}]};
+    const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+    let data; try { data = await resp.json(); } catch(e){ data = {}; }
+    if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+    return {entrada: data.input_tokens || 0, aproximado: false};
+  }
+
+  if (proveedor === "gemini"){
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":countTokens?key=" + encodeURIComponent(apiKey);
+    const headers = {"content-type":"application/json"};
+    const body = {generateContentRequest: {model: "models/" + modelo, system_instruction: {parts: [{text: systemPrompt}]}, contents: [{role:"user", parts:[{text: userPrompt}]}]}};
+    const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+    let data; try { data = await resp.json(); } catch(e){ data = {}; }
+    if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+    return {entrada: data.totalTokens || 0, aproximado: false};
+  }
+
+  // OpenAI no ofrece un endpoint público de conteo de tokens: se estima con
+  // una heurística aproximada (~4 caracteres por token).
+  const textoTotal = (systemPrompt || "") + " " + (userPrompt || "");
+  const entrada = Math.ceil(textoTotal.length / 4);
+  return {entrada, aproximado: true};
+}
+
+function formatearEstimacionTokens(entrada, aproximado, maxTokens, modelo){
+  const precios = PRECIOS_POR_MTOK[modelo];
+  let texto = (aproximado ? "≈ " : "") + entrada.toLocaleString("es-ES") + " tokens de entrada (paso 1: planificación)" +
+    (aproximado
+      ? " (estimación aproximada: este proveedor no ofrece un endpoint de conteo exacto)."
+      : " (conteo exacto facilitado por el proveedor; esta consulta no tiene coste).") +
+    ` Techo de tokens de salida configurado por llamada: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere el modelo, y esta app realiza varias llamadas: planificación + una por cada pieza).`;
+  if (precios){
+    const costeEntrada = (entrada/1e6)*precios.in;
+    const costeSalidaMax = (maxTokens/1e6)*precios.out;
+    texto += ` Coste estimado solo del paso 1: $${costeEntrada.toFixed(4)} de entrada${aproximado ? " (aprox.)" : ""} + hasta $${costeSalidaMax.toFixed(4)} de salida si se agotara el techo configurado.`;
+  } else {
+    texto += " (no hay precio de referencia cargado para este modelo).";
+  }
+  return texto;
+}
+
+btnEstimarTokens.addEventListener("click", async () => {
+  btnEstimarTokens.disabled = true;
+  estimacionTokensDiv.style.display = "none";
+  try{
+    const opts = {
+      proveedor: proveedorActivo(),
+      modelo: modeloActivo(),
+      apiKey: (inputApiKey.value.trim() || localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || ""),
+      maxTokens: obtenerMaxTokens()
+    };
+    if (!opts.apiKey) throw new Error("Indica la API key del proveedor activo.");
+    if (!opts.modelo) throw new Error("Indica un identificador de modelo válido.");
+    const idea = inputIdea.value.trim();
+    if (!idea) throw new Error("Describe antes la idea inicial de la prenda.");
+    const userPrompt = "Idea inicial de la prenda: " + idea;
+    const {entrada, aproximado} = await contarTokensEntrada(SYSTEM_PROMPT_PLANIFICAR, userPrompt, opts);
+    estimacionTokensDiv.textContent = formatearEstimacionTokens(entrada, aproximado, opts.maxTokens, opts.modelo);
+    estimacionTokensDiv.style.display = "block";
+  } catch(err){
+    estimacionTokensDiv.textContent = "⚠️ No se ha podido estimar: " + (err.message || err);
+    estimacionTokensDiv.style.display = "block";
+  } finally {
+    actualizarBotonGenerar();
+  }
+});
 
 /* ============================================================================
  * EXTRACCIÓN DE JSON / SVG DE LA RESPUESTA DEL MODELO

@@ -385,9 +385,14 @@
       <p class="hint">Rol que sigue la IA al analizar la prenda y redactar los prompts. Puedes editarlo; por defecto es el definido para esta app.</p>
     </div>
 
-    <button type="button" class="primario grande" id="btn-generar" disabled>
-      <span class="spinner"></span><span id="btn-generar-texto">Generar Outfit</span>
-    </button>
+    <div class="botones">
+      <button type="button" class="primario grande" id="btn-generar" disabled>
+        <span class="spinner"></span><span id="btn-generar-texto">Generar Outfit</span>
+      </button>
+      <button type="button" class="secundario" id="btn-estimar-tokens" disabled>Estimar tokens de entrada</button>
+    </div>
+    <p class="hint">La estimación consulta solo el conteo de tokens de ENTRADA (gratuito en los proveedores que lo ofrecen) con el mismo texto/imagen que se enviaría; los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
+    <div class="contador-coste" id="estimacion-tokens" style="display:none;"></div>
     <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span></div>
   </section>
 
@@ -429,7 +434,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 07:36
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 14:13
 </footer>
 
 <script>
@@ -588,6 +593,8 @@ const resultadoDiv = $("resultado");
 const inputNombrePdf = $("input-nombre-pdf");
 const btnExportarPdf = $("btn-exportar-pdf");
 const contadorCoste = $("contador-coste");
+const btnEstimarTokens = $("btn-estimar-tokens");
+const estimacionTokensDiv = $("estimacion-tokens");
 
 let imagenBase64 = null;   // sin el prefijo "data:...;base64,"
 let imagenMediaType = null;
@@ -764,6 +771,7 @@ function actualizarBotonGenerar(){
     return n >= NUM_PIEZAS_MIN && n <= numPiezasMaxActual();
   })();
   btnGenerar.disabled = !(hayKeyTexto && hayKeyFal && hayImagen && numPiezasOk);
+  btnEstimarTokens.disabled = !(hayKeyTexto && hayImagen && numPiezasOk);
 }
 // El máximo de piezas cambia según si se va a incluir la foto del modelo
 // (ver numPiezasMaxActual): actualiza el atributo "max" del campo, su
@@ -869,6 +877,98 @@ function pintarContadorCoste(){
   contadorCoste.textContent = `Tokens usados en esta sesión — entrada: ${entrada.toLocaleString("es-ES")}, salida: ${salida.toLocaleString("es-ES")}.` +
     (precioConocido ? ` Coste estimado (solo texto/visión): $${usd.toFixed(4)} (aproximado; la generación de imagen con FLUX se factura aparte, verifica tarifas vigentes).` : " (no hay precio de referencia cargado para este modelo).");
 }
+
+/* ============================================================================
+ * ESTIMACIÓN PREVIA DE TOKENS DE ENTRADA (antes de lanzar la generación real)
+ * ==========================================================================*/
+// Cuenta los tokens de ENTRADA que consumiría la llamada real a llamarIA()
+// con este mismo systemPrompt/userPrompt/imagen, sin generar nada ni gastar
+// tokens de salida. Anthropic y Gemini ofrecen un endpoint gratuito de
+// conteo exacto; OpenAI no lo ofrece y se recurre a una estimación
+// aproximada. Los tokens de SALIDA nunca se pueden conocer de antemano
+// (dependen de lo que decida generar el modelo): lo único mostrable de la
+// salida es el techo configurado (maxTokens).
+async function contarTokensEntrada(systemPrompt, userPrompt, opts, imagen){
+  const {proveedor, modelo, apiKey} = opts;
+
+  if (proveedor === "anthropic"){
+    const url = "https://api.anthropic.com/v1/messages/count_tokens";
+    const headers = {"content-type":"application/json","x-api-key": apiKey,"anthropic-version":"2023-06-01","anthropic-dangerous-direct-browser-access":"true"};
+    const content = [];
+    if (imagen) content.push({type:"image", source:{type:"base64", media_type: imagen.mediaType, data: imagen.base64}});
+    content.push({type:"text", text: userPrompt});
+    const body = {model: modelo, system: systemPrompt, messages: [{role:"user", content}]};
+    const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+    let data; try { data = await resp.json(); } catch(e){ data = {}; }
+    if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+    return {entrada: data.input_tokens || 0, aproximado: false};
+  }
+
+  if (proveedor === "gemini"){
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(modelo) + ":countTokens?key=" + encodeURIComponent(apiKey);
+    const headers = {"content-type":"application/json"};
+    const parts = [{text: userPrompt}];
+    if (imagen) parts.unshift({inline_data:{mime_type: imagen.mediaType, data: imagen.base64}});
+    const body = {generateContentRequest: {model: "models/" + modelo, system_instruction: {parts: [{text: systemPrompt}]}, contents: [{role:"user", parts}]}};
+    const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+    let data; try { data = await resp.json(); } catch(e){ data = {}; }
+    if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+    return {entrada: data.totalTokens || 0, aproximado: false};
+  }
+
+  // OpenAI no ofrece un endpoint público de conteo de tokens: se estima con
+  // una heurística aproximada (~4 caracteres por token) más una adición fija
+  // orientativa por cada imagen adjunta.
+  const textoTotal = (systemPrompt || "") + " " + (userPrompt || "");
+  let entrada = Math.ceil(textoTotal.length / 4);
+  if (imagen) entrada += 1500;
+  return {entrada, aproximado: true};
+}
+
+function formatearEstimacionTokens(entrada, aproximado, maxTokens, modelo){
+  const precios = PRECIOS_POR_MTOK[modelo];
+  let texto = (aproximado ? "≈ " : "") + entrada.toLocaleString("es-ES") + " tokens de entrada" +
+    (aproximado
+      ? " (estimación aproximada: este proveedor no ofrece un endpoint de conteo exacto)."
+      : " (conteo exacto facilitado por el proveedor; esta consulta no tiene coste).") +
+    ` Techo de tokens de salida configurado: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere el modelo y nunca se puede conocer de antemano).`;
+  if (precios){
+    const costeEntrada = (entrada/1e6)*precios.in;
+    const costeSalidaMax = (maxTokens/1e6)*precios.out;
+    texto += ` Coste estimado: $${costeEntrada.toFixed(4)} de entrada${aproximado ? " (aprox.)" : ""} + hasta $${costeSalidaMax.toFixed(4)} de salida si se agotara el techo configurado.`;
+  } else {
+    texto += " (no hay precio de referencia cargado para este modelo).";
+  }
+  return texto;
+}
+
+btnEstimarTokens.addEventListener("click", async () => {
+  btnEstimarTokens.disabled = true;
+  estimacionTokensDiv.style.display = "none";
+  try{
+    const opts = {
+      proveedor: proveedorActivo(),
+      modelo: modeloActivo(),
+      apiKey: (inputApiKey.value.trim() || localStorage.getItem(CLAVES_LOCALSTORAGE[proveedorActivo()]) || ""),
+      maxTokens: obtenerMaxTokens()
+    };
+    if (!opts.apiKey) throw new Error("Indica la API key del proveedor de texto/visión.");
+    if (!opts.modelo) throw new Error("Indica un identificador de modelo válido.");
+    const numPiezas = Math.min(numPiezasMaxActual(), Math.max(NUM_PIEZAS_MIN, parseInt(inputNumPiezas.value, 10) || 1));
+    const incluirModelo = chkIncluirModelo.checked;
+    const systemPrompt = inputSystemPrompt.value.trim() || SYSTEM_PROMPT_OUTFIT;
+    const userPrompt = construirMensajeUsuario(numPiezas, incluirModelo);
+    const imagen = (imagenBase64 && imagenMediaType) ? {mediaType: imagenMediaType, base64: imagenBase64} : null;
+    const {entrada, aproximado} = await contarTokensEntrada(systemPrompt, userPrompt, opts, imagen);
+    estimacionTokensDiv.textContent = formatearEstimacionTokens(entrada, aproximado, opts.maxTokens, opts.modelo);
+    estimacionTokensDiv.style.display = "block";
+  } catch(err){
+    estimacionTokensDiv.textContent = "⚠️ No se ha podido estimar: " + (err.message || err);
+    estimacionTokensDiv.style.display = "block";
+  } finally {
+    actualizarBotonGenerar();
+  }
+});
 
 /* ============================================================================
  * EXTRACCIÓN DE JSON DE LA RESPUESTA
