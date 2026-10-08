@@ -340,9 +340,9 @@
 
     <div class="grid3" id="grid-piezas-flux">
       <div class="field">
-        <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original)</label>
-        <input type="number" id="input-num-piezas" min="1" max="8" step="1" value="2">
-        <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido.</p>
+        <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 3)</label>
+        <input type="number" id="input-num-piezas" min="1" max="3" step="1" value="2">
+        <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido. El máximo es 3 para que, junto a la prenda original, nunca se superen las 4 imágenes de referencia que fal.ai admite por llamada: así la foto del modelo se genera siempre en una sola llamada, sin pasos intermedios que puedan perder fidelidad.</p>
       </div>
       <div class="field">
         <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
@@ -372,7 +372,7 @@
         <input type="checkbox" id="chk-incluir-modelo">
         <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
       </label>
-      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. fal.ai admite hasta 4 imágenes de referencia por llamada; con más piezas, GenOutFit genera primero al modelo con las primeras y luego añade cada pieza restante una a una sobre esa misma foto (tarda algo más, pero mantiene la fidelidad de cada prenda).</p>
+      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. Con el máximo de 3 piezas, la prenda original más las piezas nunca supera las 4 imágenes de referencia que admite fal.ai por llamada, así que se genera siempre en una sola llamada.</p>
     </div>
 
     <div class="field">
@@ -420,7 +420,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:04
 </footer>
 
 <script>
@@ -448,7 +448,11 @@ Reglas de idioma (estrictas):
 - Todo el contenido que generes, incluido el prompt descriptivo de cada pieza para el modelo de difusión (FLUX), debe estar redactado íntegramente en español.`;
 
 const NUM_PIEZAS_MIN = 1;
-const NUM_PIEZAS_MAX = 8;
+// Limitado a 3 para que, sumando la prenda original, nunca se superen las 4
+// imágenes de referencia que fal.ai admite por llamada a FLUX Kontext
+// multi-imagen (ver FAL_KONTEXT_MAX_IMAGES): la foto del modelo se genera
+// así siempre en una única llamada, con la máxima fidelidad posible.
+const NUM_PIEZAS_MAX = 3;
 
 const APP_CONFIG = {
   requestTimeoutMs: 60000,
@@ -1141,7 +1145,17 @@ async function generarTodasLasImagenes(){
   // estas imágenes reales, en vez de reinterpretarlas de nuevo solo con texto.
   const imagenesReferenciaModelo = [];
   const original = imagenOriginalDataUrl();
-  if (original) imagenesReferenciaModelo.push(original);
+  if (original){
+    imagenesReferenciaModelo.push(original);
+    // La prenda original también se incluye como una tarjeta más: así queda
+    // en el PDF exportado y en el historial de generaciones, junto al resto
+    // de piezas y a la foto del modelo.
+    const nombreOriginal = "Prenda original";
+    const cardOriginal = pintarImagenPlaceholder(nombreOriginal, false);
+    actualizarTarjetaImagen(cardOriginal, original, null, false);
+    cardOriginal.querySelector(".meta-pieza").textContent = "Imagen original subida por el usuario";
+    imagenesGeneradas.push({nombre: nombreOriginal, dataUrl: original, esOriginal: true});
+  }
 
   for (const pieza of piezasActuales){
     const card = pintarImagenPlaceholder(pieza.nombre, false);
@@ -1230,14 +1244,19 @@ async function historyGetAll(){
   return (todos || []).sort((a, b) => b.createdAt - a.createdAt);
 }
 async function guardarEnHistorial(){
-  // imagenesGeneradas: [{nombre, dataUrl}] ya generadas con FLUX en este turno.
+  // imagenesGeneradas: [{nombre, dataUrl, esOriginal?}] ya generadas (o, para
+  // la prenda original, ya subida) en este turno.
   const items = imagenesGeneradas.map(img => {
+    if (img.esOriginal){
+      return { nombre: img.nombre, prompt: "", esModelo: false, esOriginal: true, blob: dataUrlABlob(img.dataUrl) };
+    }
     const piezaOrig = piezasActuales.find(p => p.nombre === img.nombre);
     const esModelo = !piezaOrig && modeloShotPrompt !== null && img.nombre === "Modelo con el outfit completo";
     return {
       nombre: img.nombre,
       prompt: esModelo ? modeloShotPrompt : (piezaOrig ? piezaOrig.prompt : ""),
       esModelo,
+      esOriginal: false,
       blob: dataUrlABlob(img.dataUrl)
     };
   });
@@ -1267,7 +1286,7 @@ function cargarDesdeHistorial(rec){
   // Vuelca las imágenes y prompts guardados en el panel de resultado, sin
   // volver a llamar a ninguna API: permite revisar, descargar o exportar a
   // PDF una generación anterior.
-  piezasActuales = rec.items.filter(it => !it.esModelo).map(it => ({nombre: it.nombre, prompt: it.prompt}));
+  piezasActuales = rec.items.filter(it => !it.esModelo && !it.esOriginal).map(it => ({nombre: it.nombre, prompt: it.prompt}));
   modeloShotPrompt = rec.incluirModelo ? (rec.items.find(it => it.esModelo)?.prompt || null) : null;
   pintarPrompts();
 
@@ -1277,7 +1296,8 @@ function cargarDesdeHistorial(rec){
     const card = pintarImagenPlaceholder(it.nombre, it.esModelo);
     const dataUrl = URL.createObjectURL(it.blob);
     actualizarTarjetaImagen(card, dataUrl, null, it.esModelo);
-    imagenesGeneradas.push({nombre: it.nombre, dataUrl});
+    if (it.esOriginal) card.querySelector(".meta-pieza").textContent = "Imagen original subida por el usuario";
+    imagenesGeneradas.push({nombre: it.nombre, dataUrl, esOriginal: !!it.esOriginal});
   });
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
   panelImagenes.style.display = "block";
