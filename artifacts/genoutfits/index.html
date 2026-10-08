@@ -40,9 +40,14 @@
        - MODELOS_POR_PROVEEDOR / LIMITES_TOKENS_MODELO / PRECIOS_POR_MTOK:
          listas de modelos de texto/visión disponibles, su límite de tokens
          de salida y su precio orientativo por millón de tokens.
-       - APP_CONFIG.fal: modelo de FLUX usado por defecto y parámetros fijos
-         de generación de imagen (pasos de inferencia, tamaño, tolerancia de
-         seguridad).
+       - APP_CONFIG.fal: modelo de FLUX usado por defecto para cada pieza
+         (texto→imagen) y parámetros fijos de generación de imagen (pasos de
+         inferencia, tamaño, tolerancia de seguridad), más el modelo FLUX
+         Kontext multi-imagen (APP_CONFIG.fal.multiModel) usado para la foto
+         del modelo con el outfit completo: ese paso toma como referencia la
+         prenda original y las imágenes ya generadas de cada pieza, para que
+         el modelo salga vistiendo EXACTAMENTE esas prendas (no una
+         reinterpretación nueva a partir de texto).
        - NUM_PIEZAS_MIN / NUM_PIEZAS_MAX: rango permitido para el número de
          prendas del outfit.
 
@@ -266,7 +271,7 @@
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
       <li>La IA (Claude, GPT o Gemini, a tu elección) analiza la foto y devuelve una descripción breve y un prompt en español, listo para FLUX, de cada pieza del outfit.</li>
       <li>Puedes revisar y editar cada prompt antes de continuar.</li>
-      <li>Al pulsar "Continuar", GenOutFit genera con FLUX una imagen PNG de cada pieza (y la del modelo, si la pediste).</li>
+      <li>Al pulsar "Continuar", GenOutFitS genera con FLUX una imagen PNG de cada pieza y, si la pediste, la foto del modelo: esta última se compone con FLUX Kontext a partir de la prenda original y de las imágenes de las piezas ya generadas, para que el modelo lleve exactamente esas prendas y complementos.</li>
       <li>Puedes descargar cada imagen por separado o exportarlas todas juntas en un PDF.</li>
     </ol>
     <p><strong>Avisos frecuentes:</strong> error 401/403 &#8594; la clave no es válida o no tiene permisos. Error 429 &#8594; límite de uso alcanzado, espera e inténtalo de nuevo. Error 404 &#8594; el modelo no existe o no está disponible en tu cuenta. "La respuesta no tiene el formato esperado" &#8594; GenOutFit reintenta automáticamente una vez; si persiste, prueba con otro modelo o una foto más clara de la prenda.</p>
@@ -341,6 +346,7 @@
         <input type="checkbox" id="chk-incluir-modelo">
         <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
       </label>
+      <p class="hint">Esta foto no se genera solo a partir de texto: se compone con FLUX Kontext a partir de la prenda original y de las imágenes de cada pieza ya generadas, usándolas como referencia, para que el modelo lleve EXACTAMENTE esas prendas y complementos. fal.ai admite hasta 4 imágenes de referencia por llamada; con más piezas, GenOutFitS las combina antes en una llamada adicional (tarda algo más, pero el resultado final sigue siendo fiel a todas las piezas).</p>
     </div>
 
     <div class="field">
@@ -388,7 +394,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 04/10/2026
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026
 </footer>
 
 <script>
@@ -407,7 +413,10 @@ Para cada pieza del outfit:
 - Especifica una configuración de cámara y de luz propia de un estilo documental/editorial de moda (por ejemplo, distancia focal y apertura tipo 85mm f/1.4, luz natural direccional, fondo neutro o de estudio sencillo), manteniendo la misma configuración de cámara y de luz en todas las piezas del outfit, para que las imágenes resultantes puedan presentarse juntas de forma coherente.
 - Evita adjetivos vacíos o genéricos ("photorealistic", "hyperdetailed", "high quality", "8k"...). En su lugar, describe los detalles físicos concretos que hacen que la imagen parezca real.
 
-Si el usuario solicita una imagen adicional de un/a modelo vistiendo el outfit completo, redacta ese prompt con los mismos criterios de realismo, textura e iluminación que el resto, describiendo también la pose, la actitud y el entorno de forma natural, no forzada.
+Si el usuario solicita una imagen adicional de un/a modelo vistiendo el outfit completo, ten en cuenta que esa imagen NO se genera solo a partir de texto: se genera a partir de la fotografía de la prenda original y de las imágenes ya generadas de cada pieza, usándolas como referencia visual directa. Por tanto, ese prompt debe:
+- Dar por hecho que las prendas y complementos (forma, color, estampado, tejido, herrajes y demás detalles) ya están definidos por las imágenes de referencia: NO vuelvas a describir el aspecto de cada prenda ni inventes variaciones de color, tejido o diseño distintas de las ya generadas.
+- Indicar explícitamente que el modelo debe llevar puestas, sin ningún cambio, exactamente las prendas y complementos de las imágenes de referencia (la prenda original más cada una de las piezas generadas), combinadas en un único outfit coherente sobre una sola persona.
+- Centrarse en describir lo que SÍ hay que decidir de nuevo: la pose, la actitud, el encuadre (de cuerpo entero), el entorno o fondo, y una configuración de cámara y de luz coherente con el resto del outfit, de forma natural y no forzada.
 
 Reglas de idioma (estrictas):
 - Todo el contenido que generes, incluido el prompt descriptivo de cada pieza para el modelo de difusión (FLUX), debe estar redactado íntegramente en español.`;
@@ -420,6 +429,13 @@ const APP_CONFIG = {
   fal: {
     baseUrl: "https://fal.run/",
     defaultModel: "fal-ai/flux-pro/v1.1",
+    // Modelo FLUX Kontext multi-imagen: genera la foto del modelo a partir de
+    // la prenda original y de las imágenes de cada pieza ya generadas, en
+    // lugar de reinterpretarlas de nuevo solo a partir de texto. Acepta
+    // "image_urls" (URLs o data URIs, máx. 4 por llamada — ver
+    // FAL_KONTEXT_MAX_IMAGES) + "prompt" y "aspect_ratio" en vez de
+    // "image_size" / "num_inference_steps". https://fal.ai/models/fal-ai/flux-pro/kontext/multi
+    multiModel: "fal-ai/flux-pro/kontext/multi",
     inferenceSteps: 10, // Versión alumnos: fijado por el profesor, no configurable
     imageSize: "portrait_4_3",
     safetyTolerance: "3", // Versión alumnos: fijado por el profesor, no configurable
@@ -428,6 +444,15 @@ const APP_CONFIG = {
     queueMaxWaitMs: 120000,
     queuePollIntervalMs: 2000
   }
+};
+
+// Equivalencia entre los valores de "image_size" (modelo de piezas) y los
+// valores de "aspect_ratio" que espera el modelo Kontext multi-imagen (foto
+// del modelo), para que ambos pasos mantengan el mismo encuadre.
+const ASPECT_RATIO_POR_IMAGE_SIZE = {
+  square_hd: "1:1", square: "1:1",
+  portrait_4_3: "3:4", portrait_16_9: "9:16",
+  landscape_4_3: "4:3", landscape_16_9: "16:9"
 };
 
 // --- Modelos por proveedor (texto/visión) ------------------------------------
@@ -786,11 +811,11 @@ function construirMensajeUsuario(numPiezas, incluirModelo){
   return `Analiza la prenda que aparece en la imagen adjunta.
 
 Genera un outfit completo compuesto por ${numPiezas} prenda(s) afines a la prenda de la imagen (sin incluir la propia prenda de la imagen), siguiendo tu rol y reglas del sistema.
-${incluirModelo ? "Incluye además un prompt adicional para una fotografía de un/a modelo vistiendo el outfit completo (la prenda original más las piezas generadas)." : "No generes ningún prompt de modelo: el usuario no lo ha solicitado."}
+${incluirModelo ? "Incluye además un prompt adicional para una fotografía de un/a modelo vistiendo el outfit completo (la prenda original más las piezas generadas). Esa foto se generará por imagen-a-imagen usando como referencia la prenda original y cada pieza ya generada, así que ese prompt no debe volver a describir el aspecto de las prendas: debe dar por sentado que el modelo lleva EXACTAMENTE esas prendas, sin cambios, y centrarse en pose, actitud, encuadre de cuerpo entero, entorno, cámara y luz." : "No generes ningún prompt de modelo: el usuario no lo ha solicitado."}
 
 FORMATO DE RESPUESTA (obligatorio):
 Responde ÚNICAMENTE con un objeto JSON válido, sin texto adicional, sin comentarios y sin bloques de código, con este esquema EXACTO:
-{"pieces": [{"name": "<nombre breve de la pieza, en español>", "prompt": "<prompt descriptivo en español para FLUX>"}]${incluirModelo ? `, "model_shot_prompt": "<prompt en español para la foto del modelo con el outfit completo>"` : ""}}
+{"pieces": [{"name": "<nombre breve de la pieza, en español>", "prompt": "<prompt descriptivo en español para FLUX>"}]${incluirModelo ? `, "model_shot_prompt": "<prompt en español para la foto del modelo con el outfit completo, sin describir de nuevo las prendas: centrado en pose, actitud, encuadre, entorno, cámara y luz>"` : ""}}
 
 Cada "prompt" debe estar íntegramente en español y seguir las instrucciones del sistema (imperfecciones, texturas táctiles, micro-detalles, configuración de cámara, iluminación natural, estilo documental, sin palabras vacías).`;
 }
@@ -922,6 +947,77 @@ async function generarImagenFal(prompt){
   return extraerImagenFal(data);
 }
 
+// Data URI de la foto de la prenda original subida por el usuario, para
+// poder usarla como imagen de referencia en la foto del modelo.
+function imagenOriginalDataUrl(){
+  if (!imagenBase64 || !imagenMediaType) return null;
+  return `data:${imagenMediaType};base64,${imagenBase64}`;
+}
+
+// Genera la foto del modelo con FLUX Kontext multi-imagen (imagen-a-imagen):
+// en vez de partir solo de texto, toma como referencia la prenda original y
+// las imágenes ya generadas de cada pieza, para que el modelo vista
+// EXACTAMENTE esas prendas y complementos en vez de una reinterpretación
+// nueva. "imageUrls" admite tanto URLs remotas (las que devuelve fal.ai al
+// generar cada pieza) como data URIs (la prenda original subida localmente).
+async function generarImagenModeloFal(prompt, imageUrls){
+  const key = inputApiKeyFal.value.trim() || localStorage.getItem(CLAVE_FAL) || "";
+  const headers = {"Authorization": "Key " + key, "Content-Type": "application/json"};
+  const url = APP_CONFIG.fal.baseUrl + APP_CONFIG.fal.multiModel;
+  const body = {
+    prompt,
+    image_urls: imageUrls,
+    num_images: APP_CONFIG.fal.numImages,
+    output_format: APP_CONFIG.fal.outputFormat,
+    safety_tolerance: obtenerSafetyTolerance(),
+    aspect_ratio: ASPECT_RATIO_POR_IMAGE_SIZE[APP_CONFIG.fal.imageSize] || "3:4"
+  };
+  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let data; try { data = await resp.json(); } catch(e){ data = {}; }
+  if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
+  if (!Array.isArray(data.images) && (data.status_url || data.response_url)){
+    data = await esperarColaFal(data, headers);
+  }
+  return extraerImagenFal(data);
+}
+
+// La API de fal.ai para FLUX Kontext multi-imagen exige entre 1 y 4
+// "image_urls" por llamada. Con la prenda original más el número máximo de
+// piezas (NUM_PIEZAS_MAX) puede haber más de 4 imágenes de referencia, así
+// que si no caben en una sola llamada se combinan antes en varias tandas.
+const FAL_KONTEXT_MAX_IMAGES = 4;
+
+// Combina progresivamente varias imágenes de referencia (prenda original +
+// piezas) en un único collage de "producto" (sin modelo) que las reúne
+// todas, respetando el límite de 4 imágenes por llamada: la primera tanda
+// usa hasta 4 imágenes de partida, y cada tanda siguiente añade hasta 3
+// imágenes más al collage ya generado (collage + hasta 3 nuevas = 4). El
+// resultado es una única URL que puede usarse como referencia final.
+async function componerCollageReferencia(imagenes){
+  let collage = null;
+  let pendientes = imagenes.slice();
+  while (pendientes.length > 0){
+    const huecoDisponible = collage ? FAL_KONTEXT_MAX_IMAGES - 1 : FAL_KONTEXT_MAX_IMAGES;
+    const lote = pendientes.splice(0, huecoDisponible);
+    const entrada = collage ? [collage, ...lote] : lote;
+    const prompt = collage
+      ? "Añade estas prendas y complementos adicionales a la composición de producto ya existente (primera imagen), sin modificar en nada las piezas que ya aparecían en ella (mismo color, textura, forma y diseño). Muestra también las piezas nuevas exactamente como aparecen en sus imágenes de referencia. Fotografía de producto tipo flat lay sobre fondo neutro, sin ningún modelo ni persona."
+      : "Combina estas prendas y complementos en una única fotografía de producto tipo flat lay, mostrando cada pieza exactamente como aparece en su imagen de referencia, sin modificar su color, textura, forma ni diseño, ordenadas con claridad sobre un fondo neutro, sin ningún modelo ni persona.";
+    collage = await generarImagenModeloFal(prompt, entrada);
+  }
+  return collage;
+}
+
+// Prepara la lista final de imágenes de referencia para la foto del modelo,
+// respetando el límite de 4 "image_urls" de fal.ai: si hay 4 o menos, se
+// usan directamente; si hay más (p. ej. muchas piezas), se combinan antes en
+// un collage único mediante componerCollageReferencia().
+async function prepararReferenciasModelo(imagenes){
+  if (imagenes.length <= FAL_KONTEXT_MAX_IMAGES) return imagenes;
+  const collage = await componerCollageReferencia(imagenes);
+  return [collage];
+}
+
 async function dataUrlDesdeImagenUrl(url){
   // La imagen de fal.ai se descarga y se convierte a data URL para poder
   // previsualizarla, descargarla como PNG y exportarla a PDF sin depender
@@ -947,7 +1043,7 @@ function pintarImagenPlaceholder(nombre, esModelo){
   resultadoDiv.appendChild(card);
   return card;
 }
-function actualizarTarjetaImagen(card, dataUrl, error){
+function actualizarTarjetaImagen(card, dataUrl, error, esModelo){
   const wrap = card.querySelector(".img-wrap");
   const meta = card.querySelector(".meta-pieza");
   const btn = card.querySelector(".btn-descargar-png");
@@ -957,7 +1053,9 @@ function actualizarTarjetaImagen(card, dataUrl, error){
     return;
   }
   wrap.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(card.dataset.nombre)}">`;
-  meta.textContent = `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
+  meta.textContent = esModelo
+    ? `Formato PNG · fal.ai / FLUX Kontext (multi-imagen, a partir de la prenda original y las piezas generadas) · tolerancia de seguridad ${obtenerSafetyTolerance()}`
+    : `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
   btn.disabled = false;
   btn.addEventListener("click", () => {
     const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + ".png";
@@ -995,21 +1093,51 @@ async function guardarArchivo(nombreArchivo, contenido, tipoMime){
 async function generarTodasLasImagenes(){
   resultadoDiv.innerHTML = "";
   imagenesGeneradas = [];
-  const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false}));
-  if (modeloShotPrompt) tareas.push({nombre: "Modelo con el outfit completo", prompt: modeloShotPrompt, modelo: true});
 
-  for (const tarea of tareas){
-    const card = pintarImagenPlaceholder(tarea.nombre, tarea.modelo);
-    estadoTexto.textContent = `Generando imagen: ${tarea.nombre}…`;
+  // Imágenes de referencia para la foto del modelo: la prenda original (data
+  // URI, subida por el usuario) más la URL remota de cada pieza a medida que
+  // se va generando con éxito. Así la foto del modelo se compone a partir de
+  // estas imágenes reales, en vez de reinterpretarlas de nuevo solo con texto.
+  const imagenesReferenciaModelo = [];
+  const original = imagenOriginalDataUrl();
+  if (original) imagenesReferenciaModelo.push(original);
+
+  for (const pieza of piezasActuales){
+    const card = pintarImagenPlaceholder(pieza.nombre, false);
+    estadoTexto.textContent = `Generando imagen: ${pieza.nombre}…`;
     try {
-      const urlRemota = await generarImagenFal(tarea.prompt);
+      const urlRemota = await generarImagenFal(pieza.prompt);
       const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
-      actualizarTarjetaImagen(card, dataUrl, null);
-      imagenesGeneradas.push({nombre: tarea.nombre, dataUrl});
+      actualizarTarjetaImagen(card, dataUrl, null, false);
+      imagenesGeneradas.push({nombre: pieza.nombre, dataUrl});
+      imagenesReferenciaModelo.push(urlRemota);
     } catch(err){
-      actualizarTarjetaImagen(card, null, err.message || String(err));
+      actualizarTarjetaImagen(card, null, err.message || String(err), false);
     }
   }
+
+  if (modeloShotPrompt){
+    const nombreModelo = "Modelo con el outfit completo";
+    const card = pintarImagenPlaceholder(nombreModelo, true);
+    estadoTexto.textContent = `Generando imagen: ${nombreModelo}…`;
+    try {
+      if (imagenesReferenciaModelo.length === 0){
+        throw new Error("No hay ninguna imagen de referencia disponible (ni la prenda original ni las piezas generadas); no se puede componer la foto del modelo.");
+      }
+      if (imagenesReferenciaModelo.length > FAL_KONTEXT_MAX_IMAGES){
+        estadoTexto.textContent = `Combinando ${imagenesReferenciaModelo.length} prendas de referencia (máx. ${FAL_KONTEXT_MAX_IMAGES} por llamada a fal.ai)…`;
+      }
+      const referencias = await prepararReferenciasModelo(imagenesReferenciaModelo);
+      estadoTexto.textContent = `Generando imagen: ${nombreModelo}…`;
+      const urlRemota = await generarImagenModeloFal(modeloShotPrompt, referencias);
+      const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
+      actualizarTarjetaImagen(card, dataUrl, null, true);
+      imagenesGeneradas.push({nombre: nombreModelo, dataUrl});
+    } catch(err){
+      actualizarTarjetaImagen(card, null, err.message || String(err), true);
+    }
+  }
+
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
   panelImagenes.style.display = "block";
 }
@@ -1113,7 +1241,7 @@ function cargarDesdeHistorial(rec){
   rec.items.forEach(it => {
     const card = pintarImagenPlaceholder(it.nombre, it.esModelo);
     const dataUrl = URL.createObjectURL(it.blob);
-    actualizarTarjetaImagen(card, dataUrl, null);
+    actualizarTarjetaImagen(card, dataUrl, null, it.esModelo);
     imagenesGeneradas.push({nombre: it.nombre, dataUrl});
   });
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
