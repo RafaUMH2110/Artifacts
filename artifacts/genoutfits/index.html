@@ -394,7 +394,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:04
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:16
 </footer>
 
 <script>
@@ -1080,8 +1080,12 @@ function dataUrlABlob(dataUrl){
 }
 async function guardarArchivo(nombreArchivo, contenido, tipoMime){
   // Dentro de un Artifact publicado se usa la capacidad "downloads" del
-  // visor; fuera de ese entorno (fichero abierto directamente, o alojado en
-  // un servidor propio o GitHub Pages) se recurre a la descarga normal.
+  // visor. Fuera de ese entorno (fichero abierto directamente, o alojado en
+  // un servidor propio o GitHub Pages) se intenta primero abrir el selector
+  // nativo "Guardar como" del navegador (File System Access API), para que
+  // el usuario elija dónde guardar el fichero y con qué nombre; si el
+  // navegador no lo admite (o el usuario cancela), se recurre a la descarga
+  // normal del navegador.
   let downloads = null;
   if (window.claude && window.claude.use){
     try { downloads = await window.claude.use("downloads"); } catch(e){ downloads = null; }
@@ -1091,6 +1095,28 @@ async function guardarArchivo(nombreArchivo, contenido, tipoMime){
     try { await downloads.save({filename: nombreArchivo, data: datos}); }
     catch(err){ if (!err || err.code !== "declined") alert(`No se ha podido guardar "${nombreArchivo}".`); }
     return;
+  }
+  if (window.showSaveFilePicker){
+    try {
+      const extension = (/\.([a-z0-9]+)$/i.exec(nombreArchivo) || [,""])[1].toLowerCase();
+      const handle = await window.showSaveFilePicker({
+        suggestedName: nombreArchivo,
+        types: [{
+          description: tipoMime,
+          accept: { [tipoMime]: extension ? ["." + extension] : [] }
+        }]
+      });
+      const writable = await handle.createWritable();
+      await writable.write(datos);
+      await writable.close();
+      return;
+    } catch(err){
+      // AbortError: el usuario ha cancelado el diálogo a propósito, no es
+      // un error que deba mostrarse ni dar lugar a una descarga de más.
+      if (err && err.name === "AbortError") return;
+      // Cualquier otro fallo (navegador que anuncia la API pero la bloquea
+      // en este contexto, por ejemplo) cae a la descarga normal de abajo.
+    }
   }
   const a = document.createElement("a");
   a.href = URL.createObjectURL(datos);
