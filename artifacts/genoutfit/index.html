@@ -290,7 +290,7 @@
         <select id="sel-modelo"></select>
       </div>
       <div class="field">
-        <label for="input-max-tokens">Nº máx. tokens de salida</label>
+        <label for="input-max-tokens">Nº máx. tokens de salida (Recomendado: 4096)</label>
         <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="4096">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
@@ -394,12 +394,19 @@
     <h2 id="h-resultado">3. Prompts generados — revisa y edita antes de continuar</h2>
     <div id="aviso-truncado" style="display:none;"></div>
     <div id="lista-prompts"></div>
-    <button type="button" class="primario grande" id="btn-continuar" disabled>Continuar: generar imágenes con FLUX</button>
+    <div class="botones">
+      <button type="button" class="primario grande" id="btn-continuar" disabled>Continuar: generar imágenes con FLUX</button>
+      <button type="button" class="secundario" id="btn-descargar-prompts" disabled>Descargar prompts (TXT)</button>
+    </div>
   </section>
 
   <section class="panel" id="panel-imagenes" style="display:none;" aria-labelledby="h-imagenes">
     <h2 id="h-imagenes">4. Resultado — outfit generado</h2>
     <div id="resultado"></div>
+    <div class="field">
+      <label for="input-nombre-pdf">Nombre del PDF a exportar</label>
+      <input type="text" id="input-nombre-pdf" value="genoutfit_outfit.pdf">
+    </div>
     <div class="botones">
       <button type="button" class="primario" id="btn-exportar-pdf" disabled>Exportar todas en PDF</button>
     </div>
@@ -420,7 +427,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:16
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:47
 </footer>
 
 <script>
@@ -565,8 +572,10 @@ const panelResultado = $("panel-resultado");
 const avisoTruncadoDiv = $("aviso-truncado");
 const listaPrompts = $("lista-prompts");
 const btnContinuar = $("btn-continuar");
+const btnDescargarPrompts = $("btn-descargar-prompts");
 const panelImagenes = $("panel-imagenes");
 const resultadoDiv = $("resultado");
+const inputNombrePdf = $("input-nombre-pdf");
 const btnExportarPdf = $("btn-exportar-pdf");
 const contadorCoste = $("contador-coste");
 
@@ -607,7 +616,7 @@ function repintarModelos(){
   selModelo.innerHTML = "";
   cfg.modelos.forEach(m => {
     const op = document.createElement("option");
-    op.value = m; op.textContent = m;
+    op.value = m; op.textContent = m + (m === cfg.porDefecto ? " (Recomendado)" : "");
     if (m === cfg.porDefecto) op.selected = true;
     selModelo.appendChild(op);
   });
@@ -930,6 +939,7 @@ function pintarPrompts(){
   }
   panelResultado.style.display = "block";
   btnContinuar.disabled = false;
+  btnDescargarPrompts.disabled = false;
 }
 function recogerPromptsEditados(){
   listaPrompts.querySelectorAll("textarea").forEach(ta => {
@@ -937,6 +947,19 @@ function recogerPromptsEditados(){
     else if (ta.dataset.tipo === "modelo") modeloShotPrompt = ta.value;
   });
 }
+// Descarga todos los prompts (piezas + modelo, si lo hay) en un único TXT,
+// cada uno encabezado por el título de su prenda, para poder revisarlos o
+// reutilizarlos fuera de la app. Recoge primero cualquier edición pendiente
+// en los textarea, para que el TXT refleje siempre la última versión.
+function descargarPromptsTxt(){
+  recogerPromptsEditados();
+  const bloques = piezasActuales.map(pieza => `### ${pieza.nombre}\n${pieza.prompt}`);
+  if (modeloShotPrompt !== null){
+    bloques.push(`### Modelo con el outfit completo\n${modeloShotPrompt}`);
+  }
+  guardarArchivo("genoutfit_prompts.txt", bloques.join("\n\n"), "text/plain");
+}
+btnDescargarPrompts.addEventListener("click", descargarPromptsTxt);
 function escapeHTML(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
@@ -1234,7 +1257,17 @@ async function exportarPdf(){
     if (h > altoMax){ h = altoMax; w = (propiedades.width / propiedades.height) * h; }
     doc.addImage(img.dataUrl, "PNG", margen, 30, w, h);
   });
-  await guardarArchivo("genoutfit_outfit.pdf", doc.output("blob"), "application/pdf");
+  await guardarArchivo(nombrePdfSaneado(), doc.output("blob"), "application/pdf");
+}
+// Permite al usuario especificar el nombre del PDF a exportar (campo
+// "input-nombre-pdf"); se sanea para que sea un nombre de fichero válido y
+// siempre termine en ".pdf", y se usa un nombre por defecto si se deja vacío.
+function nombrePdfSaneado(){
+  let nombre = (inputNombrePdf.value || "").trim();
+  if (!nombre) nombre = "genoutfit_outfit.pdf";
+  nombre = nombre.replace(/[\\/:*?"<>|]/g, "_");
+  if (!/\.pdf$/i.test(nombre)) nombre += ".pdf";
+  return nombre;
 }
 
 /* ============================================================================
@@ -1323,9 +1356,14 @@ function cargarDesdeHistorial(rec){
     const dataUrl = URL.createObjectURL(it.blob);
     actualizarTarjetaImagen(card, dataUrl, null, it.esModelo);
     if (it.esOriginal) card.querySelector(".meta-pieza").textContent = "Imagen original subida por el usuario";
+    // Las imágenes recuperadas del historial usan URLs "blob:" (no "data:"),
+    // que ni la descarga de PNG ni jsPDF saben procesar: se deshabilitan sus
+    // botones de descarga para no ofrecer una acción que fallaría.
+    const btnPng = card.querySelector(".btn-descargar-png");
+    if (btnPng) btnPng.disabled = true;
     imagenesGeneradas.push({nombre: it.nombre, dataUrl, esOriginal: !!it.esOriginal});
   });
-  btnExportarPdf.disabled = imagenesGeneradas.length === 0;
+  btnExportarPdf.disabled = true;
   panelImagenes.style.display = "block";
   panelImagenes.scrollIntoView({behavior: "smooth", block: "start"});
 }
