@@ -293,8 +293,12 @@
         <select id="sel-modelo"></select>
       </div>
       <div class="field">
-        <label for="input-max-tokens">Nº máx. tokens de salida (Recomendado: 4096)</label>
-        <input type="number" id="input-max-tokens" min="256" max="8192" step="1" value="4096">
+        <label for="input-max-tokens">Nº máx. tokens de salida</label>
+        <select id="input-max-tokens">
+          <option value="4096">4096</option>
+          <option value="8192" selected>8192 (Recomendado)</option>
+          <option value="9216">9216</option>
+        </select>
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -390,6 +394,7 @@
   <section class="panel" aria-labelledby="h-historial">
     <h2 id="h-historial">Historial de generaciones</h2>
     <p class="hint" style="margin-top:0">Cada outfit generado se guarda automáticamente en este navegador (IndexedDB), con sus prompts y las imágenes generadas. No incluye API keys.</p>
+    <p class="hint"><strong>Aviso:</strong> al pulsar "Ver / recuperar" en cualquier generación, el panel de resultado se sustituye por esa generación y sus imágenes ya no se pueden descargar como PNG ni exportar a PDF — tampoco las que tengas ahora mismo en pantalla sin descargar, aunque sean las últimas generadas. Descarga antes lo que necesites.</p>
     <div class="hist-toolbar">
       <span class="hist-contador" id="historial-contador" aria-live="polite">0 generaciones</span>
       <button type="button" class="peligro" id="historial-vaciar" disabled>Vaciar historial</button>
@@ -401,7 +406,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 06:47
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 07:01
 </footer>
 
 <script>
@@ -572,16 +577,31 @@ function storageRemove(k){ try { localStorage.removeItem(k); } catch(e){} }
 function proveedorActivo(){ return selProveedor.value; }
 function modeloActivo(){ return selModelo.value; } // Versión alumnos: catálogo cerrado, sin opción "Otro…"
 
+// El nº máx. de tokens de salida solo admite estos 3 valores fijos; 8192 es
+// el recomendado (y el valor por defecto) para el prompt de esta app. En
+// esta versión alumnos, además, TOPE_TOKENS_ALUMNOS deja fuera el valor
+// 9216 para cualquier modelo (ver limiteTokensModelo).
+const MAX_TOKENS_RECOMENDADO = 8192;
+
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
-  if (!valor || valor < 256) return limite;
+  if (!valor) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
-  inputMaxTokens.max = String(limite);
-  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
+  // Deshabilita las opciones que superen el límite del modelo activo (en
+  // esta versión, siempre al menos el valor 9216, por el tope del profesor);
+  // si el valor seleccionado deja de estar permitido, se cae al permitido
+  // más alto disponible.
+  Array.from(inputMaxTokens.options).forEach(op => {
+    op.disabled = parseInt(op.value, 10) > limite;
+  });
+  if (inputMaxTokens.options[inputMaxTokens.selectedIndex].disabled){
+    const permitidos = Array.from(inputMaxTokens.options).filter(op => !op.disabled);
+    inputMaxTokens.value = permitidos.length ? permitidos[permitidos.length - 1].value : inputMaxTokens.options[0].value;
+  }
   limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
 }
 function repintarModelos(){
@@ -866,7 +886,7 @@ async function analizarYGenerarPrompts(){
   }
   if (!esquemaValido(datos)){
     if (resp.truncado){
-      throw new Error("La respuesta se ha cortado por alcanzar el límite de tokens de salida antes de completar el JSON. Sube el valor de \"Nº máx. tokens de salida\" (por ejemplo a 16000) y vuelve a generar.");
+      throw new Error("La respuesta se ha cortado por alcanzar el límite de tokens de salida antes de completar el JSON. Sube el valor de \"Nº máx. tokens de salida\" (al máximo disponible en esta versión) y vuelve a generar.");
     }
     const muestra = (resp.texto || "").trim().slice(0, 500) || "(respuesta vacía)";
     throw new Error(`La IA no ha devuelto un JSON con el formato esperado tras dos intentos. Esto es lo que ha respondido el modelo (primeros 500 caracteres), revísalo para ver si lo explica:\n\n${muestra}`);
@@ -1306,14 +1326,19 @@ async function eliminarDeHistorial(id){
 }
 function cargarDesdeHistorial(rec){
   // Vuelca las imágenes y prompts guardados en el panel de resultado, sin
-  // volver a llamar a ninguna API: permite revisar, descargar o exportar a
-  // PDF una generación anterior.
+  // volver a llamar a ninguna API: permite revisar una generación anterior
+  // (y continuar/editar sus prompts), aunque no descargar sus imágenes ni
+  // exportarlas a PDF — ver el aviso que se pinta más abajo.
   piezasActuales = rec.items.filter(it => !it.esModelo && !it.esOriginal).map(it => ({nombre: it.nombre, prompt: it.prompt}));
   modeloShotPrompt = rec.incluirModelo ? (rec.items.find(it => it.esModelo)?.prompt || null) : null;
   pintarPrompts();
 
   resultadoDiv.innerHTML = "";
   imagenesGeneradas = [];
+  const avisoHist = document.createElement("p");
+  avisoHist.className = "hint";
+  avisoHist.textContent = "Estás viendo una generación recuperada del historial: estas imágenes no se pueden descargar como PNG ni exportar a PDF (vuelve a generarlas si las necesitas en esos formatos).";
+  resultadoDiv.appendChild(avisoHist);
   rec.items.forEach(it => {
     const card = pintarImagenPlaceholder(it.nombre, it.esModelo);
     const dataUrl = URL.createObjectURL(it.blob);
@@ -1363,7 +1388,10 @@ async function renderHistorial(){
         <button type="button" class="secundario btn-cargar-hist">Ver / recuperar</button>
         <button type="button" class="peligro btn-eliminar-hist">Eliminar</button>
       </div>`;
-    div.querySelector(".btn-cargar-hist").addEventListener("click", () => cargarDesdeHistorial(rec));
+    div.querySelector(".btn-cargar-hist").addEventListener("click", () => {
+      const aviso = "Al recuperar esta generación, sus imágenes no se podrán descargar como PNG ni exportar a PDF — tampoco las que tengas ahora mismo en pantalla sin descargar, aunque sean las últimas generadas. ¿Continuar?";
+      if (confirm(aviso)) cargarDesdeHistorial(rec);
+    });
     div.querySelector(".btn-eliminar-hist").addEventListener("click", () => {
       if (confirm("¿Eliminar esta generación del historial?")) eliminarDeHistorial(rec.id);
     });
