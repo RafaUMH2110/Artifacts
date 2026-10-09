@@ -5,9 +5,10 @@
   GenOutFitS — generador de outfits completos a partir de una prenda, con IA (versión alumnos).
 
   Versión para alumnos de GenOutFit: catálogo de modelos de Anthropic reducido
-  (solo Sonnet 4.5 y Haiku 4.5), máximo de tokens de salida fijado a 8192,
-  máximo de 3 piezas por outfit, y pasos de inferencia (10) y tolerancia del
-  filtro de seguridad (3) de FLUX fijados por el profesor.
+  (solo Sonnet 4.5 y Haiku 4.5), máximo de tokens de salida limitado a 9216
+  solo con Anthropic, máximo de 3 piezas por outfit, pasos de inferencia de
+  FLUX elegibles entre 5 (por defecto) y 10, y tolerancia del filtro de
+  seguridad (3) de FLUX fijada por el profesor.
 
   INSTRUCCIONES PARA CUALQUIER PROFESOR QUE QUIERA ADAPTAR O ALOJAR ESTA APP
   ============================================================================
@@ -268,7 +269,7 @@
   <details class="panel-guia">
     <summary>&#191;Cómo funciona GenOutFitS?</summary>
     <p><strong>GenOutFitS</strong> es la versión para alumnos de GenOutFit: una aplicación de un solo archivo HTML que, a partir de la fotografía de una prenda, usa IA para identificar sus características y proponer un outfit completo de prendas afines, y genera una imagen de cada pieza con FLUX (fal.ai).</p>
-    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida está limitado a 9216 solo con Anthropic (recomendado: 8192); con OpenAI y Gemini no se fuerza ningún tope y solo se muestra como información el máximo de ese modelo, el outfit puede tener como máximo 3 piezas además de la prenda original, y los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados y no son configurables.</p>
+    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida está limitado a 9216 solo con Anthropic (recomendado: 8192); con OpenAI y Gemini no se fuerza ningún tope y solo se muestra como información el máximo de ese modelo, el outfit puede tener como máximo 3 piezas además de la prenda original, los pasos de inferencia de FLUX se eligen entre 5 (por defecto) y 10, y la tolerancia del filtro de seguridad (3) de FLUX está fijada y no es configurable.</p>
     <ol>
       <li>Subes (o arrastras) la foto de una prenda.</li>
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
@@ -339,10 +340,20 @@
       </div>
     </div>
 
-    <div class="field">
-      <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 3)</label>
-      <input type="number" id="input-num-piezas" min="1" max="3" step="1" value="2">
-      <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido. Los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados por el profesor en esta versión. El máximo de piezas es 3 para que, junto a la prenda original, nunca se superen las 4 imágenes de referencia que fal.ai admite por llamada: así la foto del modelo se genera siempre en una sola llamada, sin pasos intermedios que puedan perder fidelidad.</p>
+    <div class="grid2">
+      <div class="field">
+        <label for="input-num-piezas">Nº de piezas del outfit (sin contar la prenda original, máximo 3)</label>
+        <input type="number" id="input-num-piezas" min="1" max="3" step="1" value="2">
+        <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido. El máximo de piezas es 3 para que, junto a la prenda original, nunca se superen las 4 imágenes de referencia que fal.ai admite por llamada: así la foto del modelo se genera siempre en una sola llamada, sin pasos intermedios que puedan perder fidelidad.</p>
+      </div>
+      <div class="field">
+        <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
+        <select id="sel-pasos-inferencia">
+          <option value="5" selected>5 — por defecto</option>
+          <option value="10">10 — más detalle</option>
+        </select>
+        <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai. La tolerancia del filtro de seguridad (3) de FLUX sigue fijada por el profesor en esta versión.</p>
+      </div>
     </div>
     <div class="field">
       <label class="pick-row" for="chk-incluir-modelo">
@@ -410,7 +421,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 00:55
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:34
 </footer>
 
 <script>
@@ -461,7 +472,8 @@ const APP_CONFIG = {
     // prioriza seguir fielmente el prompt y las imágenes de referencia sobre
     // la creatividad, para que el modelo vista las prendas tal cual son.
     guidanceScaleModelo: 4.5,
-    inferenceSteps: 10, // Versión alumnos: fijado por el profesor, no configurable
+    inferenceStepsDefecto: 5, // Versión alumnos: solo 5 o 10 pasos, elegibles con sel-pasos-inferencia
+    inferenceStepsOpciones: [5, 10],
     imageSize: "portrait_4_3",
     safetyTolerance: "3", // Versión alumnos: fijado por el profesor, no configurable
     outputFormat: "png",
@@ -552,6 +564,7 @@ const inputImagen = $("input-imagen");
 const previewWrap = $("preview-wrap");
 const previewImg = $("preview-img");
 const inputNumPiezas = $("input-num-piezas");
+const selPasosInferencia = $("sel-pasos-inferencia");
 const chkIncluirModelo = $("chk-incluir-modelo");
 const inputSystemPrompt = $("input-system-prompt");
 const btnGenerar = $("btn-generar");
@@ -1100,7 +1113,8 @@ async function esperarColaFal(encolado, headers){
   throw new Error("Tiempo de espera agotado mientras fal.ai procesaba la imagen en cola.");
 }
 function obtenerPasosInferencia(){
-  return APP_CONFIG.fal.inferenceSteps; // Versión alumnos: fijado, no configurable
+  const v = parseInt(selPasosInferencia.value, 10);
+  return APP_CONFIG.fal.inferenceStepsOpciones.includes(v) ? v : APP_CONFIG.fal.inferenceStepsDefecto;
 }
 function obtenerSafetyTolerance(){
   return APP_CONFIG.fal.safetyTolerance; // Versión alumnos: fijado, no configurable
