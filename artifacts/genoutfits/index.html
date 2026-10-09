@@ -268,7 +268,7 @@
   <details class="panel-guia">
     <summary>&#191;Cómo funciona GenOutFitS?</summary>
     <p><strong>GenOutFitS</strong> es la versión para alumnos de GenOutFit: una aplicación de un solo archivo HTML que, a partir de la fotografía de una prenda, usa IA para identificar sus características y proponer un outfit completo de prendas afines, y genera una imagen de cada pieza con FLUX (fal.ai).</p>
-    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida es 8192, el outfit puede tener como máximo 3 piezas además de la prenda original, y los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados y no son configurables.</p>
+    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida es 8192 (con Anthropic y Gemini; con OpenAI no se fuerza ningún tope, solo se muestra como información el máximo de ese modelo), el outfit puede tener como máximo 3 piezas además de la prenda original, y los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados y no son configurables.</p>
     <ol>
       <li>Subes (o arrastras) la foto de una prenda.</li>
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
@@ -414,7 +414,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 16:05
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 09/10/2026
 </footer>
 
 <script>
@@ -601,22 +601,32 @@ const MAX_TOKENS_RECOMENDADO = 8192;
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
+  // A petición del profesor: con OpenAI no se fuerza ningún tope de tokens de
+  // salida, se deja el valor elegido tal cual (el límite del modelo se
+  // muestra solo como información, ver ajustarLimiteTokens). Con Anthropic y
+  // Gemini se mantiene el tope de siempre.
+  if (proveedorActivo() === "openai") return valor || MAX_TOKENS_RECOMENDADO;
   if (!valor) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
+  const esOpenAI = proveedorActivo() === "openai";
   // Deshabilita las opciones que superen el límite del modelo activo; si el
   // valor seleccionado deja de estar permitido, se cae al permitido más alto
-  // disponible.
+  // disponible. Con OpenAI no se deshabilita ninguna opción (a petición del
+  // profesor, no se fuerza ningún tope para este proveedor): el límite del
+  // modelo se muestra solo como información, más abajo.
   Array.from(inputMaxTokens.options).forEach(op => {
-    op.disabled = parseInt(op.value, 10) > limite;
+    op.disabled = !esOpenAI && parseInt(op.value, 10) > limite;
   });
-  if (inputMaxTokens.options[inputMaxTokens.selectedIndex].disabled){
+  if (!esOpenAI && inputMaxTokens.options[inputMaxTokens.selectedIndex].disabled){
     const permitidos = Array.from(inputMaxTokens.options).filter(op => !op.disabled);
     inputMaxTokens.value = permitidos.length ? permitidos[permitidos.length - 1].value : inputMaxTokens.options[0].value;
   }
-  limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+  limiteTokensModeloDiv.textContent = esOpenAI
+    ? `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con OpenAI la aplicación no fuerza este tope: es solo informativo, puedes elegir cualquiera de las opciones).`
+    : `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
 }
 function repintarModelos(){
   const cfg = MODELOS_POR_PROVEEDOR[proveedorActivo()];
