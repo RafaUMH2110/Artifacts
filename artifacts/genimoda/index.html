@@ -175,7 +175,7 @@
     <p>La imagen resultante depende de:</p>
     <ul>
       <li>La idea inicial.</li>
-      <li>Si se mejora el prompt: las instrucciones del sistema, el proveedor y modelo de IA elegidos (Anthropic/Claude u OpenAI/GPT) y el m&#225;ximo de tokens (entre 1 y 8192).</li>
+      <li>Si se mejora el prompt: las instrucciones del sistema, el proveedor y modelo de IA elegidos (Anthropic/Claude u OpenAI/GPT) y el m&#225;ximo de tokens (entre 1 y 8192 con Anthropic; con OpenAI, cualquier entero positivo, sin tope forzado por la aplicaci&#243;n).</li>
       <li>El modelo de generaci&#243;n de imagen.</li>
       <li>El n&#250;mero de pasos de inferencia (10 o 20 en esta versi&#243;n).</li>
     </ul>
@@ -225,7 +225,7 @@
         <div class="field claude-only">
           <label for="maxTokens">M&#225;ximo de tokens</label>
           <input type="number" id="maxTokens" min="1" max="8192" step="1" inputmode="numeric" value="4096">
-          <p class="hint">L&#237;mite de longitud de la respuesta del modelo de texto (<code>max_tokens</code>). Entre 1 y 8192; por defecto 4096. Solo se usa si el prompt se mejora con IA.</p>
+          <p class="hint" id="maxTokensHint">L&#237;mite de longitud de la respuesta del modelo de texto (<code>max_tokens</code>). Entre 1 y 8192; por defecto 4096. Solo se usa si el prompt se mejora con IA.</p>
         </div>
       </div>
       <div>
@@ -340,7 +340,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 08/10/2026 14:40</p>
+    <p>&#218;ltima modificaci&#243;n: 09/10/2026</p>
   </footer>
 </div>
 
@@ -387,6 +387,16 @@ const OPENAI_MODELS = [
   { id: "gpt-6.1-sol", label: "GPT-6.1 Sol (equilibrado, recomendado)" },
   { id: "gpt-6-luna",  label: "GPT-6 Luna (r\u00e1pido y econ\u00f3mico)" }
 ];
+
+/* M\u00e1ximo de tokens de salida DOCUMENTADO de cada modelo de OpenAI.
+   A petici\u00f3n del profesor, con OpenAI la aplicaci\u00f3n NO usa esta tabla para
+   limitar lo que el usuario puede escribir en "M\u00e1ximo de tokens": solo se
+   muestra como informaci\u00f3n (ver updateMaxTokensUI). Con Anthropic se sigue
+   aplicando el tope de APP_CONFIG.anthropic.maxAllowedTokens, sin cambios. */
+const OPENAI_TOKEN_LIMITS = {
+  "gpt-6.1-sol": 32768,
+  "gpt-6-luna": 16384
+};
 
 /* Proveedores de IA disponibles para la mejora del prompt (paso de texto).
    Cada proveedor define su lista cerrada de modelos, su modelo por defecto
@@ -626,11 +636,36 @@ function refreshImageSizes(preferred) {
 /* ==========================================================================
    VALIDACI\u00d3N DEL FORMULARIO
    ========================================================================== */
-/* Devuelve el m\u00e1ximo de tokens como entero positivo, o NaN si el campo no es v\u00e1lido. */
+/* Devuelve el m\u00e1ximo de tokens como entero positivo, o NaN si el campo no es v\u00e1lido.
+   A petici\u00f3n del profesor, con OpenAI no se aplica ning\u00fan tope superior (solo se
+   exige un entero positivo); con Anthropic se mantiene el tope de siempre
+   (APP_CONFIG.anthropic.maxAllowedTokens). */
 function getMaxTokens() {
   const raw = $("maxTokens").value.trim();
   const n = Number(raw);
-  return raw !== "" && Number.isInteger(n) && n >= 1 && n <= APP_CONFIG.anthropic.maxAllowedTokens ? n : NaN;
+  if (raw === "" || !Number.isInteger(n) || n < 1) return NaN;
+  if (getTextProvider() === "openai") return n;
+  return n <= APP_CONFIG.anthropic.maxAllowedTokens ? n : NaN;
+}
+
+/* Actualiza el atributo "max" y el texto informativo del campo "M\u00e1ximo de
+   tokens" seg\u00fan el proveedor activo. Con OpenAI se quita el tope del campo
+   y el texto solo informa del m\u00e1ximo documentado del modelo elegido (sin
+   forzarlo); con Anthropic se restaura el tope habitual. */
+function updateMaxTokensUI() {
+  const provider = getTextProvider();
+  const input = $("maxTokens");
+  const hint = $("maxTokensHint");
+  if (provider === "openai") {
+    input.removeAttribute("max");
+    const limite = OPENAI_TOKEN_LIMITS[getActiveModel("text")];
+    hint.textContent = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens)." +
+      (limite ? ` M\u00e1ximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens.` : "") +
+      " Con OpenAI la aplicaci\u00f3n no fuerza ning\u00fan tope: es solo informaci\u00f3n. Solo se usa si el prompt se mejora con IA.";
+  } else {
+    input.max = String(APP_CONFIG.anthropic.maxAllowedTokens);
+    hint.textContent = `L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens). Entre 1 y ${APP_CONFIG.anthropic.maxAllowedTokens}; por defecto ${APP_CONFIG.anthropic.maxTokens}. Solo se usa si el prompt se mejora con IA.`;
+  }
 }
 
 function wantsImprove() { return $("improvePrompt").checked; }
@@ -664,7 +699,7 @@ function validateForm() {
     if (!hasFalKey) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
     if (!modelsOk) missing.push("los identificadores de modelo");
-    if (!tokensOk) missing.push(`un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
+    if (!tokensOk) missing.push(provider === "openai" ? "un m\u00e1ximo de tokens v\u00e1lido (entero positivo)" : `un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
   // La estimaci\u00f3n de tokens de entrada solo existe para Anthropic (endpoint gratuito count_tokens).
@@ -1591,8 +1626,10 @@ function loadSettings() {
   $("improvePrompt").checked = savedImprove === "" ? true : savedImprove === "1";
 
   const savedTokens = Number(storageGet(STORAGE.maxTokens));
-  const tokensValid = Number.isInteger(savedTokens) && savedTokens >= 1 && savedTokens <= APP_CONFIG.anthropic.maxAllowedTokens;
+  const tokensValid = Number.isInteger(savedTokens) && savedTokens >= 1 &&
+    (getTextProvider() === "openai" || savedTokens <= APP_CONFIG.anthropic.maxAllowedTokens);
   $("maxTokens").value = String(tokensValid ? savedTokens : APP_CONFIG.anthropic.maxTokens);
+  updateMaxTokensUI();
 
   $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT;
   refreshKeyBadges();
@@ -1627,10 +1664,11 @@ function initializeApp() {
   $("textProvider").addEventListener("change", () => {
     fillTextModels();
     refreshKeyBadges();
+    updateMaxTokensUI();
     persistPreferences();
     validateForm();
   });
-  $("textModel").addEventListener("change", () => { persistPreferences(); validateForm(); });
+  $("textModel").addEventListener("change", () => { updateMaxTokensUI(); persistPreferences(); validateForm(); });
   $("falModel").addEventListener("change", () => { refreshImageSizes(); persistPreferences(); validateForm(); });
   $("steps").addEventListener("change", persistPreferences);
   $("imageSize").addEventListener("change", persistPreferences);
