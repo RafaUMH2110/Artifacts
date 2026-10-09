@@ -177,7 +177,7 @@
       <li>La idea inicial.</li>
       <li>Si se mejora el prompt: las instrucciones del sistema, el proveedor y modelo de IA elegidos (Anthropic/Claude, OpenAI/GPT o Google/Gemini) y el m&#225;ximo de tokens (entre 1 y 8192 solo con Anthropic; con OpenAI y Gemini, cualquier entero positivo, sin tope forzado por la aplicaci&#243;n).</li>
       <li>El modelo de generaci&#243;n de imagen.</li>
-      <li>El n&#250;mero de pasos de inferencia (5 o 10 en esta versi&#243;n).</li>
+      <li>El n&#250;mero de pasos de inferencia (1, 2, 3 o 4 en esta versi&#243;n; 2 por defecto).</li>
     </ul>
     <p>Prueba a cambiar solo una de estas variables cada vez para observar su efecto sobre el resultado. El historial guarda cada generaci&#243;n con su idea, su prompt y sus par&#225;metros, para que puedas compararlas entre s&#237;.</p>
   </details>
@@ -341,7 +341,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:32</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:49</p>
   </footer>
 </div>
 
@@ -367,7 +367,7 @@ const APP_CONFIG = {
   fal: {
     baseUrl: "https://fal.run/",                  // El endpoint final es baseUrl + identificador del modelo
     defaultModel: "fal-ai/flux-pro/v1.1",
-    defaultInferenceSteps: 5,
+    defaultInferenceSteps: 2,
     defaultImageSize: "portrait_4_3",
     fixedSafetyTolerance: "3",                    // Fija en esta versi\u00f3n (no editable por el usuario)
     outputFormat: "png",
@@ -456,7 +456,7 @@ const FAL_MODELS = {
 /* Par\u00e1metros enviados a un modelo introducido manualmente ("Otro\u2026"). */
 const CUSTOM_FAL_PARAMS = ["prompt", "num_inference_steps", "num_images", "output_format", "image_size", "safety_tolerance"];
 const CUSTOM_FAL_IMAGE_SIZES = FAL_MODELS[APP_CONFIG.fal.defaultModel].imageSizes;
-const INFERENCE_STEP_OPTIONS = [5, 10];   // Versi\u00f3n alumnos: solo 5 o 10 pasos
+const INFERENCE_STEP_OPTIONS = [1, 2, 3, 4];   // Versi\u00f3n alumnos: solo 1, 2, 3 o 4 pasos
 
 
 /* Historial local de generaciones (IndexedDB, solo en este navegador). */

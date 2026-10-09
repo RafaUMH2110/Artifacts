@@ -7,7 +7,7 @@
   Versión para alumnos de GenOutFit: catálogo de modelos de Anthropic reducido
   (solo Sonnet 4.5 y Haiku 4.5), máximo de tokens de salida limitado a 9216
   solo con Anthropic, máximo de 3 piezas por outfit, pasos de inferencia de
-  FLUX elegibles entre 5 (por defecto) y 10, y tolerancia del filtro de
+  FLUX elegibles entre 1, 2, 3 y 4 (2 por defecto), y tolerancia del filtro de
   seguridad (3) de FLUX fijada por el profesor.
 
   INSTRUCCIONES PARA CUALQUIER PROFESOR QUE QUIERA ADAPTAR O ALOJAR ESTA APP
@@ -269,7 +269,7 @@
   <details class="panel-guia">
     <summary>&#191;Cómo funciona GenOutFitS?</summary>
     <p><strong>GenOutFitS</strong> es la versión para alumnos de GenOutFit: una aplicación de un solo archivo HTML que, a partir de la fotografía de una prenda, usa IA para identificar sus características y proponer un outfit completo de prendas afines, y genera una imagen de cada pieza con FLUX (fal.ai).</p>
-    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida está limitado a 9216 solo con Anthropic (recomendado: 8192); con OpenAI y Gemini no se fuerza ningún tope y solo se muestra como información el máximo de ese modelo, el outfit puede tener como máximo 3 piezas además de la prenda original, los pasos de inferencia de FLUX se eligen entre 5 (por defecto) y 10, y la tolerancia del filtro de seguridad (3) de FLUX está fijada y no es configurable.</p>
+    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida está limitado a 9216 solo con Anthropic (recomendado: 8192); con OpenAI y Gemini no se fuerza ningún tope y solo se muestra como información el máximo de ese modelo, el outfit puede tener como máximo 3 piezas además de la prenda original, los pasos de inferencia de FLUX se eligen entre 1, 2, 3 y 4 (2 por defecto), y la tolerancia del filtro de seguridad (3) de FLUX está fijada y no es configurable.</p>
     <ol>
       <li>Subes (o arrastras) la foto de una prenda.</li>
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
@@ -349,8 +349,10 @@
       <div class="field">
         <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
         <select id="sel-pasos-inferencia">
-          <option value="5" selected>5 — por defecto</option>
-          <option value="10">10 — más detalle</option>
+          <option value="1">1</option>
+          <option value="2" selected>2 — por defecto</option>
+          <option value="3">3</option>
+          <option value="4">4 — más detalle</option>
         </select>
         <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai. La tolerancia del filtro de seguridad (3) de FLUX sigue fijada por el profesor en esta versión.</p>
       </div>
@@ -421,7 +423,7 @@
 
 <footer>
   GenOutFitS (versión alumnos) &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:34
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:49
 </footer>
 
 <script>
@@ -472,8 +474,8 @@ const APP_CONFIG = {
     // prioriza seguir fielmente el prompt y las imágenes de referencia sobre
     // la creatividad, para que el modelo vista las prendas tal cual son.
     guidanceScaleModelo: 4.5,
-    inferenceStepsDefecto: 5, // Versión alumnos: solo 5 o 10 pasos, elegibles con sel-pasos-inferencia
-    inferenceStepsOpciones: [5, 10],
+    inferenceStepsDefecto: 2, // Versión alumnos: solo 1, 2, 3 o 4 pasos, elegibles con sel-pasos-inferencia
+    inferenceStepsOpciones: [1, 2, 3, 4],
     imageSize: "portrait_4_3",
     safetyTolerance: "3", // Versión alumnos: fijado por el profesor, no configurable
     outputFormat: "png",
