@@ -355,7 +355,7 @@
 
 <footer>
   GenPatModa &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 08/10/2026 14:13
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 09/10/2026
 </footer>
 
 
@@ -567,12 +567,25 @@ function proveedorActivo(){ return selProveedor.value; }
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
+  // A petición del profesor, con OpenAI no se fuerza ningún tope: se usa el
+  // valor tal cual (el límite del modelo se muestra solo como información,
+  // ver ajustarLimiteTokens). Con Anthropic y Gemini se mantiene el tope de
+  // siempre.
+  if (proveedorActivo() === "openai") return valor && valor >= 256 ? valor : 8192;
   if (!valor || valor < 256) return Math.min(8192, limite);
   return Math.min(valor, limite);
 }
 
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
+  const esOpenAI = proveedorActivo() === "openai";
+  // Con OpenAI no se fija el atributo "max" ni se recorta el valor
+  // introducido: el límite del modelo se muestra solo como información.
+  if (esOpenAI){
+    inputMaxTokens.removeAttribute("max");
+    limiteTokensModeloDiv.textContent = `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con OpenAI la aplicación no fuerza este tope: es solo informativo).`;
+    return;
+  }
   inputMaxTokens.max = String(limite);
   if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
   limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
