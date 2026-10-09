@@ -402,10 +402,10 @@ const CLAUDE_MODELS = [
    documentaci\u00f3n oficial de OpenAI y usa "Otro\u2026" con el identificador
    exacto si el modelo que quieres usar no aparece aqu\u00ed. */
 const OPENAI_MODELS = [
-  { id: "gpt-4o",       label: "GPT-4o (gpt-4o)" },
-  { id: "gpt-4o-mini",  label: "GPT-4o mini (gpt-4o-mini)" },
-  { id: "gpt-4.1",      label: "GPT-4.1 (gpt-4.1)" },
-  { id: "gpt-4.1-mini", label: "GPT-4.1 mini (gpt-4.1-mini)" }
+  { id: "gpt-6-astra",  label: "GPT-6 Astra (gpt-6-astra)" },
+  { id: "gpt-6.1-sol",  label: "GPT-6.1 Sol (gpt-6.1-sol)" },
+  { id: "gpt-6-luna",   label: "GPT-6 Luna (gpt-6-luna)" },
+  { id: "gpt-4.1",      label: "GPT-4.1 (gpt-4.1)" }
 ];
 
 /* Proveedores de IA disponibles para la mejora del prompt (paso Claude/GPT).
@@ -422,7 +422,7 @@ const TEXT_PROVIDERS = {
   openai: {
     label: "OpenAI (GPT)",
     models: OPENAI_MODELS,
-    defaultModel: "gpt-4o",
+    defaultModel: "gpt-6.1-sol",
     keyStorage: "ia_openai_key",
     endpoint: "https://api.openai.com/v1/chat/completions"
   }
