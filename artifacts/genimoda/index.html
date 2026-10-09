@@ -341,7 +341,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 00:55</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:15</p>
   </footer>
 </div>
 
@@ -385,8 +385,13 @@ const CLAUDE_MODELS = [
 /* Modelos de OpenAI configurados. Para a\u00f1adir otro, agrega una entrada.
    Versi\u00f3n alumnos: lista cerrada (sin opci\u00f3n "Otro\u2026"), fijada por el profesor. */
 const OPENAI_MODELS = [
-  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol (equilibrado, recomendado)" },
-  { id: "gpt-6-luna",  label: "GPT-6 Luna (r\u00e1pido y econ\u00f3mico)" }
+  { id: "gpt-6-astra",  label: "GPT-6 Astra (avanzado)" },
+  { id: "gpt-6.1-sol",  label: "GPT-6.1 Sol (equilibrado, recomendado)" },
+  { id: "gpt-6-luna",   label: "GPT-6 Luna (r\u00e1pido y econ\u00f3mico)" },
+  { id: "gpt-4.1",      label: "GPT-4.1" },
+  { id: "gpt-4.1-mini", label: "GPT-4.1 Mini" },
+  { id: "gpt-4o",       label: "GPT-4o" },
+  { id: "gpt-4o-mini",  label: "GPT-4o Mini" }
 ];
 
 /* Modelos de Gemini configurados. Para a\u00f1adir otro, agrega una entrada.
@@ -405,6 +410,7 @@ const MODEL_TOKEN_LIMITS = {
   "claude-sonnet-4-5-20250929": 64000, "claude-haiku-4-5-20251001": 64000,
   "claude-sonnet-5": 128000, "claude-opus-5-5": 128000, "claude-fable-5-1": 128000,
   "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000, "gpt-4.1": 32768,
+  "gpt-4.1-mini": 32768, "gpt-4o": 16384, "gpt-4o-mini": 16384,
   "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536, "gemini-3.1-pro-preview": 65536
 };
 
@@ -476,8 +482,13 @@ const PRICING = {
   // Precios orientativos de OpenAI en USD por millón de tokens. Verifica las
   // tarifas vigentes antes de usarlas con fines de facturación real.
   openai: {
+    "gpt-6-astra": { inputPerMTok: 10.00, outputPerMTok: 50.00 },
     "gpt-6.1-sol": { inputPerMTok: 2.00, outputPerMTok: 10.00 },
-    "gpt-6-luna": { inputPerMTok: 0.10, outputPerMTok: 0.50 }
+    "gpt-6-luna": { inputPerMTok: 0.10, outputPerMTok: 0.50 },
+    "gpt-4.1": { inputPerMTok: 2.00, outputPerMTok: 8.00 },
+    "gpt-4.1-mini": { inputPerMTok: 0.40, outputPerMTok: 1.60 },
+    "gpt-4o": { inputPerMTok: 2.50, outputPerMTok: 10.00 },
+    "gpt-4o-mini": { inputPerMTok: 0.15, outputPerMTok: 0.60 }
   },
   // Precios orientativos de Gemini en USD por millón de tokens. Verifica las
   // tarifas vigentes antes de usarlas con fines de facturación real.
