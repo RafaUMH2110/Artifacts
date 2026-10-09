@@ -491,7 +491,7 @@ const MODELOS_POR_PROVEEDOR = {
     porDefecto: "claude-sonnet-4-5" // valor definido en el BLOQUE 0 del encargo
   },
   openai: {
-    modelos: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-4.1"],
+    modelos: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"],
     porDefecto: "gpt-6.1-sol"
   },
   gemini: {
@@ -511,6 +511,7 @@ const LIMITES_TOKENS_MODELO = {
   "claude-sonnet-4-5": 64000,
   "claude-haiku-4-5-20251001": 64000,
   "gpt-6-astra": 32768, "gpt-6.1-sol": 32768, "gpt-6-luna": 16384, "gpt-4.1": 32768,
+  "gpt-4.1-mini": 32768, "gpt-4o": 16384, "gpt-4o-mini": 16384,
   "gemini-1.5-pro": 8192, "gemini-1.5-flash": 8192, "gemini-2.0-flash": 8192
 };
 function limiteTokensModelo(modelo){
