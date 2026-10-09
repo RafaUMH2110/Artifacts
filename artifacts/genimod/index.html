@@ -4,9 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GenImOd &#8212; Generador de im&#225;genes de moda mediante IA</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImciIHgxPSIwIiB5MT0iMCIgeDI9IjAiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjNmZiM2U4Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzJiNmNiMCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHBhdGggZD0iTTMyIDUgYTQgNCAwIDEgMSAtMy42IDUuMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMjE1NjhmIiBzdHJva2Utd2lkdGg9IjIuNiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTTMyIDkgTDEzIDIzIEwxNyAyNyBMMzIgMTYuNSBMNDcgMjcgTDUxIDIzIFoiIGZpbGw9Im5vbmUiIHN0cm9rZT0iIzIxNTY4ZiIgc3Ryb2tlLXdpZHRoPSIyLjYiIHN0cm9rZS1saW5lam9pbj0icm91bmQiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgogIDxwYXRoIGQ9Ik0yNSAyMC41IEwxNyAzMyBMMTIgNTcgUTMyIDY0IDUyIDU3IEw0NyAzMyBMMzkgMjAuNSBRMzIgMjYuNSAyNSAyMC41IFoiIGZpbGw9InVybCgjZykiIHN0cm9rZT0iIzFhNDU3MiIgc3Ryb2tlLXdpZHRoPSIxLjYiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KICA8cGF0aCBkPSJNMjYgMjEuNSBRMzIgMjkgMzggMjEuNSIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMWE0NTcyIiBzdHJva2Utd2lkdGg9IjEuNCIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTTQ5IDYgTDUxLjMgMTIuNyBMNTggMTUgTDUxLjMgMTcuMyBMNDkgMjQgTDQ2LjcgMTcuMyBMNDAgMTUgTDQ2LjcgMTIuNyBaIiBmaWxsPSIjZmZjOTRkIiBzdHJva2U9IiNlMGE1MjgiIHN0cm9rZS13aWR0aD0iMC44IiBzdHJva2UtbGluZWpvaW49InJvdW5kIi8+Cjwvc3ZnPgo=">
-<link rel="icon" type="image/png" sizes="180x180" href="data:image/png;base64,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">
-<link rel="apple-touch-icon" href="data:image/png;base64,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">
 <style>
   :root {
     --bg: #f5f9fe;
@@ -137,13 +134,7 @@
   @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
 </style>
 </head>
-<body
-  data-app-title="GenImOd"
-  data-app-description="Genera imágenes de moda con IA: mejora la idea con Claude y crea la imagen final con FLUX (fal.ai). Versión completa, con modelos y parámetros configurables."
-  data-categories="ia,diseno-creatividad,generacion-contenido,docencia"
-  data-tags="Claude,FLUX,fal.ai,Imágenes,Moda"
-  data-client-only="true"
->
+<body>
 <div class="wrap">
 
   <header class="hero">
@@ -151,7 +142,7 @@
     <p class="sub">Generador de im&#225;genes de moda mediante IA</p>
     <div class="flow" aria-label="Flujo de trabajo">
       <span class="step">Idea inicial</span><span class="sep" aria-hidden="true">&#8594;</span>
-      <span class="step">Claude</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">IA (Claude u OpenAI)</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">Prompt optimizado</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">FLUX</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">Imagen</span>
@@ -167,13 +158,19 @@
     <h2 id="h-config">1. Configuraci&#243;n de las API keys</h2>
     <div class="grid2">
       <div>
-        <label for="anthropicKey">API key de Anthropic <span id="anthropicBadge" class="badge no">sin guardar</span></label>
+        <label for="textProvider">Proveedor de IA para mejorar el prompt</label>
+        <select id="textProvider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+        </select>
+        <label for="textApiKey" style="margin-top:.75rem">API key del proveedor seleccionado <span id="textApiKeyBadge" class="badge no">sin guardar</span></label>
         <div class="key-row">
-          <input type="password" id="anthropicKey" autocomplete="off" spellcheck="false">
-          <button type="button" id="anthropicSave">Guardar</button>
-          <button type="button" id="anthropicToggle" aria-pressed="false">Mostrar</button>
-          <button type="button" id="anthropicDelete">Borrar</button>
+          <input type="password" id="textApiKey" autocomplete="off" spellcheck="false">
+          <button type="button" id="textKeySave">Guardar</button>
+          <button type="button" id="textKeyToggle" aria-pressed="false">Mostrar</button>
+          <button type="button" id="textKeyDelete">Borrar</button>
         </div>
+        <p class="hint">Cada proveedor guarda su propia clave por separado; cambiar el proveedor no borra la clave del otro.</p>
       </div>
       <div>
         <label for="falKey">API key de fal.ai <span id="falBadge" class="badge no">sin guardar</span></label>
@@ -185,7 +182,7 @@
         </div>
       </div>
     </div>
-    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com y fal.run). La validez definitiva la confirma la respuesta del proveedor.</p>
+    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com, api.openai.com o fal.run, seg&#250;n corresponda). La validez definitiva la confirma la respuesta del proveedor.</p>
   </section>
 
   <!-- SECCI&#211;N 2 &#8212; MODELOS -->
@@ -194,18 +191,18 @@
     <div class="grid2">
       <div>
         <div class="field">
-          <label for="claudeModel">Modelo de Claude</label>
-          <select id="claudeModel"></select>
+          <label for="textModel">Modelo (del proveedor elegido en la secci&#243;n 1)</label>
+          <select id="textModel"></select>
         </div>
-        <div class="field hidden" id="claudeCustomWrap">
-          <label for="claudeCustom">Identificador del modelo de Claude</label>
-          <input type="text" id="claudeCustom" autocomplete="off" spellcheck="false" placeholder="Identificador exacto del modelo">
+        <div class="field hidden" id="textCustomWrap">
+          <label for="textCustom">Identificador del modelo</label>
+          <input type="text" id="textCustom" autocomplete="off" spellcheck="false" placeholder="Identificador exacto del modelo">
           <p class="hint">No se comprueba de antemano: ser&#225; la API la que confirme si es v&#225;lido.</p>
         </div>
         <div class="field">
-          <label for="maxTokens">M&#225;ximo de tokens de Claude</label>
+          <label for="maxTokens">M&#225;ximo de tokens de salida</label>
           <input type="number" id="maxTokens" min="1" step="1" inputmode="numeric" value="4096">
-          <p class="hint">L&#237;mite de longitud de la respuesta de Claude (<code>max_tokens</code>). Por defecto 4096. Si es demasiado bajo, el prompt puede quedar cortado.</p>
+          <p class="hint">L&#237;mite de longitud de la respuesta del modelo de texto (<code>max_tokens</code>). Por defecto 4096. Si es demasiado bajo, el prompt puede quedar cortado.</p>
         </div>
       </div>
       <div>
@@ -271,11 +268,6 @@
       <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
     </button>
     <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
-    <div class="row">
-      <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
-    </div>
-    <p class="hint">La estimaci&#243;n consulta solo el conteo de tokens de ENTRADA de Anthropic (gratuito) con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
-    <div id="tokenEstimate" class="status" role="status" aria-live="polite"></div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="error" class="status error" role="alert"></div>
   </section>
@@ -338,8 +330,8 @@
     <summary>&#191;C&#243;mo funciona GenImOd?</summary>
     <ol>
       <li>El usuario introduce una idea inicial.</li>
-      <li>Claude analiza y mejora la idea.</li>
-      <li>Claude genera un prompt especializado en ingl&#233;s.</li>
+      <li>El modelo de IA elegido (Claude o GPT) analiza y mejora la idea.</li>
+      <li>Ese modelo genera un prompt especializado en ingl&#233;s.</li>
       <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
       <li>GenImOd muestra y permite descargar el resultado.</li>
@@ -348,7 +340,7 @@
     <ul>
       <li>La idea inicial.</li>
       <li>Las instrucciones del sistema.</li>
-      <li>El modelo de Claude seleccionado.</li>
+      <li>El proveedor y el modelo de IA seleccionados para mejorar el prompt (Anthropic/Claude u OpenAI/GPT).</li>
       <li>El modelo FLUX seleccionado.</li>
       <li>Los par&#225;metros de inferencia.</li>
     </ul>
@@ -357,7 +349,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 08/10/2026 14:40</p>
+    <p>&#218;ltima modificaci&#243;n: 09/10/2026</p>
   </footer>
 </div>
 
@@ -397,6 +389,37 @@ const CLAUDE_MODELS = [
   { id: "claude-opus-5-5",            label: "Claude Opus 5.5 (claude-opus-5-5)" },
   { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" }
 ];
+
+/* Modelos de OpenAI configurados. Para a\u00f1adir otro, agrega una entrada.
+   La lista de modelos disponibles cambia con frecuencia: revisa la
+   documentaci\u00f3n oficial de OpenAI y usa "Otro\u2026" con el identificador
+   exacto si el modelo que quieres usar no aparece aqu\u00ed. */
+const OPENAI_MODELS = [
+  { id: "gpt-4o",       label: "GPT-4o (gpt-4o)" },
+  { id: "gpt-4o-mini",  label: "GPT-4o mini (gpt-4o-mini)" },
+  { id: "gpt-4.1",      label: "GPT-4.1 (gpt-4.1)" },
+  { id: "gpt-4.1-mini", label: "GPT-4.1 mini (gpt-4.1-mini)" }
+];
+
+/* Proveedores de IA disponibles para la mejora del prompt (paso Claude/GPT).
+   Cada proveedor define su lista de modelos, su modelo por defecto y la
+   clave de localStorage donde se guarda su propia API key. */
+const TEXT_PROVIDERS = {
+  anthropic: {
+    label: "Anthropic (Claude)",
+    models: CLAUDE_MODELS,
+    defaultModel: "claude-sonnet-4-5-20250929",
+    keyStorage: "ia_anthropic_key",
+    endpoint: "https://api.anthropic.com/v1/messages"
+  },
+  openai: {
+    label: "OpenAI (GPT)",
+    models: OPENAI_MODELS,
+    defaultModel: "gpt-4o",
+    keyStorage: "ia_openai_key",
+    endpoint: "https://api.openai.com/v1/chat/completions"
+  }
+};
 
 /* Modelos de fal.ai configurados y par\u00e1metros que admite cada uno.
    Para a\u00f1adir otro modelo, agrega una entrada con su esquema real. */
@@ -441,19 +464,11 @@ const HISTORY_CONFIG = {
 };
 
 /* Precios documentados. Si est\u00e1n vac\u00edos, se muestra "Coste: no disponible".
-   Formato Anthropic: { "<modelo>": { inputPerMTok: <USD>, outputPerMTok: <USD> } }
-   Formato fal:       { "<modelo>": { perImage: <USD> } } */
+   Formato por proveedor de texto: { "<modelo>": { inputPerMTok: <USD>, outputPerMTok: <USD> } }
+   Formato fal:                    { "<modelo>": { perImage: <USD> } } */
 const PRICING = {
-  // Precios oficiales de la API de Anthropic en USD por millon de tokens.
-  // Fuente: paginas de anuncio y documentacion oficial de cada modelo
-  // (docs.claude.com, anthropic.com/news). Verifica las tarifas vigentes
-  // antes de usarlas con fines de facturacion real.
-  anthropic: {
-    "claude-sonnet-4-5-20250929": { inputPerMTok: 3.00, outputPerMTok: 15.00 },
-    "claude-sonnet-5": { inputPerMTok: 2.00, outputPerMTok: 10.00 },
-    "claude-opus-5-5": { inputPerMTok: 4.00, outputPerMTok: 20.00 },
-    "claude-haiku-4-5-20251001": { inputPerMTok: 1.00, outputPerMTok: 5.00 }
-  },
+  anthropic: {},
+  openai: {},
   fal: {}
 };
 
@@ -503,8 +518,10 @@ No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, 
 /* Claves de localStorage (las API keys usan exactamente estos nombres). */
 const STORAGE = {
   anthropicKey: "ia_anthropic_key",
+  openaiKey: "ia_openai_key",
   falKey: "ia_fal_key",
-  claudeModel: "genimod_claude_model",
+  textProvider: "genimod_text_provider",
+  textModel: "genimod_text_model",
   falModel: "genimod_fal_model",
   steps: "genimod_inference_steps",
   maxTokens: "genimod_max_tokens",
@@ -540,10 +557,11 @@ function storageRemove(key) { try { localStorage.removeItem(key); } catch (e) { 
 /* ==========================================================================
    GESTI\u00d3N DE API KEYS
    ========================================================================== */
-function keyConfig(provider) {
-  return provider === "anthropic"
-    ? { storage: STORAGE.anthropicKey, input: $("anthropicKey"), badge: $("anthropicBadge"), name: "Anthropic" }
-    : { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
+/* kind: "text" (proveedor activo en textProvider: Anthropic u OpenAI) o "fal". */
+function keyConfig(kind) {
+  if (kind === "fal") return { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
+  const cfg = TEXT_PROVIDERS[getTextProvider()];
+  return { storage: cfg.keyStorage, input: $("textApiKey"), badge: $("textApiKeyBadge"), name: cfg.label };
 }
 
 function saveApiKey(provider) {
@@ -567,9 +585,9 @@ function deleteApiKey(provider) {
   validateForm();
 }
 
-function toggleKeyVisibility(provider) {
-  const cfg = keyConfig(provider);
-  const btn = $(provider + "Toggle");
+function toggleKeyVisibility(kind) {
+  const cfg = keyConfig(kind);
+  const btn = kind === "fal" ? $("falToggle") : $("textKeyToggle");
   const show = cfg.input.type === "password";
   cfg.input.type = show ? "text" : "password";
   btn.textContent = show ? "Ocultar" : "Mostrar";
@@ -577,8 +595,8 @@ function toggleKeyVisibility(provider) {
 }
 
 function refreshKeyBadges() {
-  ["anthropic", "fal"].forEach((p) => {
-    const cfg = keyConfig(p);
+  ["text", "fal"].forEach((kind) => {
+    const cfg = keyConfig(kind);
     const saved = !!storageGet(cfg.storage);
     cfg.badge.textContent = saved ? "guardada" : "sin guardar";
     cfg.badge.className = "badge " + (saved ? "ok" : "no");
@@ -598,13 +616,31 @@ function fillSelect(select, options) {
   });
 }
 
+function getTextProvider() {
+  const v = $("textProvider").value;
+  return TEXT_PROVIDERS[v] ? v : "anthropic";
+}
+
 function getActiveModel(kind) {
-  if (kind === "claude") {
-    const v = $("claudeModel").value;
-    return (v === OTHER ? $("claudeCustom").value : v).trim();
+  if (kind === "text") {
+    const v = $("textModel").value;
+    return (v === OTHER ? $("textCustom").value : v).trim();
   }
   const v = $("falModel").value;
   return (v === OTHER ? $("falCustom").value : v).trim();
+}
+
+/* Repinta el selector de modelos según el proveedor activo en textProvider. */
+function fillTextModels(preferred) {
+  const cfg = TEXT_PROVIDERS[getTextProvider()];
+  fillSelect($("textModel"), [
+    ...cfg.models.map((m) => ({ value: m.id, label: m.label })),
+    { value: OTHER, label: "Otro…" }
+  ]);
+  const wanted = preferred || cfg.defaultModel;
+  if (cfg.models.some((m) => m.id === wanted)) { $("textModel").value = wanted; }
+  else if (wanted) { $("textModel").value = OTHER; $("textCustom").value = wanted; }
+  else { $("textModel").value = cfg.defaultModel; }
 }
 
 function refreshImageSizes(preferred) {
@@ -617,7 +653,7 @@ function refreshImageSizes(preferred) {
 }
 
 function toggleCustomFields() {
-  $("claudeCustomWrap").classList.toggle("hidden", $("claudeModel").value !== OTHER);
+  $("textCustomWrap").classList.toggle("hidden", $("textModel").value !== OTHER);
   $("falCustomWrap").classList.toggle("hidden", $("falModel").value !== OTHER);
 }
 
@@ -632,9 +668,11 @@ function getMaxTokens() {
 }
 
 function validateForm() {
-  const hasKeys = !!storageGet(STORAGE.anthropicKey) && !!storageGet(STORAGE.falKey);
+  const textCfg = TEXT_PROVIDERS[getTextProvider()];
+  const hasTextKey = !!storageGet(textCfg.keyStorage);
+  const hasKeys = hasTextKey && !!storageGet(STORAGE.falKey);
   const hasIdea = $("idea").value.trim().length > 0;
-  const modelsOk = getActiveModel("claude").length > 0 && getActiveModel("fal").length > 0;
+  const modelsOk = getActiveModel("text").length > 0 && getActiveModel("fal").length > 0;
   const tokensOk = Number.isFinite(getMaxTokens());
   const ok = hasKeys && hasIdea && modelsOk && tokensOk && !state.busy;
   $("generate").disabled = !ok;
@@ -643,14 +681,13 @@ function validateForm() {
   else if (ok) hint.textContent = "Todo listo para generar.";
   else {
     const missing = [];
-    if (!storageGet(STORAGE.anthropicKey)) missing.push("la API key de Anthropic");
+    if (!hasTextKey) missing.push(`la API key de ${textCfg.label}`);
     if (!storageGet(STORAGE.falKey)) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
     if (!modelsOk) missing.push("los identificadores de modelo");
     if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
-  $("estimateTokens").disabled = !(!!storageGet(STORAGE.anthropicKey) && hasIdea && modelsOk && tokensOk && !state.busy);
   return ok;
 }
 
@@ -680,7 +717,7 @@ function showLoading(isLoading, label) {
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
 function redact(text) {
   let out = String(text || "");
-  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.falKey), $("anthropicKey").value, $("falKey").value]
+  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.openaiKey), storageGet(STORAGE.falKey), $("textApiKey").value, $("falKey").value]
     .filter((k) => k && k.length > 5)
     .forEach((k) => { out = out.split(k).join("[clave oculta]"); });
   return out;
@@ -757,15 +794,37 @@ REQUISITOS:
 - Devuelve exclusivamente el prompt final.`;
 }
 
-async function mejorarPromptConClaude(systemPrompt, idea, model, maxTokens) {
+/* Llamada unificada al proveedor de texto activo (Anthropic o OpenAI) para
+   mejorar la idea inicial y obtener el prompt destinado a FLUX. */
+async function mejorarIdeaConIA(systemPrompt, idea, provider, model, maxTokens) {
+  const userMessage = buildUserMessage(idea);
+
+  if (provider === "openai") {
+    const messages = [];
+    if (systemPrompt.trim()) messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: userMessage });
+    const data = await fetchJson(TEXT_PROVIDERS.openai.endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + storageGet(STORAGE.openaiKey),
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+    });
+    const usage = data && data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : null;
+    const truncated = !!(data && data.choices && data.choices[0] && data.choices[0].finish_reason === "length");
+    return { text: extractOpenAiText(data), usage, stopReason: truncated ? "max_tokens" : null };
+  }
+
+  // Anthropic (proveedor por defecto)
   const body = {
     model,
     max_tokens: maxTokens,
-    messages: [{ role: "user", content: buildUserMessage(idea) }]
+    messages: [{ role: "user", content: userMessage }]
   };
   if (systemPrompt.trim()) body.system = systemPrompt;
 
-  const data = await fetchJson(APP_CONFIG.anthropic.endpoint, {
+  const data = await fetchJson(TEXT_PROVIDERS.anthropic.endpoint, {
     method: "POST",
     headers: {
       "x-api-key": storageGet(STORAGE.anthropicKey),
@@ -790,42 +849,14 @@ function extractClaudeText(data) {
   return text;
 }
 
-/* ==========================================================================
-   ESTIMACI\u00d3N PREVIA DE TOKENS DE ENTRADA (antes de generar)
-   ========================================================================== */
-/* Cuenta los tokens de ENTRADA que consumir\u00eda mejorarPromptConClaude() con
-   esta misma idea e instrucciones, usando el endpoint gratuito y exacto de
-   Anthropic (no genera nada ni gasta tokens de salida). Los tokens de SALIDA
-   nunca se pueden conocer de antemano: lo \u00fanico mostrable de la salida es
-   el techo configurado (maxTokens). */
-async function contarTokensEntrada(systemPrompt, idea, model) {
-  const body = { model, messages: [{ role: "user", content: buildUserMessage(idea) }] };
-  if (systemPrompt.trim()) body.system = systemPrompt;
-  const data = await fetchJson("https://api.anthropic.com/v1/messages/count_tokens", {
-    method: "POST",
-    headers: {
-      "x-api-key": storageGet(STORAGE.anthropicKey),
-      "anthropic-version": APP_CONFIG.anthropic.version,
-      "anthropic-dangerous-direct-browser-access": "true",
-      "content-type": "application/json"
-    },
-    body: JSON.stringify(body)
-  });
-  return data && Number.isFinite(data.input_tokens) ? data.input_tokens : 0;
-}
-
-function formatearEstimacionTokens(entrada, maxTokens, model) {
-  const p = PRICING.anthropic[model];
-  let texto = `${entrada.toLocaleString("es-ES")} tokens de entrada (conteo exacto facilitado por Anthropic; esta consulta no tiene coste). ` +
-    `Techo de tokens de salida configurado: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere Claude y nunca se puede conocer de antemano).`;
-  if (p && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
-    const costeEntrada = (entrada / 1e6) * p.inputPerMTok;
-    const costeSalidaMax = (maxTokens / 1e6) * p.outputPerMTok;
-    texto += ` Coste estimado: $${costeEntrada.toFixed(4)} de entrada + hasta $${costeSalidaMax.toFixed(4)} de salida si se agotara el techo configurado (la generaci\u00f3n de imagen con FLUX se factura aparte).`;
-  } else {
-    texto += " (no hay precio de referencia cargado para este modelo).";
-  }
-  return texto;
+/* Extrae el texto de la respuesta de OpenAI (Chat Completions). */
+function extractOpenAiText(data) {
+  const text = data && data.choices && data.choices[0] && data.choices[0].message
+    && typeof data.choices[0].message.content === "string"
+    ? data.choices[0].message.content.trim()
+    : "";
+  if (!text) throw new AppError("El modelo de OpenAI no ha generado un prompt v\u00e1lido.");
+  return text;
 }
 
 /* ==========================================================================
@@ -901,23 +932,24 @@ function extractFalImage(data) {
 /* ==========================================================================
    VISUALIZACI\u00d3N
    ========================================================================== */
-function displayGeneratedPrompt(text, usage, model, note) {
+function displayGeneratedPrompt(text, usage, provider, model, note) {
   $("generatedPrompt").value = text;
   ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !text; });
   const meta = $("claudeMeta");
   meta.textContent = "";
   if (!text) return;
-  const lines = [`Modelo de Claude: ${model}`];
+  const providerLabel = TEXT_PROVIDERS[provider] ? TEXT_PROVIDERS[provider].label : provider;
+  const lines = [`Modelo: ${providerLabel} \u2014 ${model}`];
   if (usage && Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)) {
     lines.push(`Tokens: ${usage.input_tokens} de entrada \u00b7 ${usage.output_tokens} de salida`);
   }
-  lines.push(costLineAnthropic(model, usage));
+  lines.push(costLineText(provider, model, usage));
   if (note) lines.push(note);
   lines.forEach((l) => { const s = document.createElement("div"); s.textContent = l; meta.appendChild(s); });
 }
 
-function costLineAnthropic(model, usage) {
-  const p = PRICING.anthropic[model];
+function costLineText(provider, model, usage) {
+  const p = PRICING[provider] && PRICING[provider][model];
   if (p && usage && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
     const cost = (usage.input_tokens * p.inputPerMTok + usage.output_tokens * p.outputPerMTok) / 1e6;
     return `Coste del prompt: ${cost.toFixed(5)} USD`;
@@ -1116,29 +1148,31 @@ async function generar() {
 
   const systemPrompt = $("systemPrompt").value;
   const idea = $("idea").value.trim();
-  const claudeModel = getActiveModel("claude");
+  const textProvider = getTextProvider();
+  const textModel = getActiveModel("text");
   const falModel = getActiveModel("fal");
   const steps = Number($("steps").value);
   const imageSize = $("imageSize").value;
   const safety = $("safety").value;
   const maxTokens = getMaxTokens();
+  const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
   resetResults();
   showLoading(true, "Generando\u2026");
   try {
-    showStatus("Mejorando la idea con Claude\u2026", "info");
-    const claude = await mejorarPromptConClaude(systemPrompt, idea, claudeModel, maxTokens);
-    state.lastPrompt = claude.text;
+    showStatus(`Mejorando la idea con ${providerLabel}\u2026`, "info");
+    const resultado = await mejorarIdeaConIA(systemPrompt, idea, textProvider, textModel, maxTokens);
+    state.lastPrompt = resultado.text;
     state.lastSystem = systemPrompt;
     state.lastIdea = idea;
-    const truncated = claude.stopReason === "max_tokens"
-      ? "Aviso: la respuesta de Claude se ha cortado al alcanzar el l\u00edmite de tokens. Aumenta el m\u00e1ximo de tokens y vuelve a generar."
+    const truncated = resultado.stopReason === "max_tokens"
+      ? "Aviso: la respuesta se ha cortado al alcanzar el l\u00edmite de tokens. Aumenta el m\u00e1ximo de tokens y vuelve a generar."
       : "";
-    displayGeneratedPrompt(claude.text, claude.usage, claudeModel, truncated);
-    showStatus("Prompt generado por Claude", "ok");
+    displayGeneratedPrompt(resultado.text, resultado.usage, textProvider, textModel, truncated);
+    showStatus(`Prompt generado por ${providerLabel}`, "ok");
 
     showStatus("Generando imagen con FLUX\u2026", "info");
-    const image = await generarImagenConFal(claude.text, falModel, steps, imageSize, safety);
+    const image = await generarImagenConFal(resultado.text, falModel, steps, imageSize, safety);
     displayGeneratedImage(image, falModel, steps);
     if (image.nsfw) {
       showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Sube la tolerancia (m\u00e1x. 6) o reformula la idea con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
@@ -1146,8 +1180,8 @@ async function generar() {
       showStatus("Imagen generada correctamente.", "ok");
     }
     await guardarEnHistorial({
-      idea, systemPrompt, prompt: claude.text, claudeModel, falModel, steps, imageSize, safety,
-      image, usage: claude.usage
+      idea, systemPrompt, prompt: resultado.text, textProvider, textModel, falModel, steps, imageSize, safety,
+      image, usage: resultado.usage
     });
   } catch (err) {
     $("status").className = "status";
@@ -1157,39 +1191,13 @@ async function generar() {
   }
 }
 
-async function estimarTokens() {
-  const btn = $("estimateTokens");
-  const out = $("tokenEstimate");
-  btn.disabled = true;
-  out.className = "status";
-  out.textContent = "";
-  try {
-    const systemPrompt = $("systemPrompt").value;
-    const idea = $("idea").value.trim();
-    const model = getActiveModel("claude");
-    const maxTokens = getMaxTokens();
-    if (!storageGet(STORAGE.anthropicKey)) throw new AppError("Indica y guarda antes la API key de Anthropic.");
-    if (!idea) throw new AppError("Describe antes la idea inicial.");
-    if (!model) throw new AppError("Indica un identificador de modelo de Claude válido.");
-    if (!Number.isFinite(maxTokens)) throw new AppError("Indica un máximo de tokens válido (entero positivo).");
-    const entrada = await contarTokensEntrada(systemPrompt, idea, model);
-    out.textContent = formatearEstimacionTokens(entrada, maxTokens, model);
-    out.className = "status show ok";
-  } catch (err) {
-    out.textContent = err instanceof AppError ? err.message : "No se ha podido estimar los tokens.";
-    out.className = "status show error";
-  } finally {
-    validateForm();
-  }
-}
-
 function resetResults() {
   state.imageUrl = "";
   $("imageBox").className = "image-box";
   $("imageBox").innerHTML = "<span>La imagen generada aparecer\u00e1 aqu\u00ed.</span>";
   $("imageMeta").innerHTML = "";
   $("downloadImage").disabled = true;
-  displayGeneratedPrompt("", null, "");
+  displayGeneratedPrompt("", null, "", "");
 }
 
 function resetApplication() {
@@ -1254,7 +1262,8 @@ async function guardarEnHistorial(data) {
       idea: data.idea,
       systemPrompt: data.systemPrompt,
       prompt: data.prompt,
-      claudeModel: data.claudeModel,
+      textProvider: data.textProvider,
+      textModel: data.textModel,
       falModel: data.falModel,
       steps: data.steps,
       imageSize: data.imageSize,
@@ -1417,7 +1426,10 @@ function loadFromHistory(rec) {
   clearError();
   $("idea").value = rec.idea;
   $("systemPrompt").value = rec.systemPrompt;
-  setModelSelect("claudeModel", "claudeCustom", CLAUDE_MODELS.map((m) => m.id), rec.claudeModel);
+  const recProvider = TEXT_PROVIDERS[rec.textProvider] ? rec.textProvider : "anthropic";
+  $("textProvider").value = recProvider;
+  refreshKeyBadges();
+  fillTextModels(rec.textModel || rec.claudeModel);
   setModelSelect("falModel", "falCustom", Object.keys(FAL_MODELS), rec.falModel);
   toggleCustomFields();
   refreshImageSizes(rec.imageSize);
@@ -1428,7 +1440,7 @@ function loadFromHistory(rec) {
   state.lastPrompt = rec.prompt;
   state.lastSystem = rec.systemPrompt;
   state.lastIdea = rec.idea;
-  displayGeneratedPrompt(rec.prompt, rec.usage, rec.claudeModel);
+  displayGeneratedPrompt(rec.prompt, rec.usage, recProvider, rec.textModel || rec.claudeModel);
 
   if (loadedObjectUrl) { URL.revokeObjectURL(loadedObjectUrl); loadedObjectUrl = ""; }
   let src = rec.url;
@@ -1469,7 +1481,8 @@ async function renderComparison() {
 
   const sizeLabel = (v) => { const f = CUSTOM_FAL_IMAGE_SIZES.find((s) => s.value === v); return f ? f.label : v; };
   const rows = [
-    ["Modelo de Claude", (r) => r.claudeModel],
+    ["Proveedor de IA", (r) => (TEXT_PROVIDERS[r.textProvider] ? TEXT_PROVIDERS[r.textProvider].label : "Anthropic (Claude)")],
+    ["Modelo de texto", (r) => r.textModel || r.claudeModel],
     ["Modelo de imagen", (r) => r.falModel],
     ["Pasos", (r) => String(r.steps)],
     ["Tama\u00f1o", (r) => sizeLabel(r.imageSize)],
@@ -1556,18 +1569,10 @@ function initializeHistory() {
    INICIALIZACI\u00d3N
    ========================================================================== */
 function loadSettings() {
-  // Modelos de Claude
-  fillSelect($("claudeModel"), [
-    ...CLAUDE_MODELS.map((m) => ({ value: m.id, label: m.label })),
-    { value: OTHER, label: "Otro\u2026" }
-  ]);
-  const savedClaude = storageGet(STORAGE.claudeModel);
-  if (savedClaude) {
-    if (CLAUDE_MODELS.some((m) => m.id === savedClaude)) $("claudeModel").value = savedClaude;
-    else { $("claudeModel").value = OTHER; $("claudeCustom").value = savedClaude; }
-  } else {
-    $("claudeModel").value = APP_CONFIG.anthropic.defaultModel;
-  }
+  // Proveedor y modelo de IA para mejorar el prompt (Anthropic u OpenAI)
+  const savedProvider = storageGet(STORAGE.textProvider);
+  $("textProvider").value = TEXT_PROVIDERS[savedProvider] ? savedProvider : "anthropic";
+  fillTextModels(storageGet(STORAGE.textModel) || undefined);
 
   // Modelos de fal.ai
   fillSelect($("falModel"), [
@@ -1603,7 +1608,8 @@ function loadSettings() {
 }
 
 function persistPreferences() {
-  storageSet(STORAGE.claudeModel, getActiveModel("claude"));
+  storageSet(STORAGE.textProvider, getTextProvider());
+  storageSet(STORAGE.textModel, getActiveModel("text"));
   storageSet(STORAGE.falModel, getActiveModel("fal"));
   storageSet(STORAGE.steps, $("steps").value);
   storageSet(STORAGE.imageSize, $("imageSize").value);
@@ -1617,15 +1623,25 @@ function persistPreferences() {
 function initializeApp() {
   loadSettings();
 
-  ["anthropic", "fal"].forEach((p) => {
-    $(p + "Save").addEventListener("click", () => saveApiKey(p));
-    $(p + "Delete").addEventListener("click", () => deleteApiKey(p));
-    $(p + "Toggle").addEventListener("click", () => toggleKeyVisibility(p));
-    $(p + "Key").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey(p); } });
-  });
+  $("textKeySave").addEventListener("click", () => saveApiKey("text"));
+  $("textKeyDelete").addEventListener("click", () => deleteApiKey("text"));
+  $("textKeyToggle").addEventListener("click", () => toggleKeyVisibility("text"));
+  $("textApiKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey("text"); } });
 
-  $("claudeModel").addEventListener("change", () => { toggleCustomFields(); persistPreferences(); validateForm(); });
-  $("claudeCustom").addEventListener("input", () => { persistPreferences(); validateForm(); });
+  $("falSave").addEventListener("click", () => saveApiKey("fal"));
+  $("falDelete").addEventListener("click", () => deleteApiKey("fal"));
+  $("falToggle").addEventListener("click", () => toggleKeyVisibility("fal"));
+  $("falKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey("fal"); } });
+
+  $("textProvider").addEventListener("change", () => {
+    fillTextModels();
+    toggleCustomFields();
+    refreshKeyBadges();
+    persistPreferences();
+    validateForm();
+  });
+  $("textModel").addEventListener("change", () => { toggleCustomFields(); persistPreferences(); validateForm(); });
+  $("textCustom").addEventListener("input", () => { persistPreferences(); validateForm(); });
   $("falModel").addEventListener("change", () => { toggleCustomFields(); refreshImageSizes(); persistPreferences(); validateForm(); });
   $("falCustom").addEventListener("input", () => { persistPreferences(); validateForm(); });
   $("steps").addEventListener("change", persistPreferences);
@@ -1641,10 +1657,9 @@ function initializeApp() {
   $("idea").addEventListener("input", validateForm);
 
   $("generate").addEventListener("click", generar);
-  $("estimateTokens").addEventListener("click", estimarTokens);
   $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
   $("downloadPrompt").addEventListener("click", downloadPromptOnly);
-  $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, ""); state.lastPrompt = ""; });
+  $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, "", ""); state.lastPrompt = ""; });
   $("downloadTxt").addEventListener("click", downloadPromptsAsTxt);
   $("downloadImage").addEventListener("click", downloadImage);
 
