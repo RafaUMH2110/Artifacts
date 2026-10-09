@@ -136,9 +136,9 @@
 </head>
 <body
   data-app-title="GenImOd — Versión alumnos"
-  data-app-description="Versión de GenImOd para el aula: genera imágenes de moda con Claude y FLUX, con modelos y parámetros limitados y fijados por el profesor."
+  data-app-description="Versión de GenImOd para el aula: genera imágenes de moda con Claude u OpenAI y FLUX, con modelos y parámetros limitados y fijados por el profesor."
   data-categories="ia,diseno-creatividad,generacion-contenido,docencia"
-  data-tags="Claude,FLUX,Docencia,Imágenes,Moda"
+  data-tags="Claude,OpenAI,FLUX,Docencia,Imágenes,Moda"
   data-client-only="true"
 >
 <div class="wrap">
@@ -148,7 +148,7 @@
     <p class="sub">Generador de im&#225;genes de moda mediante IA &#8212; versi&#243;n para alumnos</p>
     <div class="flow" aria-label="Flujo de trabajo">
       <span class="step">Idea inicial</span><span class="sep" aria-hidden="true">&#8594;</span>
-      <span class="step">Claude</span><span class="sep" aria-hidden="true">&#8594;</span>
+      <span class="step">IA (texto)</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">Prompt optimizado</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">FLUX</span><span class="sep" aria-hidden="true">&#8594;</span>
       <span class="step">Imagen</span>
@@ -164,13 +164,19 @@
     <h2 id="h-config">1. Configuraci&#243;n de las API keys</h2>
     <div class="grid2">
       <div>
-        <label for="anthropicKey">API key de Anthropic <span id="anthropicBadge" class="badge no">sin guardar</span></label>
+        <label for="textProvider">Proveedor de IA (mejora del prompt)</label>
+        <select id="textProvider">
+          <option value="anthropic">Anthropic (Claude)</option>
+          <option value="openai">OpenAI (GPT)</option>
+        </select>
+        <label for="textApiKey" style="margin-top:.75rem">API key del proveedor seleccionado <span id="textApiKeyBadge" class="badge no">sin guardar</span></label>
         <div class="key-row">
-          <input type="password" id="anthropicKey" autocomplete="off" spellcheck="false">
-          <button type="button" id="anthropicSave">Guardar</button>
-          <button type="button" id="anthropicToggle" aria-pressed="false">Mostrar</button>
-          <button type="button" id="anthropicDelete">Borrar</button>
+          <input type="password" id="textApiKey" autocomplete="off" spellcheck="false">
+          <button type="button" id="textKeySave">Guardar</button>
+          <button type="button" id="textKeyToggle" aria-pressed="false">Mostrar</button>
+          <button type="button" id="textKeyDelete">Borrar</button>
         </div>
+        <p class="hint">Cada proveedor guarda su propia clave por separado; cambiar el proveedor no borra la clave del otro.</p>
       </div>
       <div>
         <label for="falKey">API key de fal.ai <span id="falBadge" class="badge no">sin guardar</span></label>
@@ -182,7 +188,7 @@
         </div>
       </div>
     </div>
-    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com y fal.run). La validez definitiva la confirma la respuesta del proveedor.</p>
+    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com, api.openai.com o fal.run, seg&#250;n corresponda). La validez definitiva la confirma la respuesta del proveedor.</p>
   </section>
 
   <!-- SECCI&#211;N 2 &#8212; MODELOS -->
@@ -191,11 +197,11 @@
     <div class="grid2">
       <div>
         <div class="field">
-          <label for="claudeModel">Modelo de Claude</label>
-          <select id="claudeModel"></select>
+          <label for="textModel">Modelo (del proveedor elegido en la secci&#243;n 1)</label>
+          <select id="textModel"></select>
         </div>
         <div class="field">
-          <label for="maxTokens">M&#225;ximo de tokens de Claude</label>
+          <label for="maxTokens">M&#225;ximo de tokens de salida</label>
           <input type="number" id="maxTokens" value="2048" readonly aria-readonly="true">
           <p class="hint">Valor fijo en esta versi&#243;n: 2048 (<code>max_tokens</code>).</p>
         </div>
@@ -253,11 +259,13 @@
       <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
     </button>
     <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
-    <div class="row">
-      <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
+    <div id="tokenEstimateSection">
+      <div class="row">
+        <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
+      </div>
+      <p class="hint">La estimaci&#243;n consulta solo el conteo de tokens de ENTRADA de Anthropic (gratuito) con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Solo disponible si el proveedor elegido es Anthropic (Claude); OpenAI no ofrece aqu&#237; un conteo de tokens de entrada equivalente. Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
+      <div id="tokenEstimate" class="status" role="status" aria-live="polite"></div>
     </div>
-    <p class="hint">La estimaci&#243;n consulta solo el conteo de tokens de ENTRADA de Anthropic (gratuito) con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
-    <div id="tokenEstimate" class="status" role="status" aria-live="polite"></div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="error" class="status error" role="alert"></div>
   </section>
@@ -306,8 +314,8 @@
     <summary>&#191;C&#243;mo funciona GenImOd?</summary>
     <ol>
       <li>El usuario introduce una idea inicial.</li>
-      <li>Claude analiza y mejora la idea.</li>
-      <li>Claude genera un prompt especializado en ingl&#233;s.</li>
+      <li>El proveedor de IA elegido (Claude u OpenAI) analiza y mejora la idea.</li>
+      <li>Ese proveedor genera un prompt especializado en ingl&#233;s.</li>
       <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
       <li>GenImOd muestra y permite descargar el resultado.</li>
@@ -316,7 +324,7 @@
     <ul>
       <li>La idea inicial.</li>
       <li>Las instrucciones del sistema.</li>
-      <li>El modelo de Claude seleccionado.</li>
+      <li>El proveedor y el modelo de IA seleccionados (Anthropic/Claude u OpenAI/GPT).</li>
       <li>El modelo FLUX seleccionado.</li>
       <li>Los par&#225;metros de inferencia.</li>
     </ul>
@@ -358,11 +366,39 @@ const APP_CONFIG = {
   }
 };
 
-/* Modelos de Claude configurados. Para a\u00f1adir otro, agrega una entrada. */
+/* Modelos de Claude configurados. Para a\u00f1adir otro, agrega una entrada.
+   Versi\u00f3n alumnos: lista cerrada (sin opci\u00f3n "Otro\u2026"), fijada por el profesor. */
 const CLAUDE_MODELS = [
   { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)" },
   { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" }
 ];
+
+/* Modelos de OpenAI configurados. Para a\u00f1adir otro, agrega una entrada.
+   Versi\u00f3n alumnos: lista cerrada (sin opci\u00f3n "Otro\u2026"), fijada por el profesor. */
+const OPENAI_MODELS = [
+  { id: "gpt-6.1-sol", label: "GPT-6.1 Sol (equilibrado, recomendado)" },
+  { id: "gpt-6-luna",  label: "GPT-6 Luna (r\u00e1pido y econ\u00f3mico)" }
+];
+
+/* Proveedores de IA disponibles para la mejora del prompt (paso de texto).
+   Cada proveedor define su lista cerrada de modelos, su modelo por defecto
+   y la clave de localStorage donde se guarda su propia API key. */
+const TEXT_PROVIDERS = {
+  anthropic: {
+    label: "Anthropic (Claude)",
+    models: CLAUDE_MODELS,
+    defaultModel: "claude-sonnet-4-5-20250929",
+    keyStorage: "ia_anthropic_key",
+    endpoint: "https://api.anthropic.com/v1/messages"
+  },
+  openai: {
+    label: "OpenAI (GPT)",
+    models: OPENAI_MODELS,
+    defaultModel: "gpt-6.1-sol",
+    keyStorage: "ia_openai_key",
+    endpoint: "https://api.openai.com/v1/chat/completions"
+  }
+};
 
 /* Modelos de fal.ai configurados y par\u00e1metros que admite cada uno.
    Para a\u00f1adir otro modelo, agrega una entrada con su esquema real. */
@@ -401,6 +437,12 @@ const PRICING = {
   anthropic: {
     "claude-sonnet-4-5-20250929": { inputPerMTok: 3.00, outputPerMTok: 15.00 },
     "claude-haiku-4-5-20251001": { inputPerMTok: 1.00, outputPerMTok: 5.00 }
+  },
+  // Precios orientativos de OpenAI en USD por millón de tokens. Verifica las
+  // tarifas vigentes antes de usarlas con fines de facturación real.
+  openai: {
+    "gpt-6.1-sol": { inputPerMTok: 2.00, outputPerMTok: 10.00 },
+    "gpt-6-luna": { inputPerMTok: 0.10, outputPerMTok: 0.50 }
   },
   fal: {}
 };
@@ -451,8 +493,10 @@ No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, 
 /* Claves de localStorage (las API keys usan exactamente estos nombres). */
 const STORAGE = {
   anthropicKey: "ia_anthropic_key",
+  openaiKey: "ia_openai_key",
   falKey: "ia_fal_key",
-  claudeModel: "genimod_alumnos_claude_model",
+  textProvider: "genimod_alumnos_text_provider",
+  textModel: "genimod_alumnos_text_model",
   falModel: "genimod_alumnos_fal_model",
   steps: "genimod_alumnos_inference_steps_v2",
   imageSize: "genimod_alumnos_image_size"
@@ -482,10 +526,11 @@ function storageRemove(key) { try { localStorage.removeItem(key); } catch (e) { 
 /* ==========================================================================
    GESTI\u00d3N DE API KEYS
    ========================================================================== */
-function keyConfig(provider) {
-  return provider === "anthropic"
-    ? { storage: STORAGE.anthropicKey, input: $("anthropicKey"), badge: $("anthropicBadge"), name: "Anthropic" }
-    : { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
+/* kind: "text" (proveedor activo en textProvider: Anthropic u OpenAI) o "fal". */
+function keyConfig(kind) {
+  if (kind === "fal") return { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
+  const cfg = TEXT_PROVIDERS[getTextProvider()];
+  return { storage: cfg.keyStorage, input: $("textApiKey"), badge: $("textApiKeyBadge"), name: cfg.label };
 }
 
 function saveApiKey(provider) {
@@ -509,9 +554,9 @@ function deleteApiKey(provider) {
   validateForm();
 }
 
-function toggleKeyVisibility(provider) {
-  const cfg = keyConfig(provider);
-  const btn = $(provider + "Toggle");
+function toggleKeyVisibility(kind) {
+  const cfg = keyConfig(kind);
+  const btn = kind === "fal" ? $("falToggle") : $("textKeyToggle");
   const show = cfg.input.type === "password";
   cfg.input.type = show ? "text" : "password";
   btn.textContent = show ? "Ocultar" : "Mostrar";
@@ -519,8 +564,8 @@ function toggleKeyVisibility(provider) {
 }
 
 function refreshKeyBadges() {
-  ["anthropic", "fal"].forEach((p) => {
-    const cfg = keyConfig(p);
+  ["text", "fal"].forEach((kind) => {
+    const cfg = keyConfig(kind);
     const saved = !!storageGet(cfg.storage);
     cfg.badge.textContent = saved ? "guardada" : "sin guardar";
     cfg.badge.className = "badge " + (saved ? "ok" : "no");
@@ -540,8 +585,22 @@ function fillSelect(select, options) {
   });
 }
 
+function getTextProvider() {
+  const v = $("textProvider").value;
+  return TEXT_PROVIDERS[v] ? v : "anthropic";
+}
+
 function getActiveModel(kind) {
-  return $(kind === "claude" ? "claudeModel" : "falModel").value.trim();
+  return $(kind === "text" ? "textModel" : "falModel").value.trim();
+}
+
+/* Repinta el selector de modelos según el proveedor activo en textProvider.
+   Lista cerrada (sin opción "Otro…"): si el modelo preferido no pertenece
+   a la lista del proveedor activo, se usa el modelo por defecto de ese proveedor. */
+function fillTextModels(preferred) {
+  const cfg = TEXT_PROVIDERS[getTextProvider()];
+  fillSelect($("textModel"), cfg.models.map((m) => ({ value: m.id, label: m.label })));
+  $("textModel").value = cfg.models.some((m) => m.id === preferred) ? preferred : cfg.defaultModel;
 }
 
 function refreshImageSizes(preferred) {
@@ -565,9 +624,13 @@ function getMaxTokens() {
 }
 
 function validateForm() {
-  const hasKeys = !!storageGet(STORAGE.anthropicKey) && !!storageGet(STORAGE.falKey);
+  const provider = getTextProvider();
+  const textCfg = TEXT_PROVIDERS[provider];
+  const hasTextKey = !!storageGet(textCfg.keyStorage);
+  const hasFalKey = !!storageGet(STORAGE.falKey);
+  const hasKeys = hasTextKey && hasFalKey;
   const hasIdea = $("idea").value.trim().length > 0;
-  const modelsOk = getActiveModel("claude").length > 0 && getActiveModel("fal").length > 0;
+  const modelsOk = getActiveModel("text").length > 0 && getActiveModel("fal").length > 0;
   const tokensOk = Number.isFinite(getMaxTokens());
   const ok = hasKeys && hasIdea && modelsOk && tokensOk && !state.busy;
   $("generate").disabled = !ok;
@@ -576,14 +639,16 @@ function validateForm() {
   else if (ok) hint.textContent = "Todo listo para generar.";
   else {
     const missing = [];
-    if (!storageGet(STORAGE.anthropicKey)) missing.push("la API key de Anthropic");
-    if (!storageGet(STORAGE.falKey)) missing.push("la API key de fal.ai");
+    if (!hasTextKey) missing.push(`la API key de ${textCfg.label}`);
+    if (!hasFalKey) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
     if (!modelsOk) missing.push("los identificadores de modelo");
     if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
-  $("estimateTokens").disabled = !(!!storageGet(STORAGE.anthropicKey) && hasIdea && modelsOk && tokensOk && !state.busy);
+  // La estimaci\u00f3n de tokens de entrada solo existe para Anthropic (endpoint gratuito count_tokens).
+  $("tokenEstimateSection").classList.toggle("hidden", provider !== "anthropic");
+  $("estimateTokens").disabled = !(provider === "anthropic" && hasTextKey && hasIdea && modelsOk && tokensOk && !state.busy);
   return ok;
 }
 
@@ -613,7 +678,7 @@ function showLoading(isLoading, label) {
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
 function redact(text) {
   let out = String(text || "");
-  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.falKey), $("anthropicKey").value, $("falKey").value]
+  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.openaiKey), storageGet(STORAGE.falKey), $("textApiKey").value, $("falKey").value]
     .filter((k) => k && k.length > 5)
     .forEach((k) => { out = out.split(k).join("[clave oculta]"); });
   return out;
@@ -689,15 +754,37 @@ REQUISITOS:
 - Devuelve exclusivamente el prompt final.`;
 }
 
-async function mejorarPromptConClaude(systemPrompt, idea, model, maxTokens) {
+/* Llamada unificada al proveedor de texto activo (Anthropic o OpenAI) para
+   mejorar la idea inicial y obtener el prompt destinado a FLUX. */
+async function mejorarIdeaConIA(systemPrompt, idea, provider, model, maxTokens) {
+  const userMessage = buildUserMessage(idea);
+
+  if (provider === "openai") {
+    const messages = [];
+    if (systemPrompt.trim()) messages.push({ role: "system", content: systemPrompt });
+    messages.push({ role: "user", content: userMessage });
+    const data = await fetchJson(TEXT_PROVIDERS.openai.endpoint, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + storageGet(STORAGE.openaiKey),
+        "content-type": "application/json"
+      },
+      body: JSON.stringify({ model, max_tokens: maxTokens, messages })
+    });
+    const usage = data && data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : null;
+    const truncated = !!(data && data.choices && data.choices[0] && data.choices[0].finish_reason === "length");
+    return { text: extractOpenAiText(data), usage, stopReason: truncated ? "max_tokens" : null };
+  }
+
+  // Anthropic (proveedor por defecto)
   const body = {
     model,
     max_tokens: maxTokens,
-    messages: [{ role: "user", content: buildUserMessage(idea) }]
+    messages: [{ role: "user", content: userMessage }]
   };
   if (systemPrompt.trim()) body.system = systemPrompt;
 
-  const data = await fetchJson(APP_CONFIG.anthropic.endpoint, {
+  const data = await fetchJson(TEXT_PROVIDERS.anthropic.endpoint, {
     method: "POST",
     headers: {
       "x-api-key": storageGet(STORAGE.anthropicKey),
@@ -722,14 +809,26 @@ function extractClaudeText(data) {
   return text;
 }
 
+/* Extrae el texto de la respuesta de OpenAI (Chat Completions). */
+function extractOpenAiText(data) {
+  const text = data && data.choices && data.choices[0] && data.choices[0].message
+    && typeof data.choices[0].message.content === "string"
+    ? data.choices[0].message.content.trim()
+    : "";
+  if (!text) throw new AppError("El modelo de OpenAI no ha generado un prompt v\u00e1lido.");
+  return text;
+}
+
 /* ==========================================================================
    ESTIMACI\u00d3N PREVIA DE TOKENS DE ENTRADA (antes de generar)
    ========================================================================== */
-/* Cuenta los tokens de ENTRADA que consumir\u00eda mejorarPromptConClaude() con
-   esta misma idea e instrucciones, usando el endpoint gratuito y exacto de
-   Anthropic (no genera nada ni gasta tokens de salida). Los tokens de SALIDA
-   nunca se pueden conocer de antemano: lo \u00fanico mostrable de la salida es
-   el techo configurado (maxTokens). */
+/* Cuenta los tokens de ENTRADA que consumir\u00eda mejorarIdeaConIA() con esta
+   misma idea e instrucciones, usando el endpoint gratuito y exacto de
+   Anthropic (no genera nada ni gasta tokens de salida). Solo tiene sentido
+   si el proveedor elegido es Anthropic: OpenAI no ofrece aqu\u00ed un conteo de
+   tokens de entrada equivalente. Los tokens de SALIDA nunca se pueden
+   conocer de antemano: lo \u00fanico mostrable de la salida es el techo
+   configurado (maxTokens). */
 async function contarTokensEntrada(systemPrompt, idea, model) {
   const body = { model, messages: [{ role: "user", content: buildUserMessage(idea) }] };
   if (systemPrompt.trim()) body.system = systemPrompt;
@@ -833,23 +932,24 @@ function extractFalImage(data) {
 /* ==========================================================================
    VISUALIZACI\u00d3N
    ========================================================================== */
-function displayGeneratedPrompt(text, usage, model, note) {
+function displayGeneratedPrompt(text, usage, provider, model, note) {
   $("generatedPrompt").value = text;
   ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !text; });
   const meta = $("claudeMeta");
   meta.textContent = "";
   if (!text) return;
-  const lines = [`Modelo de Claude: ${model}`];
+  const providerLabel = TEXT_PROVIDERS[provider] ? TEXT_PROVIDERS[provider].label : "Anthropic (Claude)";
+  const lines = [`Modelo: ${providerLabel} \u2014 ${model}`];
   if (usage && Number.isFinite(usage.input_tokens) && Number.isFinite(usage.output_tokens)) {
     lines.push(`Tokens: ${usage.input_tokens} de entrada \u00b7 ${usage.output_tokens} de salida`);
   }
-  lines.push(costLineAnthropic(model, usage));
+  lines.push(costLineText(provider, model, usage));
   if (note) lines.push(note);
   lines.forEach((l) => { const s = document.createElement("div"); s.textContent = l; meta.appendChild(s); });
 }
 
-function costLineAnthropic(model, usage) {
-  const p = PRICING.anthropic[model];
+function costLineText(provider, model, usage) {
+  const p = PRICING[provider] && PRICING[provider][model];
   if (p && usage && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
     const cost = (usage.input_tokens * p.inputPerMTok + usage.output_tokens * p.outputPerMTok) / 1e6;
     return `Coste del prompt: ${cost.toFixed(5)} USD`;
@@ -980,29 +1080,31 @@ async function generar() {
 
   const systemPrompt = $("systemPrompt").value;
   const idea = $("idea").value.trim();
-  const claudeModel = getActiveModel("claude");
+  const textProvider = getTextProvider();
+  const textModel = getActiveModel("text");
   const falModel = getActiveModel("fal");
   const steps = Number($("steps").value);
   const imageSize = $("imageSize").value;
   const safety = APP_CONFIG.fal.fixedSafetyTolerance;
   const maxTokens = getMaxTokens();
+  const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
   resetResults();
   showLoading(true, "Generando\u2026");
   try {
-    showStatus("Mejorando la idea con Claude\u2026", "info");
-    const claude = await mejorarPromptConClaude(systemPrompt, idea, claudeModel, maxTokens);
-    state.lastPrompt = claude.text;
+    showStatus(`Mejorando la idea con ${providerLabel}\u2026`, "info");
+    const resultado = await mejorarIdeaConIA(systemPrompt, idea, textProvider, textModel, maxTokens);
+    state.lastPrompt = resultado.text;
     state.lastSystem = systemPrompt;
     state.lastIdea = idea;
-    const truncated = claude.stopReason === "max_tokens"
-      ? "Aviso: la respuesta de Claude se ha cortado al alcanzar el l\u00edmite de tokens. Simplifica la idea inicial y vuelve a generar."
+    const truncated = resultado.stopReason === "max_tokens"
+      ? "Aviso: la respuesta se ha cortado al alcanzar el l\u00edmite de tokens. Simplifica la idea inicial y vuelve a generar."
       : "";
-    displayGeneratedPrompt(claude.text, claude.usage, claudeModel, truncated);
-    showStatus("Prompt generado por Claude", "ok");
+    displayGeneratedPrompt(resultado.text, resultado.usage, textProvider, textModel, truncated);
+    showStatus(`Prompt generado por ${providerLabel}`, "ok");
 
     showStatus("Generando imagen con FLUX\u2026", "info");
-    const image = await generarImagenConFal(claude.text, falModel, steps, imageSize, safety);
+    const image = await generarImagenConFal(resultado.text, falModel, steps, imageSize, safety);
     displayGeneratedImage(image, falModel, steps);
     if (image.nsfw) {
       showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Reformula la idea con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
@@ -1010,8 +1112,8 @@ async function generar() {
       showStatus("Imagen generada correctamente.", "ok");
     }
     await guardarEnHistorial({
-      idea, systemPrompt, prompt: claude.text, claudeModel, falModel, steps, imageSize, safety,
-      image, usage: claude.usage
+      idea, systemPrompt, prompt: resultado.text, textProvider, textModel, falModel, steps, imageSize, safety,
+      image, usage: resultado.usage
     });
   } catch (err) {
     $("status").className = "status";
@@ -1028,9 +1130,10 @@ async function estimarTokens() {
   out.className = "status";
   out.textContent = "";
   try {
+    if (getTextProvider() !== "anthropic") throw new AppError("La estimación de tokens de entrada solo está disponible con el proveedor Anthropic (Claude); OpenAI no ofrece aquí un conteo de tokens de entrada equivalente.");
     const systemPrompt = $("systemPrompt").value;
     const idea = $("idea").value.trim();
-    const model = getActiveModel("claude");
+    const model = getActiveModel("text");
     const maxTokens = getMaxTokens();
     if (!storageGet(STORAGE.anthropicKey)) throw new AppError("Indica y guarda antes la API key de Anthropic.");
     if (!idea) throw new AppError("Describe antes la idea inicial.");
@@ -1053,7 +1156,7 @@ function resetResults() {
   $("imageBox").innerHTML = "<span>La imagen generada aparecer\u00e1 aqu\u00ed.</span>";
   $("imageMeta").innerHTML = "";
   $("downloadImage").disabled = true;
-  displayGeneratedPrompt("", null, "");
+  displayGeneratedPrompt("", null, "", "");
 }
 
 function resetApplication() {
@@ -1118,7 +1221,8 @@ async function guardarEnHistorial(data) {
       idea: data.idea,
       systemPrompt: data.systemPrompt,
       prompt: data.prompt,
-      claudeModel: data.claudeModel,
+      textProvider: data.textProvider,
+      textModel: data.textModel,
       falModel: data.falModel,
       steps: data.steps,
       imageSize: data.imageSize,
@@ -1281,7 +1385,13 @@ function loadFromHistory(rec) {
   clearError();
   $("idea").value = rec.idea;
   $("systemPrompt").value = rec.systemPrompt;
-  setModelSelect("claudeModel", CLAUDE_MODELS.map((m) => m.id), rec.claudeModel);
+  // Compatibilidad con el historial anterior (solo Claude): si el registro no
+  // tiene textProvider pero sí claudeModel, se asume Anthropic.
+  const recProvider = TEXT_PROVIDERS[rec.textProvider] ? rec.textProvider : "anthropic";
+  const recModel = rec.textModel || rec.claudeModel || "";
+  $("textProvider").value = recProvider;
+  refreshKeyBadges();
+  if (recModel) fillTextModels(recModel);
   setModelSelect("falModel", Object.keys(FAL_MODELS), rec.falModel);
   refreshImageSizes(rec.imageSize);
   if (INFERENCE_STEP_OPTIONS.includes(rec.steps)) $("steps").value = String(rec.steps);
@@ -1290,7 +1400,7 @@ function loadFromHistory(rec) {
   state.lastPrompt = rec.prompt;
   state.lastSystem = rec.systemPrompt;
   state.lastIdea = rec.idea;
-  displayGeneratedPrompt(rec.prompt, rec.usage, rec.claudeModel);
+  displayGeneratedPrompt(rec.prompt, rec.usage, recProvider, recModel);
 
   if (loadedObjectUrl) { URL.revokeObjectURL(loadedObjectUrl); loadedObjectUrl = ""; }
   let src = rec.url;
@@ -1328,7 +1438,8 @@ async function renderComparison() {
 
   const sizeLabel = (v) => { const f = CUSTOM_FAL_IMAGE_SIZES.find((s) => s.value === v); return f ? f.label : v; };
   const rows = [
-    ["Modelo de Claude", (r) => r.claudeModel],
+    ["Proveedor de IA", (r) => (TEXT_PROVIDERS[r.textProvider] ? TEXT_PROVIDERS[r.textProvider].label : "Anthropic (Claude)")],
+    ["Modelo de texto", (r) => (r.textModel || r.claudeModel || "—")],
     ["Modelo de imagen", (r) => r.falModel],
     ["Pasos", (r) => String(r.steps)],
     ["Tama\u00f1o", (r) => sizeLabel(r.imageSize)],
@@ -1414,10 +1525,10 @@ function initializeHistory() {
    INICIALIZACI\u00d3N
    ========================================================================== */
 function loadSettings() {
-  // Modelos de Claude
-  fillSelect($("claudeModel"), CLAUDE_MODELS.map((m) => ({ value: m.id, label: m.label })));
-  const savedClaude = storageGet(STORAGE.claudeModel);
-  $("claudeModel").value = CLAUDE_MODELS.some((m) => m.id === savedClaude) ? savedClaude : APP_CONFIG.anthropic.defaultModel;
+  // Proveedor y modelo de IA para mejorar el prompt (Anthropic u OpenAI)
+  const savedProvider = storageGet(STORAGE.textProvider);
+  $("textProvider").value = TEXT_PROVIDERS[savedProvider] ? savedProvider : "anthropic";
+  fillTextModels(storageGet(STORAGE.textModel) || undefined);
 
   // Modelos de fal.ai
   fillSelect($("falModel"), Object.entries(FAL_MODELS).map(([id, m]) => ({ value: id, label: m.label })));
@@ -1436,7 +1547,8 @@ function loadSettings() {
 }
 
 function persistPreferences() {
-  storageSet(STORAGE.claudeModel, getActiveModel("claude"));
+  storageSet(STORAGE.textProvider, getTextProvider());
+  storageSet(STORAGE.textModel, getActiveModel("text"));
   storageSet(STORAGE.falModel, getActiveModel("fal"));
   storageSet(STORAGE.steps, $("steps").value);
   storageSet(STORAGE.imageSize, $("imageSize").value);
@@ -1445,14 +1557,23 @@ function persistPreferences() {
 function initializeApp() {
   loadSettings();
 
-  ["anthropic", "fal"].forEach((p) => {
-    $(p + "Save").addEventListener("click", () => saveApiKey(p));
-    $(p + "Delete").addEventListener("click", () => deleteApiKey(p));
-    $(p + "Toggle").addEventListener("click", () => toggleKeyVisibility(p));
-    $(p + "Key").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey(p); } });
-  });
+  $("textKeySave").addEventListener("click", () => saveApiKey("text"));
+  $("textKeyDelete").addEventListener("click", () => deleteApiKey("text"));
+  $("textKeyToggle").addEventListener("click", () => toggleKeyVisibility("text"));
+  $("textApiKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey("text"); } });
 
-  $("claudeModel").addEventListener("change", () => { persistPreferences(); validateForm(); });
+  $("falSave").addEventListener("click", () => saveApiKey("fal"));
+  $("falDelete").addEventListener("click", () => deleteApiKey("fal"));
+  $("falToggle").addEventListener("click", () => toggleKeyVisibility("fal"));
+  $("falKey").addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); saveApiKey("fal"); } });
+
+  $("textProvider").addEventListener("change", () => {
+    fillTextModels();
+    refreshKeyBadges();
+    persistPreferences();
+    validateForm();
+  });
+  $("textModel").addEventListener("change", () => { persistPreferences(); validateForm(); });
   $("falModel").addEventListener("change", () => { refreshImageSizes(); persistPreferences(); validateForm(); });
   $("steps").addEventListener("change", persistPreferences);
   $("imageSize").addEventListener("change", persistPreferences);
@@ -1466,7 +1587,7 @@ function initializeApp() {
   $("estimateTokens").addEventListener("click", estimarTokens);
   $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
   $("downloadPrompt").addEventListener("click", downloadPromptOnly);
-  $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, ""); state.lastPrompt = ""; });
+  $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, "", ""); state.lastPrompt = ""; });
   $("downloadTxt").addEventListener("click", downloadPromptsAsTxt);
   $("downloadImage").addEventListener("click", downloadImage);
 
