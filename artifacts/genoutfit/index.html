@@ -533,8 +533,8 @@ const MODELOS_POR_PROVEEDOR = {
 
 const LIMITE_TOKENS_DEFECTO = 8000;
 const LIMITES_TOKENS_MODELO = {
-  "claude-sonnet-4-5": 64000, "claude-sonnet-5": 64000, "claude-opus-5-5": 64000,
-  "claude-haiku-4-5-20251001": 64000, "claude-fable-5-1": 64000,
+  "claude-sonnet-4-5": 64000, "claude-sonnet-5": 128000, "claude-opus-5-5": 128000,
+  "claude-haiku-4-5-20251001": 64000, "claude-fable-5-1": 128000,
   "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000,
   "gpt-4o": 16384, "gpt-4o-mini": 16384, "gpt-4.1": 32768, "gpt-4.1-mini": 32768,
   "gemini-3.1-pro-preview": 65536, "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536
@@ -622,23 +622,21 @@ function storageRemove(k){ try { localStorage.removeItem(k); } catch(e){} }
 function proveedorActivo(){ return selProveedor.value; }
 function modeloActivo(){ return selModelo.value === "__otro__" ? inputModeloOtro.value.trim() : selModelo.value; }
 
-// El nº máx. de tokens de salida solo admite estos 3 valores fijos; 8192 es
-// el recomendado (y el valor por defecto) para el prompt de esta app.
 // Nº de tokens de salida recomendado (y valor por defecto); el campo admite
-// cualquier valor dentro del límite del modelo activo, sin otro tope fijo.
+// cualquier valor, sin tope forzado (ver obtenerMaxTokens/ajustarLimiteTokens).
 const MAX_TOKENS_RECOMENDADO = 8192;
 
+// Esta versión (GenOutFit, no restringida) no fuerza ningún tope de tokens
+// de salida para ningún proveedor: el límite documentado del modelo activo
+// se muestra solo como información (ver ajustarLimiteTokens).
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
-  const limite = limiteTokensModelo(modeloActivo());
-  if (!valor || valor < 256) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
-  return Math.min(valor, limite);
+  return valor && valor >= 256 ? valor : MAX_TOKENS_RECOMENDADO;
 }
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
-  inputMaxTokens.max = String(limite);
-  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = limite;
-  limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+  inputMaxTokens.removeAttribute("max");
+  limiteTokensModeloDiv.textContent = `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (la aplicación no fuerza este tope: es solo informativo, puedes escribir cualquier valor).`;
 }
 function repintarModelos(){
   const cfg = MODELOS_POR_PROVEEDOR[proveedorActivo()];

@@ -175,7 +175,7 @@
     <p>La imagen resultante depende de:</p>
     <ul>
       <li>La idea inicial.</li>
-      <li>Si se mejora el prompt: las instrucciones del sistema, el proveedor y modelo de IA elegidos (Anthropic/Claude, OpenAI/GPT o Google/Gemini) y el m&#225;ximo de tokens (entre 1 y 8192 con Anthropic y Gemini; con OpenAI, cualquier entero positivo, sin tope forzado por la aplicaci&#243;n).</li>
+      <li>Si se mejora el prompt: las instrucciones del sistema, el proveedor y modelo de IA elegidos (Anthropic/Claude, OpenAI/GPT o Google/Gemini) y el m&#225;ximo de tokens (entre 1 y 8192 solo con Anthropic; con OpenAI y Gemini, cualquier entero positivo, sin tope forzado por la aplicaci&#243;n).</li>
       <li>El modelo de generaci&#243;n de imagen.</li>
       <li>El n&#250;mero de pasos de inferencia (10 o 20 en esta versi&#243;n).</li>
     </ul>
@@ -396,15 +396,16 @@ const GEMINI_MODELS = [
   { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite (r\u00e1pido y econ\u00f3mico)" }
 ];
 
-/* M\u00e1ximo de tokens de salida DOCUMENTADO de cada modelo de OpenAI.
-   A petici\u00f3n del profesor, con OpenAI la aplicaci\u00f3n NO usa esta tabla para
-   limitar lo que el usuario puede escribir en "M\u00e1ximo de tokens": solo se
-   muestra como informaci\u00f3n (ver updateMaxTokensUI). Con Anthropic y Gemini
-   se sigue aplicando el tope de APP_CONFIG.anthropic.maxAllowedTokens, sin
-   cambios. */
-const OPENAI_TOKEN_LIMITS = {
-  "gpt-6.1-sol": 128000,
-  "gpt-6-luna": 128000
+/* M\u00e1ximo de tokens de salida DOCUMENTADO de cada modelo (solo informativo).
+   A petici\u00f3n del profesor, el tope de "M\u00e1ximo de tokens"
+   (APP_CONFIG.anthropic.maxAllowedTokens) se aplica \u00daNICAMENTE con el
+   proveedor Anthropic; con OpenAI y con Gemini esta tabla solo se muestra
+   como informaci\u00f3n (ver updateMaxTokensUI). */
+const MODEL_TOKEN_LIMITS = {
+  "claude-sonnet-4-5-20250929": 64000, "claude-haiku-4-5-20251001": 64000,
+  "claude-sonnet-5": 128000, "claude-opus-5-5": 128000, "claude-fable-5-1": 128000,
+  "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000, "gpt-4.1": 32768,
+  "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536, "gemini-3.1-pro-preview": 65536
 };
 
 /* Proveedores de IA disponibles para la mejora del prompt (paso de texto).
@@ -660,14 +661,14 @@ function refreshImageSizes(preferred) {
    VALIDACI\u00d3N DEL FORMULARIO
    ========================================================================== */
 /* Devuelve el m\u00e1ximo de tokens como entero positivo, o NaN si el campo no es v\u00e1lido.
-   A petici\u00f3n del profesor, con OpenAI no se aplica ning\u00fan tope superior (solo se
-   exige un entero positivo); con Anthropic y Gemini se mantiene el tope de
-   siempre (APP_CONFIG.anthropic.maxAllowedTokens). */
+   A petici\u00f3n del profesor, el tope superior
+   (APP_CONFIG.anthropic.maxAllowedTokens) solo se aplica con Anthropic; con
+   OpenAI y con Gemini solo se exige un entero positivo. */
 function getMaxTokens() {
   const raw = $("maxTokens").value.trim();
   const n = Number(raw);
   if (raw === "" || !Number.isInteger(n) || n < 1) return NaN;
-  if (getTextProvider() === "openai") return n;
+  if (getTextProvider() !== "anthropic") return n;
   return n <= APP_CONFIG.anthropic.maxAllowedTokens ? n : NaN;
 }
 
@@ -679,15 +680,18 @@ function updateMaxTokensUI() {
   const provider = getTextProvider();
   const input = $("maxTokens");
   const hint = $("maxTokensHint");
-  if (provider === "openai") {
+  const base = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens).";
+  if (provider !== "anthropic") {
     input.removeAttribute("max");
-    const limite = OPENAI_TOKEN_LIMITS[getActiveModel("text")];
-    hint.textContent = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens)." +
+    const limite = MODEL_TOKEN_LIMITS[getActiveModel("text")];
+    hint.textContent = base +
       (limite ? ` M\u00e1ximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens.` : "") +
-      " Con OpenAI la aplicaci\u00f3n no fuerza ning\u00fan tope: es solo informaci\u00f3n. Solo se usa si el prompt se mejora con IA.";
+      " Con este proveedor la aplicaci\u00f3n no fuerza ning\u00fan tope: es solo informaci\u00f3n. Solo se usa si el prompt se mejora con IA.";
   } else {
-    input.max = String(APP_CONFIG.anthropic.maxAllowedTokens);
-    hint.textContent = `L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens). Entre 1 y ${APP_CONFIG.anthropic.maxAllowedTokens}; por defecto ${APP_CONFIG.anthropic.maxTokens}. Solo se usa si el prompt se mejora con IA.`;
+    const tope = APP_CONFIG.anthropic.maxAllowedTokens;
+    input.max = String(tope);
+    if (Number(input.value) > tope) input.value = String(tope);
+    hint.textContent = `${base} Entre 1 y ${tope}; por defecto ${APP_CONFIG.anthropic.maxTokens}. Solo se usa si el prompt se mejora con IA.`;
   }
 }
 
@@ -722,7 +726,7 @@ function validateForm() {
     if (!hasFalKey) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
     if (!modelsOk) missing.push("los identificadores de modelo");
-    if (!tokensOk) missing.push(provider === "openai" ? "un m\u00e1ximo de tokens v\u00e1lido (entero positivo)" : `un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
+    if (!tokensOk) missing.push(provider !== "anthropic" ? "un m\u00e1ximo de tokens v\u00e1lido (entero positivo)" : `un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
   // La estimaci\u00f3n de tokens de entrada solo existe para Anthropic y Gemini (ambos ofrecen un endpoint gratuito de conteo exacto).
@@ -1275,7 +1279,7 @@ async function estimarTokens() {
     if (!storageGet(TEXT_PROVIDERS[provider].keyStorage)) throw new AppError(`Indica y guarda antes la API key de ${TEXT_PROVIDERS[provider].label}.`);
     if (!idea) throw new AppError("Describe antes la idea inicial.");
     if (!model) throw new AppError("Indica un identificador de modelo válido.");
-    if (!Number.isFinite(maxTokens)) throw new AppError(`Indica un máximo de tokens válido (1-${APP_CONFIG.anthropic.maxAllowedTokens}).`);
+    if (!Number.isFinite(maxTokens)) throw new AppError(provider === "anthropic" ? `Indica un máximo de tokens válido (1-${APP_CONFIG.anthropic.maxAllowedTokens}).` : "Indica un máximo de tokens válido (entero positivo).");
     const entrada = await contarTokensEntrada(systemPrompt, idea, provider, model);
     out.textContent = formatearEstimacionTokens(entrada, maxTokens, provider, model);
     out.className = "status show ok";
@@ -1687,7 +1691,7 @@ function loadSettings() {
 
   const savedTokens = Number(storageGet(STORAGE.maxTokens));
   const tokensValid = Number.isInteger(savedTokens) && savedTokens >= 1 &&
-    (getTextProvider() === "openai" || savedTokens <= APP_CONFIG.anthropic.maxAllowedTokens);
+    (getTextProvider() !== "anthropic" || savedTokens <= APP_CONFIG.anthropic.maxAllowedTokens);
   $("maxTokens").value = String(tokensValid ? savedTokens : APP_CONFIG.anthropic.maxTokens);
   updateMaxTokensUI();
 

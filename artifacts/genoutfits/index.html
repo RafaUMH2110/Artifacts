@@ -268,7 +268,7 @@
   <details class="panel-guia">
     <summary>&#191;Cómo funciona GenOutFitS?</summary>
     <p><strong>GenOutFitS</strong> es la versión para alumnos de GenOutFit: una aplicación de un solo archivo HTML que, a partir de la fotografía de una prenda, usa IA para identificar sus características y proponer un outfit completo de prendas afines, y genera una imagen de cada pieza con FLUX (fal.ai).</p>
-    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida es 8192 (con Anthropic y Gemini; con OpenAI no se fuerza ningún tope, solo se muestra como información el máximo de ese modelo), el outfit puede tener como máximo 3 piezas además de la prenda original, y los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados y no son configurables.</p>
+    <p>Esta versión tiene algunos límites fijados por el profesor para controlar el coste y la complejidad: del proveedor Anthropic solo puedes elegir Claude Sonnet 4.5 o Claude Haiku 4.5, el máximo de tokens de salida está limitado a 9216 solo con Anthropic (recomendado: 8192); con OpenAI y Gemini no se fuerza ningún tope y solo se muestra como información el máximo de ese modelo, el outfit puede tener como máximo 3 piezas además de la prenda original, y los pasos de inferencia (10) y la tolerancia del filtro de seguridad (3) de FLUX están fijados y no son configurables.</p>
     <ol>
       <li>Subes (o arrastras) la foto de una prenda.</li>
       <li>Eliges cuántas piezas debe tener el outfit completo y si quieres además una imagen de un/a modelo vistiendo todo el conjunto.</li>
@@ -510,9 +510,13 @@ const LIMITES_TOKENS_MODELO = {
   "gpt-4.1-mini": 32768, "gpt-4o": 16384, "gpt-4o-mini": 16384,
   "gemini-3.1-pro-preview": 65536, "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536
 };
+// Máximo de salida DOCUMENTADO del modelo (solo informativo).
+function limiteDocumentadoModelo(modelo){
+  return LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO;
+}
+// Límite efectivo: solo se usa con Anthropic (tope de esta versión alumnos).
 function limiteTokensModelo(modelo){
-  // Versión alumnos: tope global de 8192 tokens, aunque el modelo admita más.
-  return Math.min(LIMITES_TOKENS_MODELO[modelo] || LIMITE_TOKENS_DEFECTO, TOPE_TOKENS_ALUMNOS);
+  return Math.min(limiteDocumentadoModelo(modelo), TOPE_TOKENS_ALUMNOS);
 }
 
 // --- Precios orientativos (USD por millón de tokens) -------------------------
@@ -589,32 +593,32 @@ function proveedorActivo(){ return selProveedor.value; }
 function modeloActivo(){ return selModelo.value; } // Versión alumnos: catálogo cerrado, sin opción "Otro…"
 
 // 8192 es el valor recomendado (y por defecto) para el prompt de esta app.
-// Con Anthropic y Gemini el campo se recorta al límite del modelo activo y al
-// tope de esta versión alumnos (ver limiteTokensModelo); con OpenAI no se
-// aplica ningún tope (ver obtenerMaxTokens/ajustarLimiteTokens).
+// Solo con Anthropic el campo se recorta al límite del modelo activo y al
+// tope de esta versión alumnos (ver limiteTokensModelo); con OpenAI y con
+// Gemini no se aplica ningún tope (ver obtenerMaxTokens/ajustarLimiteTokens).
 const MAX_TOKENS_RECOMENDADO = 8192;
 
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
-  // A petición del profesor: con OpenAI no se fuerza ningún tope de tokens de
-  // salida, se deja el valor elegido tal cual (el límite del modelo se
-  // muestra solo como información, ver ajustarLimiteTokens). Con Anthropic y
-  // Gemini se mantiene el tope de siempre.
-  if (proveedorActivo() === "openai") return valor && valor >= 256 ? valor : MAX_TOKENS_RECOMENDADO;
+  // A petición del profesor: el tope de tokens de salida de esta versión
+  // alumnos solo se aplica con Anthropic. Con OpenAI y con Gemini se deja el
+  // valor elegido tal cual (el límite del modelo se muestra solo como
+  // información, ver ajustarLimiteTokens).
+  if (proveedorActivo() !== "anthropic") return valor && valor >= 256 ? valor : MAX_TOKENS_RECOMENDADO;
   if (!valor || valor < 256) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
-  const limite = limiteTokensModelo(modeloActivo());
-  const esOpenAI = proveedorActivo() === "openai";
-  // Con OpenAI no se fija el atributo "max" del campo ni se recorta el valor
-  // introducido (a petición del profesor, no se fuerza ningún tope para este
-  // proveedor): el límite del modelo se muestra solo como información, más
-  // abajo. Con Anthropic y Gemini se recorta al tope de esta versión alumnos.
-  if (esOpenAI){
+  const esAnthropic = proveedorActivo() === "anthropic";
+  const limite = esAnthropic ? limiteTokensModelo(modeloActivo()) : limiteDocumentadoModelo(modeloActivo());
+  // Con OpenAI y con Gemini no se fija el atributo "max" del campo ni se
+  // recorta el valor introducido (a petición del profesor, el tope de esta
+  // versión alumnos solo se aplica con Anthropic): el límite del modelo se
+  // muestra solo como información, más abajo.
+  if (!esAnthropic){
     inputMaxTokens.removeAttribute("max");
-    limiteTokensModeloDiv.textContent = `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con OpenAI la aplicación no fuerza este tope: es solo informativo, puedes escribir cualquier valor).`;
+    limiteTokensModeloDiv.textContent = `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con este proveedor la aplicación no fuerza este tope: es solo informativo, puedes escribir cualquier valor).`;
     return;
   }
   inputMaxTokens.max = String(limite);

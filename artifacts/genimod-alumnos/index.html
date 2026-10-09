@@ -203,8 +203,8 @@
         </div>
         <div class="field">
           <label for="maxTokens">M&#225;ximo de tokens de salida</label>
-          <input type="number" id="maxTokens" value="2048" readonly aria-readonly="true">
-          <p class="hint">Valor fijo en esta versi&#243;n: 2048 (<code>max_tokens</code>).</p>
+          <input type="number" id="maxTokens" min="1" step="1" inputmode="numeric" value="2048">
+          <p class="hint" id="maxTokensHint">L&#237;mite de longitud de la respuesta del modelo de texto (<code>max_tokens</code>). Por defecto 2048.</p>
         </div>
       </div>
       <div>
@@ -387,6 +387,15 @@ const GEMINI_MODELS = [
   { id: "gemini-3.8-flash",      label: "Gemini 3.8 Flash (equilibrado, recomendado)" },
   { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite (r\u00e1pido y econ\u00f3mico)" }
 ];
+
+/* M\u00e1ximo de tokens de salida DOCUMENTADO de cada modelo (solo informativo:
+   esta versi\u00f3n no fuerza ning\u00fan tope de "M\u00e1ximo de tokens"). */
+const MODEL_TOKEN_LIMITS = {
+  "claude-sonnet-4-5-20250929": 64000, "claude-haiku-4-5-20251001": 64000,
+  "claude-sonnet-5": 128000, "claude-opus-5-5": 128000, "claude-fable-5-1": 128000,
+  "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000, "gpt-4.1": 32768,
+  "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536, "gemini-3.1-pro-preview": 65536
+};
 
 /* Proveedores de IA disponibles para la mejora del prompt (paso de texto).
    Cada proveedor define su lista cerrada de modelos, su modelo por defecto
@@ -645,7 +654,18 @@ function getMaxTokens() {
   return raw !== "" && Number.isInteger(n) && n >= 1 ? n : NaN;
 }
 
+/* Texto informativo del campo "M\u00e1ximo de tokens": muestra el m\u00e1ximo
+   documentado del modelo activo, sin limitar nunca el valor introducido. */
+function updateMaxTokensUI() {
+  const hint = $("maxTokensHint");
+  if (!hint) return;
+  const limite = MODEL_TOKEN_LIMITS[getActiveModel("text")];
+  hint.textContent = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens). Por defecto 2048. Si es demasiado bajo, el prompt puede quedar cortado." +
+    (limite ? ` M\u00e1ximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (la aplicaci\u00f3n no fuerza este tope: es solo informativo).` : "");
+}
+
 function validateForm() {
+  updateMaxTokensUI();
   const provider = getTextProvider();
   const textCfg = TEXT_PROVIDERS[provider];
   const hasTextKey = !!storageGet(textCfg.keyStorage);
@@ -1600,7 +1620,7 @@ function loadSettings() {
   const savedSteps = storageGet(STORAGE.steps);
   $("steps").value = INFERENCE_STEP_OPTIONS.includes(Number(savedSteps)) ? savedSteps : String(APP_CONFIG.fal.defaultInferenceSteps);
   refreshImageSizes(storageGet(STORAGE.imageSize) || APP_CONFIG.fal.defaultImageSize);
-  $("maxTokens").value = String(APP_CONFIG.anthropic.maxTokens);   // valor fijo, no se lee del almacenamiento
+  $("maxTokens").value = String(APP_CONFIG.anthropic.maxTokens);
 
   $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT;
   refreshKeyBadges();
@@ -1634,6 +1654,7 @@ function initializeApp() {
     validateForm();
   });
   $("textModel").addEventListener("change", () => { persistPreferences(); validateForm(); });
+  $("maxTokens").addEventListener("input", validateForm);
   $("falModel").addEventListener("change", () => { refreshImageSizes(); persistPreferences(); validateForm(); });
   $("steps").addEventListener("change", persistPreferences);
   $("imageSize").addEventListener("change", persistPreferences);
