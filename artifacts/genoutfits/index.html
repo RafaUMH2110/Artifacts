@@ -296,12 +296,8 @@
         <select id="sel-modelo"></select>
       </div>
       <div class="field">
-        <label for="input-max-tokens">Nº máx. tokens de salida</label>
-        <select id="input-max-tokens">
-          <option value="4096">4096</option>
-          <option value="8192" selected>8192 (Recomendado)</option>
-          <option value="9216">9216</option>
-        </select>
+        <label for="input-max-tokens">Nº máx. tokens de salida (Recomendado: 8192)</label>
+        <input type="number" id="input-max-tokens" min="256" max="9216" step="1" value="8192">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -495,8 +491,8 @@ const MODELOS_POR_PROVEEDOR = {
     porDefecto: "gpt-6.1-sol"
   },
   gemini: {
-    modelos: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
-    porDefecto: "gemini-1.5-flash"
+    modelos: ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash-lite"],
+    porDefecto: "gemini-3.8-flash"
   }
 };
 // Versión alumnos: lista cerrada de modelos (sin opción "Otro…"), fijada por
@@ -504,15 +500,15 @@ const MODELOS_POR_PROVEEDOR = {
 // Para añadir o quitar un modelo, edita este objeto.
 
 const LIMITE_TOKENS_DEFECTO = 8000;
-// Tope global de esta versión alumnos: deja accesibles los 3 valores fijos
-// del selector (4096/8192/9216) salvo que el propio modelo admita menos.
+// Tope global de esta versión alumnos para Anthropic y Gemini (con OpenAI no
+// se aplica ningún tope, ver obtenerMaxTokens/ajustarLimiteTokens).
 const TOPE_TOKENS_ALUMNOS = 9216;
 const LIMITES_TOKENS_MODELO = {
   "claude-sonnet-4-5": 64000,
   "claude-haiku-4-5-20251001": 64000,
-  "gpt-6-astra": 32768, "gpt-6.1-sol": 32768, "gpt-6-luna": 16384, "gpt-4.1": 32768,
+  "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000, "gpt-4.1": 32768,
   "gpt-4.1-mini": 32768, "gpt-4o": 16384, "gpt-4o-mini": 16384,
-  "gemini-1.5-pro": 8192, "gemini-1.5-flash": 8192, "gemini-2.0-flash": 8192
+  "gemini-3.1-pro-preview": 65536, "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536
 };
 function limiteTokensModelo(modelo){
   // Versión alumnos: tope global de 8192 tokens, aunque el modelo admita más.
@@ -527,8 +523,8 @@ const PRECIOS_POR_MTOK = {
   "gpt-6-astra": {in: 10.00, out: 50.00}, "gpt-6.1-sol": {in: 2.00, out: 10.00}, "gpt-6-luna": {in: 0.10, out: 0.50},
   "gpt-4o": {in: 2.50, out: 10.00}, "gpt-4o-mini": {in: 0.15, out: 0.60},
   "gpt-4.1": {in: 2.00, out: 8.00}, "gpt-4.1-mini": {in: 0.40, out: 1.60},
-  "gemini-1.5-pro": {in: 1.25, out: 5.00}, "gemini-1.5-flash": {in: 0.075, out: 0.30},
-  "gemini-2.0-flash": {in: 0.10, out: 0.40}
+  "gemini-3.1-pro-preview": {in: 2.50, out: 15.00}, "gemini-3.8-flash": {in: 0.75, out: 3.75},
+  "gemini-3.5-flash-lite": {in: 0.30, out: 2.50}
 };
 
 const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_key", gemini: "ia_gemini_key"};
@@ -592,10 +588,10 @@ function storageRemove(k){ try { localStorage.removeItem(k); } catch(e){} }
 function proveedorActivo(){ return selProveedor.value; }
 function modeloActivo(){ return selModelo.value; } // Versión alumnos: catálogo cerrado, sin opción "Otro…"
 
-// El nº máx. de tokens de salida solo admite estos 3 valores fijos
-// (4096/8192/9216); 8192 es el recomendado (y el valor por defecto) para
-// el prompt de esta app. Los tres son accesibles salvo que el modelo activo
-// tenga un límite propio menor (ver limiteTokensModelo).
+// 8192 es el valor recomendado (y por defecto) para el prompt de esta app.
+// Con Anthropic y Gemini el campo se recorta al límite del modelo activo y al
+// tope de esta versión alumnos (ver limiteTokensModelo); con OpenAI no se
+// aplica ningún tope (ver obtenerMaxTokens/ajustarLimiteTokens).
 const MAX_TOKENS_RECOMENDADO = 8192;
 
 function obtenerMaxTokens(){
@@ -605,28 +601,25 @@ function obtenerMaxTokens(){
   // salida, se deja el valor elegido tal cual (el límite del modelo se
   // muestra solo como información, ver ajustarLimiteTokens). Con Anthropic y
   // Gemini se mantiene el tope de siempre.
-  if (proveedorActivo() === "openai") return valor || MAX_TOKENS_RECOMENDADO;
-  if (!valor) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
+  if (proveedorActivo() === "openai") return valor && valor >= 256 ? valor : MAX_TOKENS_RECOMENDADO;
+  if (!valor || valor < 256) return Math.min(MAX_TOKENS_RECOMENDADO, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
   const limite = limiteTokensModelo(modeloActivo());
   const esOpenAI = proveedorActivo() === "openai";
-  // Deshabilita las opciones que superen el límite del modelo activo; si el
-  // valor seleccionado deja de estar permitido, se cae al permitido más alto
-  // disponible. Con OpenAI no se deshabilita ninguna opción (a petición del
-  // profesor, no se fuerza ningún tope para este proveedor): el límite del
-  // modelo se muestra solo como información, más abajo.
-  Array.from(inputMaxTokens.options).forEach(op => {
-    op.disabled = !esOpenAI && parseInt(op.value, 10) > limite;
-  });
-  if (!esOpenAI && inputMaxTokens.options[inputMaxTokens.selectedIndex].disabled){
-    const permitidos = Array.from(inputMaxTokens.options).filter(op => !op.disabled);
-    inputMaxTokens.value = permitidos.length ? permitidos[permitidos.length - 1].value : inputMaxTokens.options[0].value;
+  // Con OpenAI no se fija el atributo "max" del campo ni se recorta el valor
+  // introducido (a petición del profesor, no se fuerza ningún tope para este
+  // proveedor): el límite del modelo se muestra solo como información, más
+  // abajo. Con Anthropic y Gemini se recorta al tope de esta versión alumnos.
+  if (esOpenAI){
+    inputMaxTokens.removeAttribute("max");
+    limiteTokensModeloDiv.textContent = `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con OpenAI la aplicación no fuerza este tope: es solo informativo, puedes escribir cualquier valor).`;
+    return;
   }
-  limiteTokensModeloDiv.textContent = esOpenAI
-    ? `Máximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (con OpenAI la aplicación no fuerza este tope: es solo informativo, puedes elegir cualquiera de las opciones).`
-    : `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+  inputMaxTokens.max = String(limite);
+  if (parseInt(inputMaxTokens.value, 10) > limite) inputMaxTokens.value = String(limite);
+  limiteTokensModeloDiv.textContent = `Límite para este modelo: ${limite.toLocaleString("es-ES")} tokens (tope de esta versión alumnos: ${TOPE_TOKENS_ALUMNOS.toLocaleString("es-ES")} tokens).`;
 }
 function repintarModelos(){
   const cfg = MODELOS_POR_PROVEEDOR[proveedorActivo()];

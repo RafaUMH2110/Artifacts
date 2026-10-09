@@ -34,7 +34,7 @@
   * { box-sizing: border-box; }
   html { scroll-padding-top: 1rem; }
   body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.55; }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+  .wrap { max-width: 1160px; margin: 0 auto; padding: 0 1.25rem 3rem; }
 
   header.hero { padding: 2.5rem 0 1.5rem; }
   header.hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.2rem, 5vw, 3.2rem); margin: 0; letter-spacing: -0.02em; color: var(--blue-700); font-weight: 700; }
@@ -136,9 +136,9 @@
 </head>
 <body
   data-app-title="GenImOd — Versión alumnos"
-  data-app-description="Versión de GenImOd para el aula: genera imágenes de moda con Claude u OpenAI y FLUX, con modelos y parámetros limitados y fijados por el profesor."
+  data-app-description="Versión de GenImOd para el aula: genera imágenes de moda con Claude, OpenAI o Gemini y FLUX, con modelos y parámetros limitados y fijados por el profesor."
   data-categories="ia,diseno-creatividad,generacion-contenido,docencia"
-  data-tags="Claude,OpenAI,FLUX,Docencia,Imágenes,Moda"
+  data-tags="Claude,OpenAI,Gemini,FLUX,Docencia,Imágenes,Moda"
   data-client-only="true"
 >
 <div class="wrap">
@@ -168,6 +168,7 @@
         <select id="textProvider">
           <option value="anthropic">Anthropic (Claude)</option>
           <option value="openai">OpenAI (GPT)</option>
+          <option value="gemini">Google (Gemini)</option>
         </select>
         <label for="textApiKey" style="margin-top:.75rem">API key del proveedor seleccionado <span id="textApiKeyBadge" class="badge no">sin guardar</span></label>
         <div class="key-row">
@@ -188,7 +189,7 @@
         </div>
       </div>
     </div>
-    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com, api.openai.com o fal.run, seg&#250;n corresponda). La validez definitiva la confirma la respuesta del proveedor.</p>
+    <p class="hint">Cada clave solo se env&#237;a a su proveedor oficial (api.anthropic.com, api.openai.com, generativelanguage.googleapis.com o fal.run, seg&#250;n corresponda). La validez definitiva la confirma la respuesta del proveedor.</p>
   </section>
 
   <!-- SECCI&#211;N 2 &#8212; MODELOS -->
@@ -263,7 +264,7 @@
       <div class="row">
         <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
       </div>
-      <p class="hint">La estimaci&#243;n consulta solo el conteo de tokens de ENTRADA de Anthropic (gratuito) con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Solo disponible si el proveedor elegido es Anthropic (Claude); OpenAI no ofrece aqu&#237; un conteo de tokens de entrada equivalente. Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
+      <p class="hint">La estimaci&#243;n consulta el conteo de tokens de ENTRADA (gratuito) del proveedor elegido, con la misma idea e instrucciones que se enviar&#237;an; no requiere la clave de fal.ai. Solo disponible si el proveedor elegido es Anthropic (Claude) o Google (Gemini); OpenAI no ofrece aqu&#237; un conteo de tokens de entrada equivalente. Los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
       <div id="tokenEstimate" class="status" role="status" aria-live="polite"></div>
     </div>
     <div id="status" class="status" role="status" aria-live="polite"></div>
@@ -314,7 +315,7 @@
     <summary>&#191;C&#243;mo funciona GenImOd?</summary>
     <ol>
       <li>El usuario introduce una idea inicial.</li>
-      <li>El proveedor de IA elegido (Claude u OpenAI) analiza y mejora la idea.</li>
+      <li>El proveedor de IA elegido (Claude, OpenAI o Gemini) analiza y mejora la idea.</li>
       <li>Ese proveedor genera un prompt especializado en ingl&#233;s.</li>
       <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
@@ -324,7 +325,7 @@
     <ul>
       <li>La idea inicial.</li>
       <li>Las instrucciones del sistema.</li>
-      <li>El proveedor y el modelo de IA seleccionados (Anthropic/Claude u OpenAI/GPT).</li>
+      <li>El proveedor y el modelo de IA seleccionados (Anthropic/Claude, OpenAI/GPT o Google/Gemini).</li>
       <li>El modelo FLUX seleccionado.</li>
       <li>Los par&#225;metros de inferencia.</li>
     </ul>
@@ -380,6 +381,13 @@ const OPENAI_MODELS = [
   { id: "gpt-6-luna",  label: "GPT-6 Luna (r\u00e1pido y econ\u00f3mico)" }
 ];
 
+/* Modelos de Gemini configurados. Para a\u00f1adir otro, agrega una entrada.
+   Versi\u00f3n alumnos: lista cerrada (sin opci\u00f3n "Otro\u2026"), fijada por el profesor. */
+const GEMINI_MODELS = [
+  { id: "gemini-3.8-flash",      label: "Gemini 3.8 Flash (equilibrado, recomendado)" },
+  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite (r\u00e1pido y econ\u00f3mico)" }
+];
+
 /* Proveedores de IA disponibles para la mejora del prompt (paso de texto).
    Cada proveedor define su lista cerrada de modelos, su modelo por defecto
    y la clave de localStorage donde se guarda su propia API key. */
@@ -397,6 +405,13 @@ const TEXT_PROVIDERS = {
     defaultModel: "gpt-6.1-sol",
     keyStorage: "ia_openai_key",
     endpoint: "https://api.openai.com/v1/chat/completions"
+  },
+  gemini: {
+    label: "Google (Gemini)",
+    models: GEMINI_MODELS,
+    defaultModel: "gemini-3.8-flash",
+    keyStorage: "ia_gemini_key",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/models/"
   }
 };
 
@@ -443,6 +458,12 @@ const PRICING = {
   openai: {
     "gpt-6.1-sol": { inputPerMTok: 2.00, outputPerMTok: 10.00 },
     "gpt-6-luna": { inputPerMTok: 0.10, outputPerMTok: 0.50 }
+  },
+  // Precios orientativos de Gemini en USD por millón de tokens. Verifica las
+  // tarifas vigentes antes de usarlas con fines de facturación real.
+  gemini: {
+    "gemini-3.8-flash": { inputPerMTok: 0.75, outputPerMTok: 3.75 },
+    "gemini-3.5-flash-lite": { inputPerMTok: 0.30, outputPerMTok: 2.50 }
   },
   fal: {}
 };
@@ -494,6 +515,7 @@ No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, 
 const STORAGE = {
   anthropicKey: "ia_anthropic_key",
   openaiKey: "ia_openai_key",
+  geminiKey: "ia_gemini_key",
   falKey: "ia_fal_key",
   textProvider: "genimod_alumnos_text_provider",
   textModel: "genimod_alumnos_text_model",
@@ -526,7 +548,7 @@ function storageRemove(key) { try { localStorage.removeItem(key); } catch (e) { 
 /* ==========================================================================
    GESTI\u00d3N DE API KEYS
    ========================================================================== */
-/* kind: "text" (proveedor activo en textProvider: Anthropic u OpenAI) o "fal". */
+/* kind: "text" (proveedor activo en textProvider: Anthropic, OpenAI o Gemini) o "fal". */
 function keyConfig(kind) {
   if (kind === "fal") return { storage: STORAGE.falKey, input: $("falKey"), badge: $("falBadge"), name: "fal.ai" };
   const cfg = TEXT_PROVIDERS[getTextProvider()];
@@ -646,9 +668,10 @@ function validateForm() {
     if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
-  // La estimaci\u00f3n de tokens de entrada solo existe para Anthropic (endpoint gratuito count_tokens).
-  $("tokenEstimateSection").classList.toggle("hidden", provider !== "anthropic");
-  $("estimateTokens").disabled = !(provider === "anthropic" && hasTextKey && hasIdea && modelsOk && tokensOk && !state.busy);
+  // La estimaci\u00f3n de tokens de entrada solo existe para Anthropic y Gemini (ambos ofrecen un endpoint gratuito de conteo exacto).
+  const soportaEstimacion = provider === "anthropic" || provider === "gemini";
+  $("tokenEstimateSection").classList.toggle("hidden", !soportaEstimacion);
+  $("estimateTokens").disabled = !(soportaEstimacion && hasTextKey && hasIdea && modelsOk && tokensOk && !state.busy);
   return ok;
 }
 
@@ -678,7 +701,7 @@ function showLoading(isLoading, label) {
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
 function redact(text) {
   let out = String(text || "");
-  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.openaiKey), storageGet(STORAGE.falKey), $("textApiKey").value, $("falKey").value]
+  [storageGet(STORAGE.anthropicKey), storageGet(STORAGE.openaiKey), storageGet(STORAGE.geminiKey), storageGet(STORAGE.falKey), $("textApiKey").value, $("falKey").value]
     .filter((k) => k && k.length > 5)
     .forEach((k) => { out = out.split(k).join("[clave oculta]"); });
   return out;
@@ -754,8 +777,8 @@ REQUISITOS:
 - Devuelve exclusivamente el prompt final.`;
 }
 
-/* Llamada unificada al proveedor de texto activo (Anthropic o OpenAI) para
-   mejorar la idea inicial y obtener el prompt destinado a FLUX. */
+/* Llamada unificada al proveedor de texto activo (Anthropic, OpenAI o Gemini)
+   para mejorar la idea inicial y obtener el prompt destinado a FLUX. */
 async function mejorarIdeaConIA(systemPrompt, idea, provider, model, maxTokens) {
   const userMessage = buildUserMessage(idea);
 
@@ -774,6 +797,23 @@ async function mejorarIdeaConIA(systemPrompt, idea, provider, model, maxTokens) 
     const usage = data && data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : null;
     const truncated = !!(data && data.choices && data.choices[0] && data.choices[0].finish_reason === "length");
     return { text: extractOpenAiText(data), usage, stopReason: truncated ? "max_tokens" : null };
+  }
+
+  if (provider === "gemini") {
+    const url = TEXT_PROVIDERS.gemini.endpoint + encodeURIComponent(model) + ":generateContent?key=" + encodeURIComponent(storageGet(STORAGE.geminiKey));
+    const body = {
+      contents: [{ role: "user", parts: [{ text: userMessage }] }],
+      generationConfig: { maxOutputTokens: maxTokens }
+    };
+    if (systemPrompt.trim()) body.system_instruction = { parts: [{ text: systemPrompt }] };
+    const data = await fetchJson(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body)
+    });
+    const usage = data && data.usageMetadata ? { input_tokens: data.usageMetadata.promptTokenCount, output_tokens: data.usageMetadata.candidatesTokenCount } : null;
+    const truncated = !!(data && data.candidates && data.candidates[0] && data.candidates[0].finishReason === "MAX_TOKENS");
+    return { text: extractGeminiText(data), usage, stopReason: truncated ? "max_tokens" : null };
   }
 
   // Anthropic (proveedor por defecto)
@@ -819,17 +859,34 @@ function extractOpenAiText(data) {
   return text;
 }
 
+/* Extrae el texto de la respuesta de Gemini (generateContent). */
+function extractGeminiText(data) {
+  const partes = data && data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts;
+  const text = Array.isArray(partes)
+    ? partes.filter((p) => p && typeof p.text === "string").map((p) => p.text).join("\n").trim()
+    : "";
+  if (!text) throw new AppError("Gemini no ha generado un prompt v\u00e1lido.");
+  return text;
+}
+
 /* ==========================================================================
    ESTIMACI\u00d3N PREVIA DE TOKENS DE ENTRADA (antes de generar)
    ========================================================================== */
 /* Cuenta los tokens de ENTRADA que consumir\u00eda mejorarIdeaConIA() con esta
-   misma idea e instrucciones, usando el endpoint gratuito y exacto de
-   Anthropic (no genera nada ni gasta tokens de salida). Solo tiene sentido
-   si el proveedor elegido es Anthropic: OpenAI no ofrece aqu\u00ed un conteo de
-   tokens de entrada equivalente. Los tokens de SALIDA nunca se pueden
-   conocer de antemano: lo \u00fanico mostrable de la salida es el techo
-   configurado (maxTokens). */
-async function contarTokensEntrada(systemPrompt, idea, model) {
+   misma idea e instrucciones, usando el endpoint gratuito y exacto que
+   ofrecen Anthropic y Gemini (no genera nada ni gasta tokens de salida).
+   Solo tiene sentido si el proveedor elegido es Anthropic o Gemini: OpenAI
+   no ofrece aqu\u00ed un conteo de tokens de entrada equivalente. Los tokens de
+   SALIDA nunca se pueden conocer de antemano: lo \u00fanico mostrable de la
+   salida es el techo configurado (maxTokens). */
+async function contarTokensEntrada(systemPrompt, idea, provider, model) {
+  if (provider === "gemini") {
+    const url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":countTokens?key=" + encodeURIComponent(storageGet(STORAGE.geminiKey));
+    const body = { generateContentRequest: { model: "models/" + model, contents: [{ role: "user", parts: [{ text: buildUserMessage(idea) }] }] } };
+    if (systemPrompt.trim()) body.generateContentRequest.system_instruction = { parts: [{ text: systemPrompt }] };
+    const data = await fetchJson(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+    return data && Number.isFinite(data.totalTokens) ? data.totalTokens : 0;
+  }
   const body = { model, messages: [{ role: "user", content: buildUserMessage(idea) }] };
   if (systemPrompt.trim()) body.system = systemPrompt;
   const data = await fetchJson("https://api.anthropic.com/v1/messages/count_tokens", {
@@ -845,10 +902,12 @@ async function contarTokensEntrada(systemPrompt, idea, model) {
   return data && Number.isFinite(data.input_tokens) ? data.input_tokens : 0;
 }
 
-function formatearEstimacionTokens(entrada, maxTokens, model) {
-  const p = PRICING.anthropic[model];
-  let texto = `${entrada.toLocaleString("es-ES")} tokens de entrada (conteo exacto facilitado por Anthropic; esta consulta no tiene coste). ` +
-    `Techo de tokens de salida configurado: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere Claude y nunca se puede conocer de antemano).`;
+function formatearEstimacionTokens(entrada, maxTokens, provider, model) {
+  const p = PRICING[provider] && PRICING[provider][model];
+  const nombreProveedor = provider === "gemini" ? "Gemini" : "Anthropic";
+  const nombreModelo = provider === "gemini" ? "Gemini" : "Claude";
+  let texto = `${entrada.toLocaleString("es-ES")} tokens de entrada (conteo exacto facilitado por ${nombreProveedor}; esta consulta no tiene coste). ` +
+    `Techo de tokens de salida configurado: ${maxTokens.toLocaleString("es-ES")} (el consumo real de salida depende de lo que genere ${nombreModelo} y nunca se puede conocer de antemano).`;
   if (p && Number.isFinite(p.inputPerMTok) && Number.isFinite(p.outputPerMTok)) {
     const costeEntrada = (entrada / 1e6) * p.inputPerMTok;
     const costeSalidaMax = (maxTokens / 1e6) * p.outputPerMTok;
@@ -1130,17 +1189,18 @@ async function estimarTokens() {
   out.className = "status";
   out.textContent = "";
   try {
-    if (getTextProvider() !== "anthropic") throw new AppError("La estimación de tokens de entrada solo está disponible con el proveedor Anthropic (Claude); OpenAI no ofrece aquí un conteo de tokens de entrada equivalente.");
+    const provider = getTextProvider();
+    if (provider !== "anthropic" && provider !== "gemini") throw new AppError("La estimación de tokens de entrada solo está disponible con los proveedores Anthropic (Claude) y Google (Gemini); OpenAI no ofrece aquí un conteo de tokens de entrada equivalente.");
     const systemPrompt = $("systemPrompt").value;
     const idea = $("idea").value.trim();
     const model = getActiveModel("text");
     const maxTokens = getMaxTokens();
-    if (!storageGet(STORAGE.anthropicKey)) throw new AppError("Indica y guarda antes la API key de Anthropic.");
+    if (!storageGet(TEXT_PROVIDERS[provider].keyStorage)) throw new AppError(`Indica y guarda antes la API key de ${TEXT_PROVIDERS[provider].label}.`);
     if (!idea) throw new AppError("Describe antes la idea inicial.");
-    if (!model) throw new AppError("Indica un identificador de modelo de Claude válido.");
+    if (!model) throw new AppError("Indica un identificador de modelo válido.");
     if (!Number.isFinite(maxTokens)) throw new AppError("Indica un máximo de tokens válido (entero positivo).");
-    const entrada = await contarTokensEntrada(systemPrompt, idea, model);
-    out.textContent = formatearEstimacionTokens(entrada, maxTokens, model);
+    const entrada = await contarTokensEntrada(systemPrompt, idea, provider, model);
+    out.textContent = formatearEstimacionTokens(entrada, maxTokens, provider, model);
     out.className = "status show ok";
   } catch (err) {
     out.textContent = err instanceof AppError ? err.message : "No se ha podido estimar los tokens.";
@@ -1525,7 +1585,7 @@ function initializeHistory() {
    INICIALIZACI\u00d3N
    ========================================================================== */
 function loadSettings() {
-  // Proveedor y modelo de IA para mejorar el prompt (Anthropic u OpenAI)
+  // Proveedor y modelo de IA para mejorar el prompt (Anthropic, OpenAI o Gemini)
   const savedProvider = storageGet(STORAGE.textProvider);
   $("textProvider").value = TEXT_PROVIDERS[savedProvider] ? savedProvider : "anthropic";
   fillTextModels(storageGet(STORAGE.textModel) || undefined);

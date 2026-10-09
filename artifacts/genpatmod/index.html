@@ -39,9 +39,9 @@
     color: var(--text);
     line-height: 1.55;
   }
-  main { max-width: 820px; margin: 0 auto; padding: 0 1.25rem 3rem; }
+  main { max-width: 1160px; margin: 0 auto; padding: 0 1.25rem 3rem; }
 
-  header.hero { max-width: 820px; margin: 0 auto; padding: 2.5rem 1.25rem 1.25rem; text-align: left; }
+  header.hero { max-width: 1160px; margin: 0 auto; padding: 2.5rem 1.25rem 1.25rem; text-align: left; }
   header.hero h1 { font-family: Georgia, "Times New Roman", serif; font-size: clamp(2rem, 5vw, 2.8rem); margin: 0; letter-spacing: -0.02em; color: var(--blue-700); font-weight: 700; }
   header.hero p { margin: .3rem 0 1rem; font-size: 1.1rem; color: var(--muted); }
   .flow { display: flex; flex-wrap: wrap; gap: .4rem; align-items: center; font-size: .9rem; }
@@ -49,7 +49,7 @@
   .flow .sep { color: var(--blue-500); }
 
   .aviso {
-    max-width: 820px; margin: 0 auto 1.25rem; padding: .8rem 1.25rem;
+    max-width: 1160px; margin: 0 auto 1.25rem; padding: .8rem 1.25rem;
     background: var(--warn-bg); border: 1px solid var(--warn-border); border-radius: 10px;
     color: #7a5b12; font-size: .88rem;
   }
@@ -156,7 +156,7 @@
   }
   .contador-coste { font-size: .82rem; color: var(--muted); margin-top: .8rem; border-top: 1px dashed var(--border); padding-top: .6rem; }
 
-  footer { text-align: center; font-size: .82rem; color: var(--muted); padding: 1.5rem 1.25rem 3rem; max-width: 820px; margin: 0 auto; }
+  footer { text-align: center; font-size: .82rem; color: var(--muted); padding: 1.5rem 1.25rem 3rem; max-width: 1160px; margin: 0 auto; }
   footer a { color: var(--blue-600); }
 
   #svg-render-host { position: absolute; left: -99999px; top: 0; width: 210mm; height: 297mm; background: #fff; overflow: hidden; }
@@ -446,8 +446,8 @@ const MODELOS_POR_PROVEEDOR = {
     porDefecto: "gpt-6.1-sol"
   },
   gemini: {
-    modelos: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
-    porDefecto: "gemini-1.5-flash"
+    modelos: ["gemini-3.1-pro-preview", "gemini-3.8-flash", "gemini-3.5-flash-lite"],
+    porDefecto: "gemini-3.8-flash"
   }
 };
 // La lista de modelos de cada proveedor cambia con frecuencia: revisa la
@@ -466,13 +466,13 @@ const LIMITES_TOKENS_MODELO = {
   "claude-opus-5-5": 64000,
   "claude-haiku-4-5-20251001": 64000,
   "claude-fable-5-1": 64000,
-  "gpt-6-astra": 32768,
-  "gpt-6.1-sol": 32768,
-  "gpt-6-luna": 16384,
+  "gpt-6-astra": 128000,
+  "gpt-6.1-sol": 128000,
+  "gpt-6-luna": 128000,
   "gpt-4.1": 32768,
-  "gemini-1.5-pro": 8192,
-  "gemini-1.5-flash": 8192,
-  "gemini-2.0-flash": 8192
+  "gemini-3.1-pro-preview": 65536,
+  "gemini-3.8-flash": 65536,
+  "gemini-3.5-flash-lite": 65536
 };
 
 function limiteTokensModelo(modelo){
@@ -492,9 +492,9 @@ const PRECIOS_POR_MTOK = {
   "gpt-6.1-sol": {in: 2.00, out: 10.00},
   "gpt-6-luna": {in: 0.10, out: 0.50},
   "gpt-4.1": {in: 2.00, out: 8.00},
-  "gemini-1.5-pro": {in: 1.25, out: 5.00},
-  "gemini-1.5-flash": {in: 0.075, out: 0.30},
-  "gemini-2.0-flash": {in: 0.10, out: 0.40}
+  "gemini-3.1-pro-preview": {in: 2.50, out: 15.00},
+  "gemini-3.8-flash": {in: 0.75, out: 3.75},
+  "gemini-3.5-flash-lite": {in: 0.30, out: 2.50}
 };
 
 // --- Geometría de la página impresa (idéntica al pipeline Python de origen) -
