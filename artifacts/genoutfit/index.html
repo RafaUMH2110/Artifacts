@@ -520,8 +520,8 @@ const MODELOS_POR_PROVEEDOR = {
     porDefecto: "claude-sonnet-4-5" // valor definido en el BLOQUE 0 del encargo
   },
   openai: {
-    modelos: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini"],
-    porDefecto: "gpt-4o"
+    modelos: ["gpt-6-astra", "gpt-6.1-sol", "gpt-6-luna", "gpt-4.1", "gpt-4.1-mini", "gpt-4o", "gpt-4o-mini"],
+    porDefecto: "gpt-6.1-sol"
   },
   gemini: {
     modelos: ["gemini-1.5-pro", "gemini-1.5-flash", "gemini-2.0-flash"],
@@ -535,6 +535,7 @@ const LIMITE_TOKENS_DEFECTO = 8000;
 const LIMITES_TOKENS_MODELO = {
   "claude-sonnet-4-5": 64000, "claude-sonnet-5": 64000, "claude-opus-5-5": 64000,
   "claude-haiku-4-5-20251001": 64000, "claude-fable-5-1": 64000,
+  "gpt-6-astra": 32768, "gpt-6.1-sol": 32768, "gpt-6-luna": 16384,
   "gpt-4o": 16384, "gpt-4o-mini": 16384, "gpt-4.1": 32768, "gpt-4.1-mini": 32768,
   "gemini-1.5-pro": 8192, "gemini-1.5-flash": 8192, "gemini-2.0-flash": 8192
 };
@@ -547,6 +548,7 @@ const PRECIOS_POR_MTOK = {
   "claude-sonnet-4-5": {in: 3.00, out: 15.00}, "claude-sonnet-5": {in: 2.00, out: 10.00},
   "claude-opus-5-5": {in: 4.00, out: 20.00}, "claude-haiku-4-5-20251001": {in: 1.00, out: 5.00},
   "claude-fable-5-1": {in: 10.00, out: 50.00},
+  "gpt-6-astra": {in: 10.00, out: 50.00}, "gpt-6.1-sol": {in: 2.00, out: 10.00}, "gpt-6-luna": {in: 0.10, out: 0.50},
   "gpt-4o": {in: 2.50, out: 10.00}, "gpt-4o-mini": {in: 0.15, out: 0.60},
   "gpt-4.1": {in: 2.00, out: 8.00}, "gpt-4.1-mini": {in: 0.40, out: 1.60},
   "gemini-1.5-pro": {in: 1.25, out: 5.00}, "gemini-1.5-flash": {in: 0.075, out: 0.30},
