@@ -351,10 +351,17 @@
       <div class="field">
         <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
         <select id="sel-pasos-inferencia">
-          <option value="10">10 — más rápido</option>
-          <option value="20" selected>20 — por defecto</option>
-          <option value="30">30</option>
-          <option value="40">40 — más detalle</option>
+          <option value="2" selected>2 — por defecto</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+          <option value="5">5</option>
+          <option value="6">6</option>
+          <option value="7">7</option>
+          <option value="8">8</option>
+          <option value="9">9</option>
+          <option value="10">10</option>
+          <option value="11">11</option>
+          <option value="12">12 — más detalle</option>
         </select>
         <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai.</p>
       </div>
@@ -401,6 +408,7 @@
 
   <section class="panel" id="panel-resultado" style="display:none;" aria-labelledby="h-resultado">
     <h2 id="h-resultado">3. Prompts generados — revisa y edita antes de continuar</h2>
+    <p class="hint" style="margin-top:0">Cada prompt tiene su propia casilla de selección (marcada por defecto): al pulsar "Continuar" solo se generará la imagen de los prompts marcados.</p>
     <div id="aviso-truncado" style="display:none;"></div>
     <div id="lista-prompts"></div>
     <div class="botones">
@@ -437,7 +445,7 @@
 
 <footer>
   GenOutFit &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:59
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 09:13
 </footer>
 
 <script>
@@ -493,8 +501,8 @@ const APP_CONFIG = {
     // prioriza seguir fielmente el prompt y las imágenes de referencia sobre
     // la creatividad, para que el modelo vista las prendas tal cual son.
     guidanceScaleModelo: 4.5,
-    inferenceStepsDefecto: 20,
-    inferenceStepsOpciones: [10, 20, 30, 40],
+    inferenceStepsDefecto: 2,
+    inferenceStepsOpciones: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12],
     imageSize: "portrait_4_3",
     safetyTolerance: "3",
     outputFormat: "png",
@@ -604,8 +612,9 @@ const estimacionTokensDiv = $("estimacion-tokens");
 let imagenBase64 = null;   // sin el prefijo "data:...;base64,"
 let imagenMediaType = null;
 let costeAcumulado = {entrada: 0, salida: 0, usd: 0};
-let piezasActuales = null; // [{nombre, prompt}], mantenidas en orden tras edición
+let piezasActuales = null; // [{nombre, prompt, seleccionada}], mantenidas en orden tras edición
 let modeloShotPrompt = null;
+let modeloSeleccionado = true; // casilla de selección de la foto del modelo (por defecto marcada)
 let promptAnalisisImagen = null; // prompt de texto enviado junto a la imagen subida, para visualizarlo en "Prompts generados"
 let imagenesGeneradas = []; // [{nombre, dataUrl}] tras llamar a FLUX
 
@@ -1064,8 +1073,9 @@ async function analizarYGenerarPrompts(){
     avisoTruncadoDiv.style.display = "none";
   }
 
-  piezasActuales = datos.pieces.map(p => ({nombre: p.name, prompt: p.prompt}));
+  piezasActuales = datos.pieces.map(p => ({nombre: p.name, prompt: p.prompt, seleccionada: true}));
   modeloShotPrompt = incluirModelo ? (datos.model_shot_prompt || null) : null;
+  modeloSeleccionado = true;
   promptAnalisisImagen = userPrompt;
 }
 
@@ -1085,25 +1095,55 @@ function pintarPrompts(){
   piezasActuales.forEach((pieza, i) => {
     const card = document.createElement("div");
     card.className = "pieza-card";
-    card.innerHTML = `<h3>${escapeHTML(pieza.nombre)}</h3>
+    const seleccionada = pieza.seleccionada !== false;
+    card.innerHTML = `<label class="pick-row" style="margin-top:0;">
+        <input type="checkbox" data-tipo="pieza-sel" data-idx="${i}" ${seleccionada ? "checked" : ""}>
+        <span>Generar la imagen de esta pieza</span>
+      </label>
+      <h3>${escapeHTML(pieza.nombre)}</h3>
       <textarea class="tall mono" data-idx="${i}" data-tipo="pieza">${escapeHTML(pieza.prompt)}</textarea>`;
     listaPrompts.appendChild(card);
   });
   if (modeloShotPrompt !== null){
     const card = document.createElement("div");
     card.className = "pieza-card modelo";
-    card.innerHTML = `<h3>Modelo con el outfit completo</h3>
+    card.innerHTML = `<label class="pick-row" style="margin-top:0;">
+        <input type="checkbox" data-tipo="modelo-sel" ${modeloSeleccionado ? "checked" : ""}>
+        <span>Generar esta imagen</span>
+      </label>
+      <h3>Modelo con el outfit completo</h3>
       <textarea class="tall mono" data-tipo="modelo">${escapeHTML(modeloShotPrompt)}</textarea>`;
     listaPrompts.appendChild(card);
   }
   panelResultado.style.display = "block";
-  btnContinuar.disabled = false;
+  actualizarBotonContinuar();
   btnDescargarPrompts.disabled = false;
 }
+// Recalcula si hay al menos un prompt seleccionado (pieza o foto del modelo);
+// si no hay ninguno, no tiene sentido continuar, así que se deshabilita el botón.
+function actualizarBotonContinuar(){
+  const haySeleccion = (piezasActuales || []).some(p => p.seleccionada !== false)
+    || (modeloShotPrompt !== null && modeloSeleccionado);
+  btnContinuar.disabled = !haySeleccion;
+}
+// Delegación de eventos: al marcar/desmarcar cualquier casilla de selección,
+// se actualiza al instante el estado guardado y el botón "Continuar".
+listaPrompts.addEventListener("change", (e) => {
+  const t = e.target;
+  if (!(t instanceof HTMLInputElement) || t.type !== "checkbox") return;
+  if (t.dataset.tipo === "pieza-sel") piezasActuales[parseInt(t.dataset.idx, 10)].seleccionada = t.checked;
+  else if (t.dataset.tipo === "modelo-sel") modeloSeleccionado = t.checked;
+  else return;
+  actualizarBotonContinuar();
+});
 function recogerPromptsEditados(){
   listaPrompts.querySelectorAll("textarea").forEach(ta => {
     if (ta.dataset.tipo === "pieza") piezasActuales[parseInt(ta.dataset.idx, 10)].prompt = ta.value;
     else if (ta.dataset.tipo === "modelo") modeloShotPrompt = ta.value;
+  });
+  listaPrompts.querySelectorAll('input[type="checkbox"]').forEach(chk => {
+    if (chk.dataset.tipo === "pieza-sel") piezasActuales[parseInt(chk.dataset.idx, 10)].seleccionada = chk.checked;
+    else if (chk.dataset.tipo === "modelo-sel") modeloSeleccionado = chk.checked;
   });
 }
 // Descarga todos los prompts (piezas + modelo, si lo hay) en un único TXT,
@@ -1370,7 +1410,10 @@ async function generarTodasLasImagenes(){
     imagenesGeneradas.push({nombre: nombreOriginal, dataUrl: original, esOriginal: true});
   }
 
-  for (const pieza of piezasActuales){
+  // Solo se generan las imágenes de las piezas cuya casilla de selección
+  // esté marcada; las que no lo estén se omiten por completo (ni se llama a
+  // fal.ai ni aparecen como tarjeta en el resultado).
+  for (const pieza of piezasActuales.filter(p => p.seleccionada !== false)){
     const card = pintarImagenPlaceholder(pieza.nombre, false);
     estadoTexto.textContent = `Generando imagen: ${pieza.nombre}…`;
     try {
@@ -1384,7 +1427,7 @@ async function generarTodasLasImagenes(){
     }
   }
 
-  if (modeloShotPrompt){
+  if (modeloShotPrompt && modeloSeleccionado){
     const nombreModelo = "Modelo con el outfit completo";
     const card = pintarImagenPlaceholder(nombreModelo, true);
     estadoTexto.textContent = imagenesReferenciaModelo.length > FAL_KONTEXT_MAX_IMAGES
@@ -1511,8 +1554,9 @@ function cargarDesdeHistorial(rec){
   // volver a llamar a ninguna API: permite revisar una generación anterior
   // (y continuar/editar sus prompts), aunque no descargar sus imágenes ni
   // exportarlas a PDF — ver el aviso que se pinta más abajo.
-  piezasActuales = rec.items.filter(it => !it.esModelo && !it.esOriginal).map(it => ({nombre: it.nombre, prompt: it.prompt}));
+  piezasActuales = rec.items.filter(it => !it.esModelo && !it.esOriginal).map(it => ({nombre: it.nombre, prompt: it.prompt, seleccionada: true}));
   modeloShotPrompt = rec.incluirModelo ? (rec.items.find(it => it.esModelo)?.prompt || null) : null;
+  modeloSeleccionado = true;
   promptAnalisisImagen = rec.promptAnalisis || null; // ausente en generaciones guardadas antes de añadir esta visualización
   pintarPrompts();
 
@@ -1628,6 +1672,10 @@ btnGenerar.addEventListener("click", async () => {
 
 btnContinuar.addEventListener("click", async () => {
   recogerPromptsEditados();
+  if (!(piezasActuales || []).some(p => p.seleccionada !== false) && !(modeloShotPrompt !== null && modeloSeleccionado)){
+    alert("No has seleccionado ningún prompt: marca al menos una casilla antes de continuar.");
+    return;
+  }
   mostrarCargando(btnContinuar, "Generando imágenes con FLUX…");
   try {
     await generarTodasLasImagenes();
@@ -1636,7 +1684,7 @@ btnContinuar.addEventListener("click", async () => {
   } catch(err){
     mostrarError(btnContinuar, err);
   } finally {
-    btnContinuar.disabled = false;
+    actualizarBotonContinuar();
   }
 });
 
