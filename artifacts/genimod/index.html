@@ -271,11 +271,12 @@
 
   <!-- SECCI&#211;N 5 &#8212; ACCI&#211;N -->
   <section class="card" aria-labelledby="h-action">
-    <h2 id="h-action">5. Generar</h2>
+    <h2 id="h-action">5. Generar prompt</h2>
     <button type="button" id="generate" class="primary big" disabled>
-      <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
+      <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar prompt</span>
     </button>
-    <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
+    <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas la API key del proveedor de texto guardada y una idea inicial.</p>
+    <p class="hint">Este bot&#243;n solo mejora la idea y genera el prompt para FLUX; la ejecuci&#243;n se detiene ah&#237; para que puedas revisarlo o editarlo. La imagen se genera despu&#233;s, al pulsar &#171;Generar imagen con este prompt&#187; en el siguiente apartado.</p>
     <div id="status" class="status" role="status" aria-live="polite"></div>
     <div id="error" class="status error" role="alert"></div>
   </section>
@@ -290,6 +291,7 @@
         <span class="spinner" aria-hidden="true"></span><span id="generateFromPromptLabel">Generar imagen con este prompt</span>
       </button>
     </div>
+    <p class="hint" id="generateFromPromptHint"></p>
     <div class="row">
       <button type="button" id="copyPrompt" disabled>Copiar prompt</button>
       <button type="button" id="downloadPrompt" disabled>Descargar prompt</button>
@@ -343,10 +345,10 @@
   <details class="card">
     <summary>&#191;C&#243;mo funciona GenImOd?</summary>
     <ol>
-      <li>El usuario introduce una idea inicial.</li>
+      <li>El usuario introduce una idea inicial y pulsa &#171;Generar prompt&#187;.</li>
       <li>El modelo de IA elegido (Claude, GPT o Gemini) analiza y mejora la idea.</li>
-      <li>Ese modelo genera un prompt especializado en espa&#241;ol.</li>
-      <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
+      <li>Ese modelo genera un prompt especializado en espa&#241;ol. La ejecuci&#243;n se detiene aqu&#237; para que puedas revisarlo o editarlo.</li>
+      <li>Al pulsar &#171;Generar imagen con este prompt&#187;, el texto que haya en ese momento se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
       <li>GenImOd muestra y permite descargar el resultado.</li>
     </ol>
@@ -363,7 +365,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 07:55</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 08:10</p>
   </footer>
 </div>
 
@@ -719,25 +721,26 @@ function updateMaxTokensUI() {
     (limite ? ` M\u00e1ximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (la aplicaci\u00f3n no fuerza este tope: es solo informativo).` : "");
 }
 
+/* El bot\u00f3n principal solo necesita el proveedor de texto: genera el prompt y
+   se detiene ah\u00ed. La API key y el modelo de fal.ai solo hacen falta despu\u00e9s,
+   para el bot\u00f3n "Generar imagen con este prompt" (ver updateGenerateFromPromptButton). */
 function validateForm() {
   updateMaxTokensUI();
   const textCfg = TEXT_PROVIDERS[getTextProvider()];
   const hasTextKey = !!storageGet(textCfg.keyStorage);
-  const hasKeys = hasTextKey && !!storageGet(STORAGE.falKey);
   const hasIdea = $("idea").value.trim().length > 0;
-  const modelsOk = getActiveModel("text").length > 0 && getActiveModel("fal").length > 0;
+  const modelsOk = getActiveModel("text").length > 0;
   const tokensOk = Number.isFinite(getMaxTokens());
-  const ok = hasKeys && hasIdea && modelsOk && tokensOk && !state.busy;
+  const ok = hasTextKey && hasIdea && modelsOk && tokensOk && !state.busy;
   $("generate").disabled = !ok;
   const hint = $("generateHint");
   if (state.busy) hint.textContent = "";
-  else if (ok) hint.textContent = "Todo listo para generar.";
+  else if (ok) hint.textContent = "Todo listo para generar el prompt.";
   else {
     const missing = [];
     if (!hasTextKey) missing.push(`la API key de ${textCfg.label}`);
-    if (!storageGet(STORAGE.falKey)) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
-    if (!modelsOk) missing.push("los identificadores de modelo");
+    if (!modelsOk) missing.push("el identificador del modelo de texto");
     if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
@@ -764,7 +767,7 @@ function showLoading(isLoading, label) {
   state.busy = isLoading;
   $("generate").classList.toggle("busy", isLoading);
   $("generate").setAttribute("aria-busy", String(isLoading));
-  $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen";
+  $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar prompt";
   $("generateFromPrompt").classList.toggle("busy", isLoading);
   $("generateFromPrompt").setAttribute("aria-busy", String(isLoading));
   $("generateFromPromptLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen con este prompt";
@@ -777,7 +780,17 @@ function updateGenerateFromPromptButton() {
   const hasFalKey = !!storageGet(STORAGE.falKey);
   const hasPrompt = $("generatedPrompt").value.trim().length > 0;
   const modelsOk = getActiveModel("fal").length > 0;
-  $("generateFromPrompt").disabled = !(hasFalKey && hasPrompt && modelsOk) || state.busy;
+  const ok = hasFalKey && hasPrompt && modelsOk && !state.busy;
+  $("generateFromPrompt").disabled = !ok;
+  const hint = $("generateFromPromptHint");
+  if (!hint) return;
+  if (state.busy) { hint.textContent = ""; return; }
+  if (ok) { hint.textContent = ""; return; }
+  const missing = [];
+  if (!hasPrompt) missing.push("un prompt (genera uno arriba o escribe el tuyo)");
+  if (!hasFalKey) missing.push("la API key de fal.ai");
+  if (!modelsOk) missing.push("el identificador del modelo de fal.ai");
+  hint.textContent = "Falta: " + missing.join(", ") + ".";
 }
 
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
@@ -1253,6 +1266,10 @@ async function copyToClipboard(text) {
 /* ==========================================================================
    FLUJO PRINCIPAL
    ========================================================================== */
+/* Mejora la idea con el proveedor de texto elegido y muestra el prompt
+   resultante. La ejecuci\u00f3n se detiene aqu\u00ed a prop\u00f3sito: no se llama a FLUX
+   todav\u00eda, para que el usuario pueda revisar o editar el prompt antes de
+   generar la imagen pulsando "Generar imagen con este prompt". */
 async function generar() {
   clearError();
   if (!validateForm()) { showError("Completa todos los campos obligatorios antes de generar."); return; }
@@ -1261,10 +1278,6 @@ async function generar() {
   const idea = $("idea").value.trim();
   const textProvider = getTextProvider();
   const textModel = getActiveModel("text");
-  const falModel = getActiveModel("fal");
-  const steps = Number($("steps").value);
-  const imageSize = $("imageSize").value;
-  const safety = $("safety").value;
   const maxTokens = getMaxTokens();
   const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
@@ -1280,20 +1293,8 @@ async function generar() {
       ? "Aviso: la respuesta se ha cortado al alcanzar el l\u00edmite de tokens. Aumenta el m\u00e1ximo de tokens y vuelve a generar."
       : "";
     displayGeneratedPrompt(resultado.text, resultado.usage, textProvider, textModel, truncated);
-    showStatus(`Prompt generado por ${providerLabel}`, "ok");
-
-    showStatus("Generando imagen con FLUX\u2026", "info");
-    const image = await generarImagenConFal(resultado.text, falModel, steps, imageSize, safety);
-    displayGeneratedImage(image, falModel, steps);
-    if (image.nsfw) {
-      showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Sube la tolerancia (m\u00e1x. 6) o reformula la idea con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
-    } else {
-      showStatus("Imagen generada correctamente.", "ok");
-    }
-    await guardarEnHistorial({
-      idea, systemPrompt, prompt: resultado.text, textProvider, textModel, falModel, steps, imageSize, safety,
-      image, usage: resultado.usage
-    });
+    showStatus(`Prompt generado por ${providerLabel}. Rev\u00edsalo o edita, y pulsa \u00abGenerar imagen con este prompt\u00bb cuando quieras continuar.`, "ok");
+    $("h-claude").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     $("status").className = "status";
     showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");

@@ -169,11 +169,11 @@
   <details class="card">
     <summary>&#191;C&#243;mo funciona GenImOda?</summary>
     <ol>
-      <li>El usuario introduce una idea inicial.</li>
-      <li>Si la casilla &#171;Mejorar el prompt con IA&#187; est&#225; activada, el proveedor elegido (Claude, OpenAI o Gemini) analiza la idea y genera un prompt especializado en espa&#241;ol; si est&#225; desactivada, se usa la idea inicial tal cual, sin llamar a ning&#250;n proveedor de texto.</li>
-      <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
+      <li>El usuario introduce una idea inicial y pulsa &#171;Generar prompt&#187;.</li>
+      <li>Si la casilla &#171;Mejorar el prompt con IA&#187; est&#225; activada, el proveedor elegido (Claude, OpenAI o Gemini) analiza la idea y genera un prompt especializado en espa&#241;ol; si est&#225; desactivada, se usa la idea inicial tal cual, sin llamar a ning&#250;n proveedor de texto. En ambos casos la ejecuci&#243;n se detiene aqu&#237; para que puedas revisar o editar el prompt.</li>
+      <li>Al pulsar &#171;Generar imagen con este prompt&#187;, el texto que haya en ese momento se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
-      <li>GenImOda muestra el resultado, lo guarda en el historial de este navegador y permite descargarlo en PNG.</li>
+      <li>GenImOda muestra el resultado, lo guarda en el historial de este navegador y permite descargarlo en PNG o JPEG.</li>
     </ol>
     <p>La imagen resultante depende de:</p>
     <ul>
@@ -291,11 +291,12 @@
 
   <!-- SECCI&#211;N 5 &#8212; ACCI&#211;N -->
   <section class="card" aria-labelledby="h-action">
-    <h2 id="h-action">5. Generar</h2>
+    <h2 id="h-action">5. Generar prompt</h2>
     <button type="button" id="generate" class="primary big" disabled>
-      <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar imagen</span>
+      <span class="spinner" aria-hidden="true"></span><span id="generateLabel">Generar prompt</span>
     </button>
-    <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas las dos API keys guardadas y una idea inicial.</p>
+    <p class="hint" id="generateHint">Para activar el bot&#243;n necesitas una idea inicial (y, si mejoras el prompt con IA, la API key del proveedor de texto).</p>
+    <p class="hint">Este bot&#243;n prepara el prompt (lo mejora con IA si la casilla est&#225; marcada, o usa la idea tal cual si no) y la ejecuci&#243;n se detiene ah&#237; para que puedas revisarlo o editarlo. La imagen se genera despu&#233;s, al pulsar &#171;Generar imagen con este prompt&#187; en el siguiente apartado.</p>
     <div id="tokenEstimateSection">
       <div class="row">
         <button type="button" id="estimateTokens" disabled>Estimar tokens de entrada</button>
@@ -317,6 +318,7 @@
         <span class="spinner" aria-hidden="true"></span><span id="generateFromPromptLabel">Generar imagen con este prompt</span>
       </button>
     </div>
+    <p class="hint" id="generateFromPromptHint"></p>
     <div class="row">
       <button type="button" id="copyPrompt" disabled>Copiar prompt</button>
       <button type="button" id="downloadPrompt" disabled>Descargar prompt</button>
@@ -368,7 +370,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 07:55</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 08:10</p>
   </footer>
 </div>
 
@@ -754,27 +756,28 @@ function updateImproveUi() {
   validateForm();
 }
 
+/* El bot\u00f3n principal solo prepara el prompt (lo mejora con IA si corresponde)
+   y se detiene ah\u00ed: solo necesita la API key de fal.ai el bot\u00f3n
+   "Generar imagen con este prompt" (ver updateGenerateFromPromptButton). */
 function validateForm() {
   const improve = wantsImprove();
   const provider = getTextProvider();
   const textCfg = TEXT_PROVIDERS[provider];
   const hasTextKey = !!storageGet(textCfg.keyStorage);
-  const hasFalKey = !!storageGet(STORAGE.falKey);
-  const hasKeys = hasFalKey && (!improve || hasTextKey);
+  const hasKeys = !improve || hasTextKey;
   const hasIdea = $("idea").value.trim().length > 0;
-  const modelsOk = (!improve || getActiveModel("text").length > 0) && getActiveModel("fal").length > 0;
+  const modelsOk = !improve || getActiveModel("text").length > 0;
   const tokensOk = !improve || Number.isFinite(getMaxTokens());
   const ok = hasKeys && hasIdea && modelsOk && tokensOk && !state.busy;
   $("generate").disabled = !ok;
   const hint = $("generateHint");
   if (state.busy) hint.textContent = "";
-  else if (ok) hint.textContent = "Todo listo para generar.";
+  else if (ok) hint.textContent = "Todo listo para generar el prompt.";
   else {
     const missing = [];
     if (improve && !hasTextKey) missing.push(`la API key de ${textCfg.label} (necesaria para mejorar el prompt)`);
-    if (!hasFalKey) missing.push("la API key de fal.ai");
     if (!hasIdea) missing.push("la idea inicial");
-    if (!modelsOk) missing.push("los identificadores de modelo");
+    if (!modelsOk) missing.push("el identificador del modelo de texto");
     if (!tokensOk) missing.push(provider !== "anthropic" ? "un m\u00e1ximo de tokens v\u00e1lido (entero positivo)" : `un m\u00e1ximo de tokens v\u00e1lido (1-${APP_CONFIG.anthropic.maxAllowedTokens})`);
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
@@ -805,7 +808,7 @@ function showLoading(isLoading, label) {
   state.busy = isLoading;
   $("generate").classList.toggle("busy", isLoading);
   $("generate").setAttribute("aria-busy", String(isLoading));
-  $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen";
+  $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar prompt";
   $("generateFromPrompt").classList.toggle("busy", isLoading);
   $("generateFromPrompt").setAttribute("aria-busy", String(isLoading));
   $("generateFromPromptLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen con este prompt";
@@ -818,7 +821,17 @@ function updateGenerateFromPromptButton() {
   const hasFalKey = !!storageGet(STORAGE.falKey);
   const hasPrompt = $("generatedPrompt").value.trim().length > 0;
   const modelsOk = getActiveModel("fal").length > 0;
-  $("generateFromPrompt").disabled = !(hasFalKey && hasPrompt && modelsOk) || state.busy;
+  const ok = hasFalKey && hasPrompt && modelsOk && !state.busy;
+  $("generateFromPrompt").disabled = !ok;
+  const hint = $("generateFromPromptHint");
+  if (!hint) return;
+  if (state.busy) { hint.textContent = ""; return; }
+  if (ok) { hint.textContent = ""; return; }
+  const missing = [];
+  if (!hasPrompt) missing.push("un prompt (genera uno arriba o escribe el tuyo)");
+  if (!hasFalKey) missing.push("la API key de fal.ai");
+  if (!modelsOk) missing.push("el identificador del modelo de fal.ai");
+  hint.textContent = "Falta: " + missing.join(", ") + ".";
 }
 
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
@@ -1352,6 +1365,10 @@ async function copyToClipboard(text) {
 /* ==========================================================================
    FLUJO PRINCIPAL
    ========================================================================== */
+/* Prepara el prompt (lo mejora con IA si la casilla est\u00e1 marcada, o usa la
+   idea tal cual si no) y se detiene ah\u00ed: no se llama a FLUX todav\u00eda, para
+   que el usuario pueda revisar o editar el prompt antes de generar la
+   imagen pulsando "Generar imagen con este prompt". */
 async function generar() {
   clearError();
   if (!validateForm()) { showError("Completa todos los campos obligatorios antes de generar."); return; }
@@ -1361,10 +1378,6 @@ async function generar() {
   const idea = $("idea").value.trim();
   const textProvider = getTextProvider();
   const textModel = improve ? getActiveModel("text") : "";
-  const falModel = getActiveModel("fal");
-  const steps = Number($("steps").value);
-  const imageSize = $("imageSize").value;
-  const safety = String(obtenerSafetyTolerance());
   const maxTokens = improve ? getMaxTokens() : null;
   const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
@@ -1382,31 +1395,17 @@ async function generar() {
         ? "Aviso: la respuesta se ha cortado al alcanzar el l\u00edmite de tokens. Sube el m\u00e1ximo de tokens o simplifica la idea inicial y vuelve a generar."
         : "";
       displayGeneratedPrompt(promptFinal, usage, textProvider, textModel, truncated);
-      showStatus(`Prompt generado por ${providerLabel}`, "ok");
+      showStatus(`Prompt generado por ${providerLabel}. Rev\u00edsalo o edita, y pulsa \u00abGenerar imagen con este prompt\u00bb cuando quieras continuar.`, "ok");
     } else {
       promptFinal = idea;
       displayGeneratedPrompt(promptFinal, null, "", "", "");
-      showStatus("Prompt sin mejorar: se usar\u00e1 la idea inicial tal cual.", "info");
+      showStatus("Prompt sin mejorar: se usar\u00e1 la idea inicial tal cual. Pulsa \u00abGenerar imagen con este prompt\u00bb cuando quieras continuar.", "info");
     }
 
     state.lastPrompt = promptFinal;
     state.lastSystem = systemPrompt;
     state.lastIdea = idea;
-
-    showStatus("Generando imagen con FLUX\u2026", "info");
-    const image = await generarImagenConFal(promptFinal, falModel, steps, imageSize, safety);
-    displayGeneratedImage(image, falModel, steps);
-    if (image.nsfw) {
-      showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Reformula la idea con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
-    } else {
-      showStatus("Imagen generada correctamente.", "ok");
-    }
-    await guardarEnHistorial({
-      idea, systemPrompt, prompt: promptFinal, improved: improve,
-      textProvider: improve ? textProvider : null, textModel: improve ? textModel : null,
-      falModel, steps, imageSize, safety,
-      image, usage
-    });
+    $("h-claude").scrollIntoView({ behavior: "smooth", block: "start" });
   } catch (err) {
     $("status").className = "status";
     showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");
