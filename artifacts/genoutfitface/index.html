@@ -411,6 +411,14 @@
       </div>
     </div>
     <div class="field">
+      <label for="sel-formato-imagen">Formato de salida de las imágenes</label>
+      <select id="sel-formato-imagen">
+        <option value="jpeg" selected>JPEG — archivos más ligeros (recomendado)</option>
+        <option value="png">PNG — sin compresión, archivos más pesados</option>
+      </select>
+      <p class="hint">JPEG reduce bastante el peso en KB de cada imagen generada respecto a PNG, sin pérdida apreciable en fotografía; usa PNG solo si necesitas la máxima calidad sin compresión.</p>
+    </div>
+    <div class="field">
       <label class="pick-row" for="chk-incluir-modelo">
         <input type="checkbox" id="chk-incluir-modelo">
         <span>Incluir también una imagen de un/a modelo vistiendo todo el outfit</span>
@@ -493,7 +501,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:09
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:30
 </footer>
 
 <script>
@@ -539,7 +547,11 @@ const APP_CONFIG = {
     inferenceStepsMax: 20,
     imageSize: "portrait_4_3",
     safetyTolerance: "3",
-    outputFormat: "png",
+    // "jpeg" por defecto: el peso del archivo es muy inferior al de "png"
+    // (sin pérdida apreciable para fotografía) y es el formato habitual para
+    // compartir o imprimir. El usuario puede cambiarlo a "png" si necesita
+    // transparencia o máxima calidad sin compresión.
+    outputFormat: "jpeg",
     numImages: 1,
     queueMaxWaitMs: 120000,
     queuePollIntervalMs: 2000,
@@ -554,7 +566,19 @@ const APP_CONFIG = {
     // body (en la función generarImagenModeloConPersonaFal) si han cambiado.
     kontext: {
       model: "fal-ai/flux-pro/kontext",
-      guidanceScale: 3.5
+      guidanceScale: 3.5,
+      // Al editar una foto de referencia que es SOLO de rostro, el modelo
+      // necesita bastante más adherencia al prompt para seguir la
+      // instrucción de ampliar a cuerpo completo con proporciones humanas
+      // realistas; con guidance_scale por defecto (3.5) tiende a ignorarla
+      // y a mantener la cabeza al mismo tamaño en píxeles que en la foto
+      // original, agrandándola de forma antinatural respecto al cuerpo.
+      guidanceScaleSoloRostro: 6,
+      // aspect_ratio fuerza un encuadre vertical con más espacio para el
+      // cuerpo que el de una foto de rostro recortada (normalmente más
+      // cuadrada o apaisada); así el modelo tiene sitio real donde dibujar
+      // el cuerpo completo en vez de comprimirlo bajo una cabeza ya grande.
+      aspectRatio: "2:3"
     }
   }
 };
@@ -639,6 +663,7 @@ const previewImgPersona = $("preview-img-persona");
 const inputNumPiezas = $("input-num-piezas");
 const inputPasosInferencia = $("input-pasos-inferencia");
 const selSafetyTolerance = $("sel-safety-tolerance");
+const selFormatoImagen = $("sel-formato-imagen");
 const chkIncluirModelo = $("chk-incluir-modelo");
 const inputSystemPrompt = $("input-system-prompt");
 const btnGenerar = $("btn-generar");
@@ -1222,6 +1247,19 @@ function obtenerSafetyTolerance(){
   const opciones = ["1","2","3","4","5","6"];
   return opciones.includes(selSafetyTolerance.value) ? selSafetyTolerance.value : APP_CONFIG.fal.safetyTolerance;
 }
+function obtenerFormatoImagen(){
+  return selFormatoImagen && selFormatoImagen.value === "png" ? "png" : "jpeg";
+}
+// Reciben el MIME real de la imagen (nunca lo adivinan a partir de la URL:
+// una imagen cargada desde el historial se previsualiza con un blob: URL,
+// que no lleva el MIME en el propio string, así que el MIME se guarda
+// aparte — ver "mime" en imagenesGeneradas y en los registros del historial).
+function extensionDesdeMime(mime){
+  return /png/i.test(mime || "") ? "png" : "jpg";
+}
+function tipoPdfDesdeMime(mime){
+  return /png/i.test(mime || "") ? "PNG" : "JPEG";
+}
 async function llamarFalGenImagen(modelId, body){
   const key = inputApiKeyFal.value.trim() || localStorage.getItem(CLAVE_FAL) || "";
   const headers = {"Authorization": "Key " + key, "Content-Type": "application/json"};
@@ -1240,7 +1278,7 @@ async function generarImagenFal(prompt){
     prompt,
     num_inference_steps: obtenerPasosInferencia(),
     num_images: APP_CONFIG.fal.numImages,
-    output_format: APP_CONFIG.fal.outputFormat,
+    output_format: obtenerFormatoImagen(),
     image_size: APP_CONFIG.fal.imageSize,
     safety_tolerance: obtenerSafetyTolerance()
   });
@@ -1249,13 +1287,19 @@ async function generarImagenFal(prompt){
 // a partir de la foto subida, preservando el rostro. Ver el aviso sobre
 // APP_CONFIG.fal.kontext al principio del fichero: verifica el identificador
 // del modelo y los nombres de los campos del body si fal.ai los actualiza.
-async function generarImagenModeloConPersonaFal(prompt){
+// "soloRostro" indica que la foto de referencia es solo de rostro/busto (no
+// de cuerpo completo): en ese caso se sube el guidance_scale para que el
+// modelo siga mejor la instrucción de ampliar a cuerpo completo con
+// proporciones realistas, y se fuerza un aspect_ratio vertical que deje
+// sitio real para dibujar el cuerpo en vez de comprimirlo bajo la cabeza.
+async function generarImagenModeloConPersonaFal(prompt, soloRostro){
   return llamarFalGenImagen(APP_CONFIG.fal.kontext.model, {
     prompt,
     image_url: `data:${personaMediaType};base64,${personaBase64}`,
-    guidance_scale: APP_CONFIG.fal.kontext.guidanceScale,
+    guidance_scale: soloRostro ? APP_CONFIG.fal.kontext.guidanceScaleSoloRostro : APP_CONFIG.fal.kontext.guidanceScale,
+    aspect_ratio: APP_CONFIG.fal.kontext.aspectRatio,
     num_images: APP_CONFIG.fal.numImages,
-    output_format: APP_CONFIG.fal.outputFormat,
+    output_format: obtenerFormatoImagen(),
     safety_tolerance: obtenerSafetyTolerance()
   });
 }
@@ -1283,7 +1327,7 @@ function pintarImagenPlaceholder(nombre, esModelo, usaPersona){
     <div class="img-wrap"><span class="placeholder">Generando…</span></div>
     <div class="meta-pieza"></div>
     <div class="botones">
-      <button type="button" class="secundario btn-descargar-png" disabled>Descargar PNG</button>
+      <button type="button" class="secundario btn-descargar-png" disabled>Descargar imagen</button>
       <button type="button" class="peligro btn-borrar-imagen">Borrar</button>
     </div>`;
   card.querySelector(".btn-borrar-imagen").addEventListener("click", () => {
@@ -1300,7 +1344,12 @@ function actualizarContadorImagenes(){
   const n = resultadoDiv.querySelectorAll(".pieza-card").length;
   $("imagenes-contador").textContent = `${n} ${n === 1 ? "imagen" : "imágenes"}`;
 }
-function actualizarTarjetaImagen(card, dataUrl, error, usaPersona){
+// "blobReal" es opcional: cuando la tarjeta se rellena desde el historial,
+// dataUrl es un blob: URL (de URL.createObjectURL) y no lleva el MIME ni el
+// tamaño real codificados en el propio string, así que se pasa el Blob
+// guardado directamente. Si no se indica, se reconstruye desde dataUrl (una
+// data: URI real, caso de una generación nueva).
+function actualizarTarjetaImagen(card, dataUrl, error, usaPersona, blobReal){
   const wrap = card.querySelector(".img-wrap");
   const meta = card.querySelector(".meta-pieza");
   const btn = card.querySelector(".btn-descargar-png");
@@ -1309,14 +1358,19 @@ function actualizarTarjetaImagen(card, dataUrl, error, usaPersona){
     meta.textContent = "";
     return;
   }
+  const blob = blobReal || dataUrlABlob(dataUrl);
+  const mime = blob.type || "image/jpeg";
+  const formatoTexto = extensionDesdeMime(mime).toUpperCase();
+  const pesoKb = Math.round(blob.size / 1024);
   wrap.innerHTML = `<img src="${dataUrl}" alt="${escapeHTML(card.dataset.nombre)}">`;
   meta.textContent = usaPersona
-    ? `Formato PNG · fal.ai / FLUX Kontext (edición con foto de referencia) · tolerancia de seguridad ${obtenerSafetyTolerance()}`
-    : `Formato PNG · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
+    ? `Formato ${formatoTexto} · ~${pesoKb} KB · fal.ai / FLUX Kontext (edición con foto de referencia) · tolerancia de seguridad ${obtenerSafetyTolerance()}`
+    : `Formato ${formatoTexto} · ~${pesoKb} KB · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
   btn.disabled = false;
+  btn.textContent = "Descargar " + formatoTexto;
   btn.addEventListener("click", () => {
-    const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + ".png";
-    guardarArchivo(nombreArchivo, dataUrlABlob(dataUrl), "image/png");
+    const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + "." + extensionDesdeMime(mime);
+    guardarArchivo(nombreArchivo, blob);
   });
 }
 function dataUrlABlob(dataUrl){
@@ -1356,7 +1410,7 @@ async function generarTodasLasImagenes(){
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
   if (modeloShotPrompt){
     const promptModelo = soloRostro ? (modeloShotPrompt + AVISO_PROPORCION_CABEZA_CUERPO) : modeloShotPrompt;
-    tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo});
+    tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo, soloRostro});
   }
 
   let cancelada = false;
@@ -1371,11 +1425,12 @@ async function generarTodasLasImagenes(){
       : `Generando imagen: ${tarea.nombre}…`;
     try {
       const urlRemota = tarea.usaPersona
-        ? await generarImagenModeloConPersonaFal(tarea.prompt)
+        ? await generarImagenModeloConPersonaFal(tarea.prompt, tarea.soloRostro)
         : await generarImagenFal(tarea.prompt);
       const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
       actualizarTarjetaImagen(card, dataUrl, null, tarea.usaPersona);
-      imagenesGeneradas.push({nombre: tarea.nombre, dataUrl});
+      const mime = (/^data:([^;]+);/.exec(dataUrl) || [])[1] || "image/jpeg";
+      imagenesGeneradas.push({nombre: tarea.nombre, dataUrl, mime});
     } catch(err){
       actualizarTarjetaImagen(card, null, err.message || String(err), tarea.usaPersona);
       if (err instanceof OperacionCanceladaError){ cancelada = true; break; }
@@ -1401,7 +1456,7 @@ async function exportarPdf(){
     let w = anchoUtil, h = (propiedades.height / propiedades.width) * w;
     const altoMax = 240;
     if (h > altoMax){ h = altoMax; w = (propiedades.width / propiedades.height) * h; }
-    doc.addImage(img.dataUrl, "PNG", margen, 30, w, h);
+    doc.addImage(img.dataUrl, tipoPdfDesdeMime(img.mime), margen, 30, w, h);
   });
   await guardarArchivo("genoutfit_outfit.pdf", doc.output("blob"), "application/pdf");
 }
@@ -1492,8 +1547,8 @@ function cargarDesdeHistorial(rec){
   rec.items.forEach(it => {
     const card = pintarImagenPlaceholder(it.nombre, it.esModelo, it.esModelo && rec.usoPersonaReferencia);
     const dataUrl = URL.createObjectURL(it.blob);
-    actualizarTarjetaImagen(card, dataUrl, null, it.esModelo && rec.usoPersonaReferencia);
-    imagenesGeneradas.push({nombre: it.nombre, dataUrl});
+    actualizarTarjetaImagen(card, dataUrl, null, it.esModelo && rec.usoPersonaReferencia, it.blob);
+    imagenesGeneradas.push({nombre: it.nombre, dataUrl, mime: it.blob.type || "image/jpeg"});
   });
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
   panelImagenes.style.display = "block";
