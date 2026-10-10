@@ -63,6 +63,7 @@
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
   .field { margin-bottom: 1rem; }
   .row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
   .key-row { display: flex; gap: .5rem; flex-wrap: wrap; }
@@ -134,7 +135,7 @@
   .pick-row { display: flex; align-items: flex-start; gap: .5rem; font-weight: 600; margin: 0 0 .4rem; cursor: pointer; }
   .pick-row input { width: 1.2rem; height: 1.2rem; margin-top: .15rem; flex-shrink: 0; }
 
-  @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
+  @media (max-width: 800px) { .grid2, .grid3, .grid4 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
 </style>
 </head>
 <body
@@ -266,7 +267,7 @@
   <!-- SECCI&#211;N 4 &#8212; PAR&#193;METROS -->
   <section class="card" aria-labelledby="h-params">
     <h2 id="h-params">4. Par&#225;metros de la imagen</h2>
-    <div class="grid3">
+    <div class="grid4">
       <div>
         <label for="steps">N&#250;mero de pasos de inferencia</label>
         <select id="steps"></select>
@@ -278,6 +279,10 @@
       <div>
         <label for="imageSize">Tama&#241;o / formato de imagen</label>
         <select id="imageSize"></select>
+      </div>
+      <div>
+        <label for="selSafetyTolerance">Tolerancia del filtro de seguridad (FLUX)</label>
+        <select id="selSafetyTolerance"></select>
       </div>
     </div>
   </section>
@@ -341,7 +346,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:59</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 02:27</p>
   </footer>
 </div>
 
@@ -369,7 +374,8 @@ const APP_CONFIG = {
     defaultModel: "fal-ai/flux-pro/v1.1",
     defaultInferenceSteps: 2,
     defaultImageSize: "portrait_4_3",
-    fixedSafetyTolerance: "3",                    // Fija en esta versi\u00f3n (no editable por el usuario)
+    safetyToleranceDefecto: 3,                    // Versi\u00f3n alumnos: elegible entre 1 y 5 con selSafetyTolerance
+    safetyToleranceOpciones: [1, 2, 3, 4, 5],
     outputFormat: "png",
     numImages: 1
   }
@@ -554,7 +560,8 @@ const STORAGE = {
   textModel: "genimod_alumnos_text_model",
   falModel: "genimod_alumnos_fal_model",
   steps: "genimod_alumnos_inference_steps_v2",
-  imageSize: "genimod_alumnos_image_size"
+  imageSize: "genimod_alumnos_image_size",
+  safetyTolerance: "genimod_alumnos_safety_tolerance"
 };
 
 /* ==========================================================================
@@ -1010,6 +1017,11 @@ function formatearEstimacionTokens(entrada, maxTokens, provider, model) {
 /* ==========================================================================
    FAL.AI \u2014 GENERACI\u00d3N DE IMAGEN
    ========================================================================== */
+/* Tolerancia del filtro de seguridad de FLUX elegida por el alumno (1-5, por defecto 3). */
+function obtenerSafetyTolerance() {
+  const v = parseInt($("selSafetyTolerance").value, 10);
+  return APP_CONFIG.fal.safetyToleranceOpciones.includes(v) ? v : APP_CONFIG.fal.safetyToleranceDefecto;
+}
 function buildFalBody(model, prompt, steps, imageSize, safety) {
   const allowed = FAL_MODELS[model] ? FAL_MODELS[model].params : CUSTOM_FAL_PARAMS;
   const all = {
@@ -1239,7 +1251,7 @@ async function generar() {
   const falModel = getActiveModel("fal");
   const steps = Number($("steps").value);
   const imageSize = $("imageSize").value;
-  const safety = APP_CONFIG.fal.fixedSafetyTolerance;
+  const safety = String(obtenerSafetyTolerance());
   const maxTokens = improve ? getMaxTokens() : null;
   const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
@@ -1567,6 +1579,7 @@ function loadFromHistory(rec) {
   setModelSelect("falModel", Object.keys(FAL_MODELS), rec.falModel);
   refreshImageSizes(rec.imageSize);
   if (INFERENCE_STEP_OPTIONS.includes(rec.steps)) $("steps").value = String(rec.steps);
+  if (APP_CONFIG.fal.safetyToleranceOpciones.includes(Number(rec.safety))) $("selSafetyTolerance").value = String(Number(rec.safety));
   persistPreferences();
 
   state.lastPrompt = rec.prompt;
@@ -1714,6 +1727,11 @@ function loadSettings() {
   $("steps").value = INFERENCE_STEP_OPTIONS.includes(Number(savedSteps)) ? savedSteps : String(APP_CONFIG.fal.defaultInferenceSteps);
   refreshImageSizes(storageGet(STORAGE.imageSize) || APP_CONFIG.fal.defaultImageSize);
 
+  // Tolerancia del filtro de seguridad de FLUX (1-5, por defecto 3)
+  fillSelect($("selSafetyTolerance"), APP_CONFIG.fal.safetyToleranceOpciones.map((n) => ({ value: String(n), label: String(n) })));
+  const savedSafety = storageGet(STORAGE.safetyTolerance);
+  $("selSafetyTolerance").value = APP_CONFIG.fal.safetyToleranceOpciones.includes(Number(savedSafety)) ? savedSafety : String(APP_CONFIG.fal.safetyToleranceDefecto);
+
   const savedImprove = storageGet(STORAGE.improvePrompt);
   $("improvePrompt").checked = savedImprove === "" ? true : savedImprove === "1";
 
@@ -1736,6 +1754,7 @@ function persistPreferences() {
   storageSet(STORAGE.falModel, getActiveModel("fal"));
   storageSet(STORAGE.steps, $("steps").value);
   storageSet(STORAGE.imageSize, $("imageSize").value);
+  storageSet(STORAGE.safetyTolerance, $("selSafetyTolerance").value);
 }
 
 function initializeApp() {
@@ -1764,6 +1783,7 @@ function initializeApp() {
   $("falModel").addEventListener("change", () => { refreshImageSizes(); persistPreferences(); validateForm(); });
   $("steps").addEventListener("change", persistPreferences);
   $("imageSize").addEventListener("change", persistPreferences);
+  $("selSafetyTolerance").addEventListener("change", persistPreferences);
 
   $("systemClear").addEventListener("click", () => { $("systemPrompt").value = ""; $("systemPrompt").focus(); });
   $("systemRestore").addEventListener("click", () => { $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT; });
