@@ -204,7 +204,10 @@
   }
   #estado-generacion.visible { display: flex; }
   #estado-generacion.error { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; align-items: flex-start; }
-  #estado-generacion.error #estado-texto { white-space: pre-wrap; word-break: break-word; }
+  #estado-generacion.detenida { background: #eee; color: var(--muted); border-color: var(--border); align-items: flex-start; }
+  #estado-generacion.error #estado-texto, #estado-generacion.detenida #estado-texto { white-space: pre-wrap; word-break: break-word; }
+  #estado-generacion #estado-texto { flex: 1; min-width: 0; }
+  #estado-generacion #btn-detener { flex-shrink: 0; padding: .3rem .8rem; font-size: .82rem; }
 
   #aviso-truncado {
     margin-top: .9rem; padding: .7rem 1rem; border-radius: 10px;
@@ -449,7 +452,7 @@
     <button type="button" class="primario grande" id="btn-generar" disabled>
       <span class="spinner"></span><span id="btn-generar-texto">Generar Outfit</span>
     </button>
-    <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span></div>
+    <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span><button type="button" class="peligro hidden" id="btn-detener">Detener</button></div>
   </section>
 
   <section class="panel" id="panel-resultado" style="display:none;" aria-labelledby="h-resultado">
@@ -624,6 +627,7 @@ const btnGenerar = $("btn-generar");
 const btnGenerarTexto = $("btn-generar-texto");
 const estadoGeneracion = $("estado-generacion");
 const estadoTexto = $("estado-texto");
+const btnDetener = $("btn-detener");
 const panelResultado = $("panel-resultado");
 const avisoTruncadoDiv = $("aviso-truncado");
 const listaPrompts = $("lista-prompts");
@@ -642,6 +646,13 @@ let piezasActuales = null; // [{nombre, prompt}], mantenidas en orden tras edici
 let modeloShotPrompt = null;
 let personaAnalisis = null; // {tipoFoto: "completa"|"rostro", rasgosFaciales, caracteristicasFisicas} | null
 let imagenesGeneradas = []; // [{nombre, dataUrl}] tras llamar a FLUX
+let controladorOperacion = null; // AbortController de la operación larga en curso (análisis o generación de imágenes), para el botón "Detener"
+
+// Error específico para cuando el usuario detiene una operación en curso con
+// el botón "Detener", distinto de un error real de red/proveedor.
+class OperacionCanceladaError extends Error {
+  constructor(msg){ super(msg || "Generación detenida por el usuario."); this.name = "OperacionCanceladaError"; }
+}
 
 /* ============================================================================
  * ALMACENAMIENTO LOCAL
@@ -852,13 +863,34 @@ $("btn-restaurar-system").addEventListener("click", () => { inputSystemPrompt.va
 /* ============================================================================
  * LLAMADA UNIFICADA A LA IA DE TEXTO/VISIÓN (Anthropic / OpenAI / Gemini)
  * ==========================================================================*/
-async function fetchConTimeout(url, opciones, timeoutMs = APP_CONFIG.requestTimeoutMs){
+// Combina varias AbortSignal en una sola: se aborta en cuanto cualquiera de
+// ellas lo hace. Usa AbortSignal.any si el navegador la soporta, con un
+// fallback manual para navegadores más antiguos.
+function combinarSenales(señales){
+  const validas = señales.filter(Boolean);
+  if (validas.length <= 1) return validas[0];
+  if (typeof AbortSignal !== "undefined" && typeof AbortSignal.any === "function") return AbortSignal.any(validas);
   const controlador = new AbortController();
-  const id = setTimeout(() => controlador.abort(), timeoutMs);
+  validas.forEach(s => {
+    if (s.aborted) controlador.abort();
+    else s.addEventListener("abort", () => controlador.abort(), {once: true});
+  });
+  return controlador.signal;
+}
+// Además del timeout de la propia petición, cada llamada se liga al
+// AbortController de la operación en curso (controladorOperacion), para que
+// el botón "Detener" pueda cancelar una petición ya en marcha.
+async function fetchConTimeout(url, opciones, timeoutMs = APP_CONFIG.requestTimeoutMs){
+  const controladorTimeout = new AbortController();
+  const id = setTimeout(() => controladorTimeout.abort(), timeoutMs);
+  const señal = combinarSenales([controladorTimeout.signal, controladorOperacion && controladorOperacion.signal]);
   try{
-    return await fetch(url, {...opciones, signal: controlador.signal});
+    return await fetch(url, {...opciones, signal: señal});
   } catch(e){
-    if (e.name === "AbortError") throw new Error("La petición ha superado el tiempo máximo de espera (60 s). Inténtalo de nuevo.");
+    if (e.name === "AbortError"){
+      if (controladorOperacion && controladorOperacion.signal.aborted) throw new OperacionCanceladaError();
+      throw new Error("La petición ha superado el tiempo máximo de espera (60 s). Inténtalo de nuevo.");
+    }
     throw new Error("Error de red: no se ha podido contactar con el servidor de la IA. Revisa tu conexión.");
   } finally { clearTimeout(id); }
 }
@@ -868,6 +900,15 @@ function mensajeErrorHttp(status, cuerpo){
   if (status === 404) return "El modelo indicado no existe o no está disponible en tu cuenta (código 404). Revisa el identificador del modelo.";
   const detalle = cuerpo && (cuerpo.error && cuerpo.error.message ? cuerpo.error.message : JSON.stringify(cuerpo).slice(0,200));
   return "Error del proveedor (código " + status + ")" + (detalle ? ": " + detalle : ".");
+}
+// Algunos modelos de OpenAI (p. ej. la familia de razonamiento gpt-6-*) ya no
+// aceptan "max_tokens" y devuelven un error 400 pidiendo "max_completion_tokens"
+// en su lugar. Se detecta ese error concreto en el cuerpo de la respuesta para
+// reintentar la llamada una única vez renombrando el parámetro, sin necesidad
+// de mantener una lista de qué modelos lo requieren.
+function requiereMaxCompletionTokens(cuerpo){
+  const msg = cuerpo && cuerpo.error && typeof cuerpo.error.message === "string" ? cuerpo.error.message : "";
+  return /max_tokens/i.test(msg) && /max_completion_tokens/i.test(msg);
 }
 
 // userPrompt: texto. imagenes: array de {mediaType, base64} opcional (solo en
@@ -912,8 +953,14 @@ async function llamarIA(systemPrompt, userPrompt, opts, imagenes){
     throw new Error("Proveedor desconocido: " + proveedor);
   }
 
-  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
   let data; try { data = await resp.json(); } catch(e){ data = {}; }
+  if (!resp.ok && proveedor === "openai" && requiereMaxCompletionTokens(data)){
+    const { max_tokens, ...bodySinMaxTokens } = body;
+    const bodyAlt = { ...bodySinMaxTokens, max_completion_tokens: max_tokens };
+    resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(bodyAlt)});
+    try { data = await resp.json(); } catch(e){ data = {}; }
+  }
   if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
 
   const texto = extraerTexto(data);
@@ -1099,6 +1146,7 @@ async function esperarColaFal(encolado, headers){
   let statusUrl = encolado.status_url;
   let responseUrl = encolado.response_url;
   while (Date.now() - inicio < APP_CONFIG.fal.queueMaxWaitMs){
+    if (controladorOperacion && controladorOperacion.signal.aborted) throw new OperacionCanceladaError();
     await new Promise(r => setTimeout(r, APP_CONFIG.fal.queuePollIntervalMs));
     const r = await fetchConTimeout(statusUrl, {headers});
     const d = await r.json().catch(() => ({}));
@@ -1238,7 +1286,12 @@ async function generarTodasLasImagenes(){
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
   if (modeloShotPrompt) tareas.push({nombre: "Modelo con el outfit completo", prompt: modeloShotPrompt, modelo: true, usaPersona: usaPersonaParaModelo});
 
+  let cancelada = false;
   for (const tarea of tareas){
+    if (controladorOperacion && controladorOperacion.signal.aborted){
+      cancelada = true;
+      break; // el usuario ha pulsado "Detener": no se generan más piezas
+    }
     const card = pintarImagenPlaceholder(tarea.nombre, tarea.modelo, tarea.usaPersona);
     estadoTexto.textContent = tarea.usaPersona
       ? `Generando imagen: ${tarea.nombre}… (editando la foto de referencia con FLUX Kontext)`
@@ -1252,10 +1305,12 @@ async function generarTodasLasImagenes(){
       imagenesGeneradas.push({nombre: tarea.nombre, dataUrl});
     } catch(err){
       actualizarTarjetaImagen(card, null, err.message || String(err), tarea.usaPersona);
+      if (err instanceof OperacionCanceladaError){ cancelada = true; break; }
     }
   }
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
   panelImagenes.style.display = "block";
+  return cancelada;
 }
 
 /* ============================================================================
@@ -1424,19 +1479,39 @@ $("historial-vaciar").addEventListener("click", async () => {
 function mostrarCargando(boton, texto){
   boton.classList.add("busy");
   boton.disabled = true;
-  estadoGeneracion.classList.remove("error");
+  estadoGeneracion.classList.remove("error", "detenida");
   estadoGeneracion.classList.add("visible");
   estadoTexto.textContent = texto;
+  controladorOperacion = new AbortController();
+  btnDetener.classList.remove("hidden");
+  btnDetener.disabled = false;
 }
 function ocultarCargando(boton){
   boton.classList.remove("busy");
   estadoGeneracion.classList.remove("visible");
+  controladorOperacion = null;
+  btnDetener.classList.add("hidden");
 }
 function mostrarError(boton, err){
   boton.classList.remove("busy");
   estadoGeneracion.classList.add("visible", "error");
   estadoTexto.textContent = "Error: " + (err && err.message ? err.message : String(err));
+  controladorOperacion = null;
+  btnDetener.classList.add("hidden");
 }
+function mostrarDetenido(boton, texto){
+  boton.classList.remove("busy");
+  estadoGeneracion.classList.add("visible", "detenida");
+  estadoTexto.textContent = texto;
+  controladorOperacion = null;
+  btnDetener.classList.add("hidden");
+}
+btnDetener.addEventListener("click", () => {
+  if (!controladorOperacion) return;
+  btnDetener.disabled = true;
+  btnDetener.textContent = "Deteniendo…";
+  controladorOperacion.abort();
+});
 
 /* ============================================================================
  * BOTONES PRINCIPALES
@@ -1451,8 +1526,10 @@ btnGenerar.addEventListener("click", async () => {
     ocultarCargando(btnGenerar);
     btnGenerar.disabled = false;
   } catch(err){
-    mostrarError(btnGenerar, err);
+    if (err instanceof OperacionCanceladaError) mostrarDetenido(btnGenerar, "Análisis detenido por el usuario.");
+    else mostrarError(btnGenerar, err);
     btnGenerar.disabled = false;
+    btnDetener.textContent = "Detener";
   }
 });
 
@@ -1460,13 +1537,16 @@ btnContinuar.addEventListener("click", async () => {
   recogerPromptsEditados();
   mostrarCargando(btnContinuar, "Generando imágenes con FLUX…");
   try {
-    await generarTodasLasImagenes();
-    ocultarCargando(btnContinuar);
-    await guardarEnHistorial();
+    const cancelada = await generarTodasLasImagenes();
+    if (cancelada) mostrarDetenido(btnContinuar, "Generación detenida por el usuario. Se han conservado las imágenes generadas hasta el momento.");
+    else ocultarCargando(btnContinuar);
+    if (imagenesGeneradas.length > 0) await guardarEnHistorial();
   } catch(err){
-    mostrarError(btnContinuar, err);
+    if (err instanceof OperacionCanceladaError) mostrarDetenido(btnContinuar, "Generación detenida por el usuario.");
+    else mostrarError(btnContinuar, err);
   } finally {
     btnContinuar.disabled = false;
+    btnDetener.textContent = "Detener";
   }
 });
 
