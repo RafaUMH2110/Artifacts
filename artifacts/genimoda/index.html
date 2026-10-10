@@ -63,9 +63,11 @@
 
   .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
   .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.25rem; }
-  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1.25rem; }
   .field { margin-bottom: 1rem; }
   .row { display: flex; flex-wrap: wrap; gap: .5rem; margin-top: .5rem; }
+  .export-row { align-items: flex-end; }
+  .export-row select, .export-row input { width: auto; min-width: 8rem; }
+  .export-row .field-inline { margin: 0; }
   .key-row { display: flex; gap: .5rem; flex-wrap: wrap; }
   .key-row input { flex: 1 1 200px; }
   .hint { font-size: .85rem; color: var(--muted); margin: .3rem 0 0; }
@@ -135,7 +137,7 @@
   .pick-row { display: flex; align-items: flex-start; gap: .5rem; font-weight: 600; margin: 0 0 .4rem; cursor: pointer; }
   .pick-row input { width: 1.2rem; height: 1.2rem; margin-top: .15rem; flex-shrink: 0; }
 
-  @media (max-width: 800px) { .grid2, .grid3, .grid4 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
+  @media (max-width: 800px) { .grid2, .grid3 { grid-template-columns: 1fr; } .card { padding: 1.1rem; } }
 </style>
 </head>
 <body
@@ -168,7 +170,7 @@
     <summary>&#191;C&#243;mo funciona GenImOda?</summary>
     <ol>
       <li>El usuario introduce una idea inicial.</li>
-      <li>Si la casilla &#171;Mejorar el prompt con IA&#187; est&#225; activada, el proveedor elegido (Claude, OpenAI o Gemini) analiza la idea y genera un prompt especializado en ingl&#233;s; si est&#225; desactivada, se usa la idea inicial tal cual, sin llamar a ning&#250;n proveedor de texto.</li>
+      <li>Si la casilla &#171;Mejorar el prompt con IA&#187; est&#225; activada, el proveedor elegido (Claude, OpenAI o Gemini) analiza la idea y genera un prompt especializado en espa&#241;ol; si est&#225; desactivada, se usa la idea inicial tal cual, sin llamar a ning&#250;n proveedor de texto.</li>
       <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
       <li>GenImOda muestra el resultado, lo guarda en el historial de este navegador y permite descargarlo en PNG.</li>
@@ -267,7 +269,7 @@
   <!-- SECCI&#211;N 4 &#8212; PAR&#193;METROS -->
   <section class="card" aria-labelledby="h-params">
     <h2 id="h-params">4. Par&#225;metros de la imagen</h2>
-    <div class="grid4">
+    <div class="grid2">
       <div>
         <label for="steps">N&#250;mero de pasos de inferencia</label>
         <select id="steps"></select>
@@ -281,7 +283,7 @@
         <select id="imageSize"></select>
       </div>
       <div>
-        <label for="selSafetyTolerance">Tolerancia del filtro de seguridad (FLUX)</label>
+        <label for="selSafetyTolerance">Tolerancia del filtro de seguridad de fal.ai</label>
         <select id="selSafetyTolerance"></select>
       </div>
     </div>
@@ -308,7 +310,13 @@
   <!-- RESULTADOS -->
   <section class="card" aria-labelledby="h-claude">
     <h2 id="h-claude">Prompt generado por Claude</h2>
-    <textarea id="generatedPrompt" class="tall" readonly aria-label="Prompt generado por Claude" placeholder="El prompt generado por Claude aparecer&#225; aqu&#237;."></textarea>
+    <textarea id="generatedPrompt" class="tall" aria-label="Prompt generado por Claude (editable)" placeholder="El prompt generado por Claude aparecer&#225; aqu&#237;. Puedes editarlo antes de generar la imagen."></textarea>
+    <p class="hint" style="margin-top:.4rem">Puedes modificar este prompt a mano; la imagen se generar&#225; con el texto que haya aqu&#237; en el momento de pulsar el bot&#243;n.</p>
+    <div class="row">
+      <button type="button" id="generateFromPrompt" class="primary" disabled>
+        <span class="spinner" aria-hidden="true"></span><span id="generateFromPromptLabel">Generar imagen con este prompt</span>
+      </button>
+    </div>
     <div class="row">
       <button type="button" id="copyPrompt" disabled>Copiar prompt</button>
       <button type="button" id="downloadPrompt" disabled>Descargar prompt</button>
@@ -322,7 +330,21 @@
     <h2 id="h-image">Imagen generada</h2>
     <div class="image-box" id="imageBox"><span>La imagen generada aparecer&#225; aqu&#237;.</span></div>
     <div class="meta" id="imageMeta"></div>
-    <div class="row"><button type="button" id="downloadImage" class="primary" disabled>Descargar imagen PNG</button></div>
+    <div class="row export-row">
+      <div class="field-inline">
+        <label for="exportFormat">Formato de exportaci&#243;n</label>
+        <select id="exportFormat">
+          <option value="png">PNG (original de fal.ai)</option>
+          <option value="jpeg">JPEG</option>
+        </select>
+      </div>
+      <div class="field-inline hidden" id="jpegQualityWrap">
+        <label for="jpegQuality">Calidad JPEG (1-100)</label>
+        <input type="number" id="jpegQuality" min="1" max="100" step="1" inputmode="numeric" value="92">
+      </div>
+      <button type="button" id="downloadImage" class="primary" disabled>Descargar imagen PNG</button>
+    </div>
+    <p class="hint">El PNG es el archivo original que devuelve fal.ai. El JPEG se convierte en tu navegador y ocupa menos; si la imagen tuviera transparencia, se rellena con fondo blanco.</p>
   </section>
 
   <!-- HISTORIAL LOCAL -->
@@ -346,7 +368,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 02:27</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 07:55</p>
   </footer>
 </div>
 
@@ -464,6 +486,13 @@ const CUSTOM_FAL_PARAMS = ["prompt", "num_inference_steps", "num_images", "outpu
 const CUSTOM_FAL_IMAGE_SIZES = FAL_MODELS[APP_CONFIG.fal.defaultModel].imageSizes;
 const INFERENCE_STEP_OPTIONS = [1, 2, 3, 4];   // Versi\u00f3n alumnos: solo 1, 2, 3 o 4 pasos
 
+/* Exportaci\u00f3n de la imagen descargada. La generaci\u00f3n siempre se solicita en PNG;
+   el JPEG se obtiene convirtiendo ese PNG en el navegador. */
+const EXPORT_CONFIG = { defaultFormat: "png", defaultJpegQuality: 92 };
+const EXPORT_FORMATS = {
+  png:  { mime: "image/png",  ext: ".png", label: "PNG" },
+  jpeg: { mime: "image/jpeg", ext: ".jpg", label: "JPEG" }
+};
 
 /* Historial local de generaciones (IndexedDB, solo en este navegador). */
 const HISTORY_CONFIG = {
@@ -510,7 +539,7 @@ const DEFAULT_SYSTEM_PROMPT = `Eres un experto en fotograf\u00eda comercial de m
 
 Tu tarea es transformar una idea inicial, posiblemente breve o incompleta, en un prompt de alta calidad para un modelo de generaci\u00f3n de im\u00e1genes FLUX.
 
-La imagen solicitada debe representar una prenda de moda mediante una fotograf\u00eda comercial hiperrealista.
+La imagen solicitada debe representar una prenda de moda mediante una fotograf\u00eda comercial hiperrealista de cuerpo completo.
 
 Describe de forma precisa y visualmente \u00fatil:
 
@@ -540,11 +569,11 @@ No utilices palabras vac\u00edas o gen\u00e9ricas como \u201cphotorealistic\u201
 
 En su lugar, describe los elementos f\u00edsicos, \u00f3pticos, materiales y fotogr\u00e1ficos que hacen que la imagen resulte cre\u00edble.
 
-La fotograf\u00eda debe mostrar la prenda y permitir apreciar claramente su dise\u00f1o y construcci\u00f3n.
+La fotograf\u00eda debe mostrar la prenda de cuerpo completo y permitir apreciar claramente su dise\u00f1o y construcci\u00f3n.
 
 El prompt final debe estar optimizado para FLUX.
 
-Devuelve \u00daNICAMENTE el prompt final en ingl\u00e9s.
+Devuelve \u00daNICAMENTE el prompt final en espa\u00f1ol.
 
 No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, comillas ni bloques Markdown.`;
 
@@ -561,7 +590,9 @@ const STORAGE = {
   falModel: "genimod_alumnos_fal_model",
   steps: "genimod_alumnos_inference_steps_v2",
   imageSize: "genimod_alumnos_image_size",
-  safetyTolerance: "genimod_alumnos_safety_tolerance"
+  safetyTolerance: "genimod_alumnos_safety_tolerance",
+  exportFormat: "genimod_alumnos_export_format",
+  jpegQuality: "genimod_alumnos_jpeg_quality"
 };
 
 /* ==========================================================================
@@ -751,6 +782,7 @@ function validateForm() {
   const soportaEstimacion = provider === "anthropic" || provider === "gemini";
   $("tokenEstimateSection").classList.toggle("hidden", !soportaEstimacion);
   $("estimateTokens").disabled = !(improve && soportaEstimacion && hasTextKey && hasIdea && modelsOk && tokensOk && !state.busy);
+  updateGenerateFromPromptButton();
   return ok;
 }
 
@@ -774,7 +806,19 @@ function showLoading(isLoading, label) {
   $("generate").classList.toggle("busy", isLoading);
   $("generate").setAttribute("aria-busy", String(isLoading));
   $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen";
+  $("generateFromPrompt").classList.toggle("busy", isLoading);
+  $("generateFromPrompt").setAttribute("aria-busy", String(isLoading));
+  $("generateFromPromptLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen con este prompt";
   validateForm();
+}
+
+/* Habilita el bot\u00f3n "Generar imagen con este prompt" cuando hay texto en el
+   prompt editable, un modelo de fal.ai v\u00e1lido y su API key guardada. */
+function updateGenerateFromPromptButton() {
+  const hasFalKey = !!storageGet(STORAGE.falKey);
+  const hasPrompt = $("generatedPrompt").value.trim().length > 0;
+  const modelsOk = getActiveModel("fal").length > 0;
+  $("generateFromPrompt").disabled = !(hasFalKey && hasPrompt && modelsOk) || state.busy;
 }
 
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
@@ -873,7 +917,7 @@ REQUISITOS:
 - La prenda debe ser claramente visible.
 - Descripci\u00f3n precisa de materiales y construcci\u00f3n.
 - Iluminaci\u00f3n y c\u00e1mara f\u00edsicamente plausibles.
-- El resultado final debe ser un prompt en ingl\u00e9s.
+- El resultado final debe ser un prompt en espa\u00f1ol.
 - Devuelve exclusivamente el prompt final.`;
 }
 
@@ -1095,6 +1139,7 @@ function extractFalImage(data) {
 function displayGeneratedPrompt(text, usage, provider, model, note) {
   $("generatedPrompt").value = text;
   ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !text; });
+  updateGenerateFromPromptButton();
   const meta = $("claudeMeta");
   meta.textContent = "";
   if (!text) return;
@@ -1208,17 +1253,85 @@ function downloadPromptOnly() {
   saveBlob(new Blob([text], { type: "text/plain;charset=utf-8" }), "GenImOd_prompt.txt");
 }
 
-/* Descarga el PNG original devuelto por fal.ai, sin conversiones en el navegador. */
+/* Descarga la imagen en el formato elegido (PNG original o JPEG convertido en el navegador). */
+function getExportFormat() { return $("exportFormat").value === "jpeg" ? "jpeg" : "png"; }
+
+/* Calidad JPEG como valor 0-1; si el campo no es v\u00e1lido se usa el valor por defecto. */
+function getJpegQuality() {
+  const n = Number($("jpegQuality").value);
+  const pct = Number.isFinite(n) && n >= 1 ? Math.min(100, Math.round(n)) : EXPORT_CONFIG.defaultJpegQuality;
+  return pct / 100;
+}
+
+function updateExportUi() {
+  const f = getExportFormat();
+  $("jpegQualityWrap").classList.toggle("hidden", f !== "jpeg");
+  $("downloadImage").textContent = "Descargar imagen " + EXPORT_FORMATS[f].label;
+}
+
+/* Decodifica un Blob de imagen para poder dibujarlo en un canvas. */
+async function decodeImageBlob(blob) {
+  if (window.createImageBitmap) {
+    try { const bmp = await createImageBitmap(blob); return { source: bmp, width: bmp.width, height: bmp.height, close: () => bmp.close() }; }
+    catch (e) { /* se prueba con <img> */ }
+  }
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = await new Promise((resolve, reject) => {
+      const i = new Image();
+      i.onload = () => resolve(i);
+      i.onerror = () => reject(new Error("decode"));
+      i.src = url;
+    });
+    return { source: img, width: img.naturalWidth, height: img.naturalHeight, close: () => {} };
+  } finally { URL.revokeObjectURL(url); }
+}
+
+/* Convierte un Blob de imagen a PNG o JPEG mediante un canvas. */
+async function reencodeBlob(blob, format) {
+  const fmt = EXPORT_FORMATS[format];
+  const decoded = await decodeImageBlob(blob);
+  const canvas = document.createElement("canvas");
+  canvas.width = decoded.width;
+  canvas.height = decoded.height;
+  const ctx = canvas.getContext("2d");
+  if (format === "jpeg") {          // JPEG no admite transparencia
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
+  ctx.drawImage(decoded.source, 0, 0);
+  decoded.close();
+  return await new Promise((resolve, reject) => {
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("encode"))), fmt.mime, format === "jpeg" ? getJpegQuality() : undefined);
+  });
+}
+
+/* Guarda el Blob en el formato elegido; si ya est\u00e1 en ese formato, se guarda el original sin recodificar. */
+async function exportBlob(blob, baseName) {
+  const format = getExportFormat();
+  const fmt = EXPORT_FORMATS[format];
+  const out = blob.type === fmt.mime ? blob : await reencodeBlob(blob, format);
+  saveBlob(out, withExtension(baseName, fmt.ext));
+}
+
+/* Si el navegador impide leer la imagen (CORS), se abre la original en otra pesta\u00f1a. */
+function openOriginalFallback(url) {
+  window.open(url, "_blank", "noopener");
+  if (getExportFormat() === "jpeg") {
+    showStatus("El navegador no permite leer la imagen para convertirla a JPEG. Se ha abierto la original (PNG) en otra pesta\u00f1a: usa \u00abGuardar imagen como\u2026\u00bb.", "info");
+  } else {
+    showStatus("El navegador no permiti\u00f3 la descarga directa. Se ha abierto la imagen en otra pesta\u00f1a: usa \u00abGuardar imagen como\u2026\u00bb.", "info");
+  }
+}
+
 async function downloadImage() {
   if (!state.imageUrl) return;
   try {
     const resp = await fetch(state.imageUrl);
     if (!resp.ok) throw new Error("http " + resp.status);
-    saveBlob(await resp.blob(), withExtension("GenImOd_imagen", ".png"));
+    await exportBlob(await resp.blob(), "GenImOd_imagen");
   } catch (e) {
-    // Si el navegador bloquea la lectura directa (CORS), se abre la imagen original en otra pesta\u00f1a.
-    window.open(state.imageUrl, "_blank", "noopener");
-    showStatus("El navegador no permiti\u00f3 la descarga directa. Se ha abierto la imagen en otra pesta\u00f1a: usa \u00abGuardar imagen como\u2026\u00bb.", "info");
+    openOriginalFallback(state.imageUrl);
   }
 }
 
@@ -1328,6 +1441,44 @@ async function estimarTokens() {
     out.className = "status show error";
   } finally {
     validateForm();
+  }
+}
+
+/* Genera la imagen directamente a partir del texto actual del prompt editable,
+   sin volver a llamar al proveedor de texto (Anthropic/OpenAI/Gemini). \u00datil
+   cuando el usuario ha corregido a mano el prompt mejorado. */
+async function generarImagenDesdePrompt() {
+  clearError();
+  const prompt = $("generatedPrompt").value.trim();
+  if (!prompt) { showError("Escribe o genera primero un prompt antes de crear la imagen."); return; }
+  if (!storageGet(STORAGE.falKey)) { showError("Introduce y guarda la API key de fal.ai antes de generar la imagen."); return; }
+  const falModel = getActiveModel("fal");
+  if (!falModel) { showError("Indica el identificador del modelo de fal.ai."); return; }
+  const steps = Number($("steps").value);
+  const imageSize = $("imageSize").value;
+  const safety = String(obtenerSafetyTolerance());
+
+  state.lastPrompt = prompt;
+  showLoading(true, "Generando\u2026");
+  try {
+    showStatus("Generando imagen con FLUX a partir del prompt editado\u2026", "info");
+    const image = await generarImagenConFal(prompt, falModel, steps, imageSize, safety);
+    displayGeneratedImage(image, falModel, steps);
+    if (image.nsfw) {
+      showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Reformula el prompt con lenguaje m\u00e1s t\u00e9cnico y menos centrado en el cuerpo.", "error");
+    } else {
+      showStatus("Imagen generada correctamente.", "ok");
+    }
+    await guardarEnHistorial({
+      idea: state.lastIdea, systemPrompt: state.lastSystem, prompt, improved: wantsImprove(),
+      textProvider: wantsImprove() ? getTextProvider() : null, textModel: wantsImprove() ? getActiveModel("text") : null,
+      falModel, steps, imageSize, safety, image, usage: null
+    });
+  } catch (err) {
+    $("status").className = "status";
+    showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");
+  } finally {
+    showLoading(false);
   }
 }
 
@@ -1602,15 +1753,17 @@ function setModelSelect(selectId, knownIds, value) {
 }
 
 async function downloadRecordImage(rec) {
-  const name = `GenImOd_${rec.id.split("-")[0]}.png`;
+  const base = `GenImOd_${rec.id.split("-")[0]}`;
   try {
-    if (rec.blob) { saveBlob(rec.blob, name); return; }
-    const resp = await fetch(rec.url);
-    if (!resp.ok) throw new Error("http " + resp.status);
-    saveBlob(await resp.blob(), name);
+    let blob = rec.blob;
+    if (!blob) {
+      const resp = await fetch(rec.url);
+      if (!resp.ok) throw new Error("http " + resp.status);
+      blob = await resp.blob();
+    }
+    await exportBlob(blob, base);
   } catch (e) {
-    window.open(rec.url, "_blank", "noopener");
-    showStatus("No se ha podido descargar directamente. Se ha abierto la imagen original en otra pesta\u00f1a.", "info");
+    openOriginalFallback(rec.url);
   }
 }
 
@@ -1741,6 +1894,11 @@ function loadSettings() {
   $("maxTokens").value = String(tokensValid ? savedTokens : APP_CONFIG.anthropic.maxTokens);
   updateMaxTokensUI();
 
+  $("exportFormat").value = storageGet(STORAGE.exportFormat) === "jpeg" ? "jpeg" : EXPORT_CONFIG.defaultFormat;
+  const savedQ = Number(storageGet(STORAGE.jpegQuality));
+  $("jpegQuality").value = String(Number.isInteger(savedQ) && savedQ >= 1 && savedQ <= 100 ? savedQ : EXPORT_CONFIG.defaultJpegQuality);
+  updateExportUi();
+
   $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT;
   refreshKeyBadges();
   updateImproveUi();
@@ -1755,6 +1913,9 @@ function persistPreferences() {
   storageSet(STORAGE.steps, $("steps").value);
   storageSet(STORAGE.imageSize, $("imageSize").value);
   storageSet(STORAGE.safetyTolerance, $("selSafetyTolerance").value);
+  storageSet(STORAGE.exportFormat, getExportFormat());
+  const q = Number($("jpegQuality").value);
+  if (Number.isInteger(q) && q >= 1 && q <= 100) storageSet(STORAGE.jpegQuality, String(q));
 }
 
 function initializeApp() {
@@ -1784,6 +1945,8 @@ function initializeApp() {
   $("steps").addEventListener("change", persistPreferences);
   $("imageSize").addEventListener("change", persistPreferences);
   $("selSafetyTolerance").addEventListener("change", persistPreferences);
+  $("exportFormat").addEventListener("change", () => { updateExportUi(); persistPreferences(); });
+  $("jpegQuality").addEventListener("input", persistPreferences);
 
   $("systemClear").addEventListener("click", () => { $("systemPrompt").value = ""; $("systemPrompt").focus(); });
   $("systemRestore").addEventListener("click", () => { $("systemPrompt").value = DEFAULT_SYSTEM_PROMPT; });
@@ -1791,6 +1954,12 @@ function initializeApp() {
   $("idea").addEventListener("input", validateForm);
 
   $("generate").addEventListener("click", generar);
+  $("generateFromPrompt").addEventListener("click", generarImagenDesdePrompt);
+  $("generatedPrompt").addEventListener("input", () => {
+    const t = $("generatedPrompt").value;
+    ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !t; });
+    updateGenerateFromPromptButton();
+  });
   $("estimateTokens").addEventListener("click", estimarTokens);
   $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
   $("downloadPrompt").addEventListener("click", downloadPromptOnly);

@@ -283,7 +283,13 @@
   <!-- RESULTADOS -->
   <section class="card" aria-labelledby="h-claude">
     <h2 id="h-claude">Prompt generado por Claude</h2>
-    <textarea id="generatedPrompt" class="tall" readonly aria-label="Prompt generado por Claude" placeholder="El prompt generado por Claude aparecer&#225; aqu&#237;."></textarea>
+    <textarea id="generatedPrompt" class="tall" aria-label="Prompt generado por Claude (editable)" placeholder="El prompt generado por Claude aparecer&#225; aqu&#237;. Puedes editarlo antes de generar la imagen."></textarea>
+    <p class="hint" style="margin-top:.4rem">Puedes modificar este prompt a mano; la imagen se generar&#225; con el texto que haya aqu&#237; en el momento de pulsar el bot&#243;n.</p>
+    <div class="row">
+      <button type="button" id="generateFromPrompt" class="primary" disabled>
+        <span class="spinner" aria-hidden="true"></span><span id="generateFromPromptLabel">Generar imagen con este prompt</span>
+      </button>
+    </div>
     <div class="row">
       <button type="button" id="copyPrompt" disabled>Copiar prompt</button>
       <button type="button" id="downloadPrompt" disabled>Descargar prompt</button>
@@ -339,7 +345,7 @@
     <ol>
       <li>El usuario introduce una idea inicial.</li>
       <li>El modelo de IA elegido (Claude, GPT o Gemini) analiza y mejora la idea.</li>
-      <li>Ese modelo genera un prompt especializado en ingl&#233;s.</li>
+      <li>Ese modelo genera un prompt especializado en espa&#241;ol.</li>
       <li>El prompt se env&#237;a a FLUX mediante fal.ai.</li>
       <li>FLUX genera la imagen.</li>
       <li>GenImOd muestra y permite descargar el resultado.</li>
@@ -357,7 +363,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:59</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 07:55</p>
   </footer>
 </div>
 
@@ -382,7 +388,7 @@ const APP_CONFIG = {
   fal: {
     baseUrl: "https://fal.run/",                  // El endpoint final es baseUrl + identificador del modelo
     defaultModel: "fal-ai/flux-pro/v1.1",
-    defaultInferenceSteps: 20,
+    defaultInferenceSteps: 2,
     defaultImageSize: "portrait_4_3",
     defaultSafetyTolerance: "2",                  // 1 = m\u00e1s estricto, 6 = m\u00e1s permisivo
     outputFormat: "png",
@@ -479,7 +485,7 @@ const SAFETY_TOLERANCE_OPTIONS = [
   { value: "6", label: "6 - El m\u00e1s permisivo" }
 ];
 const CUSTOM_FAL_IMAGE_SIZES = FAL_MODELS[APP_CONFIG.fal.defaultModel].imageSizes;
-const INFERENCE_STEP_OPTIONS = [10, 20, 30, 40];
+const INFERENCE_STEP_OPTIONS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10];
 
 /* Exportaci\u00f3n de la imagen descargada. La generaci\u00f3n siempre se solicita en PNG;
    el JPEG se obtiene convirtiendo ese PNG en el navegador. */
@@ -546,7 +552,7 @@ La fotograf\u00eda debe mostrar la prenda de cuerpo completo y permitir apreciar
 
 El prompt final debe estar optimizado para FLUX.
 
-Devuelve \u00daNICAMENTE el prompt final en ingl\u00e9s.
+Devuelve \u00daNICAMENTE el prompt final en espa\u00f1ol.
 
 No a\u00f1adas explicaciones, introducciones, comentarios, encabezados, listas, comillas ni bloques Markdown.`;
 
@@ -735,6 +741,7 @@ function validateForm() {
     if (!tokensOk) missing.push("un m\u00e1ximo de tokens v\u00e1lido (entero positivo)");
     hint.textContent = "Falta: " + missing.join(", ") + ".";
   }
+  updateGenerateFromPromptButton();
   return ok;
 }
 
@@ -758,7 +765,19 @@ function showLoading(isLoading, label) {
   $("generate").classList.toggle("busy", isLoading);
   $("generate").setAttribute("aria-busy", String(isLoading));
   $("generateLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen";
+  $("generateFromPrompt").classList.toggle("busy", isLoading);
+  $("generateFromPrompt").setAttribute("aria-busy", String(isLoading));
+  $("generateFromPromptLabel").textContent = isLoading ? (label || "Generando\u2026") : "Generar imagen con este prompt";
   validateForm();
+}
+
+/* Habilita el bot\u00f3n "Generar imagen con este prompt" cuando hay texto en el
+   prompt editable, un modelo de fal.ai v\u00e1lido y su API key guardada. */
+function updateGenerateFromPromptButton() {
+  const hasFalKey = !!storageGet(STORAGE.falKey);
+  const hasPrompt = $("generatedPrompt").value.trim().length > 0;
+  const modelsOk = getActiveModel("fal").length > 0;
+  $("generateFromPrompt").disabled = !(hasFalKey && hasPrompt && modelsOk) || state.busy;
 }
 
 /* Elimina de un texto cualquier API key conocida antes de mostrarlo. */
@@ -858,7 +877,7 @@ REQUISITOS:
 - La prenda debe ser claramente visible.
 - Descripci\u00f3n precisa de materiales y construcci\u00f3n.
 - Iluminaci\u00f3n y c\u00e1mara f\u00edsicamente plausibles.
-- El resultado final debe ser un prompt en ingl\u00e9s.
+- El resultado final debe ser un prompt en espa\u00f1ol.
 - Devuelve exclusivamente el prompt final.`;
 }
 
@@ -1026,6 +1045,7 @@ function extractFalImage(data) {
 function displayGeneratedPrompt(text, usage, provider, model, note) {
   $("generatedPrompt").value = text;
   ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !text; });
+  updateGenerateFromPromptButton();
   const meta = $("claudeMeta");
   meta.textContent = "";
   if (!text) return;
@@ -1273,6 +1293,43 @@ async function generar() {
     await guardarEnHistorial({
       idea, systemPrompt, prompt: resultado.text, textProvider, textModel, falModel, steps, imageSize, safety,
       image, usage: resultado.usage
+    });
+  } catch (err) {
+    $("status").className = "status";
+    showError(err instanceof AppError ? err.message : "Se ha producido un error inesperado.");
+  } finally {
+    showLoading(false);
+  }
+}
+
+/* Genera la imagen directamente a partir del texto actual del prompt editable,
+   sin volver a llamar al proveedor de texto (Anthropic/OpenAI/Gemini). Útil
+   cuando el usuario ha corregido a mano el prompt mejorado. */
+async function generarImagenDesdePrompt() {
+  clearError();
+  const prompt = $("generatedPrompt").value.trim();
+  if (!prompt) { showError("Escribe o genera primero un prompt antes de crear la imagen."); return; }
+  if (!storageGet(STORAGE.falKey)) { showError("Introduce y guarda la API key de fal.ai antes de generar la imagen."); return; }
+  const falModel = getActiveModel("fal");
+  if (!falModel) { showError("Indica el identificador del modelo de fal.ai."); return; }
+  const steps = Number($("steps").value);
+  const imageSize = $("imageSize").value;
+  const safety = $("safety").value;
+
+  state.lastPrompt = prompt;
+  showLoading(true, "Generando…");
+  try {
+    showStatus("Generando imagen con FLUX a partir del prompt editado…", "info");
+    const image = await generarImagenConFal(prompt, falModel, steps, imageSize, safety);
+    displayGeneratedImage(image, falModel, steps);
+    if (image.nsfw) {
+      showStatus("Aviso: fal.ai ha marcado la imagen con su filtro de seguridad y probablemente sea negra. Sube la tolerancia (máx. 6) o reformula el prompt con lenguaje más técnico y menos centrado en el cuerpo.", "error");
+    } else {
+      showStatus("Imagen generada correctamente.", "ok");
+    }
+    await guardarEnHistorial({
+      idea: state.lastIdea, systemPrompt: state.lastSystem, prompt, textProvider: getTextProvider(), textModel: getActiveModel("text"),
+      falModel, steps, imageSize, safety, image, usage: null
     });
   } catch (err) {
     $("status").className = "status";
@@ -1748,6 +1805,12 @@ function initializeApp() {
   $("idea").addEventListener("input", validateForm);
 
   $("generate").addEventListener("click", generar);
+  $("generateFromPrompt").addEventListener("click", generarImagenDesdePrompt);
+  $("generatedPrompt").addEventListener("input", () => {
+    const t = $("generatedPrompt").value;
+    ["copyPrompt", "downloadPrompt", "clearPrompt", "downloadTxt"].forEach((id) => { $(id).disabled = !t; });
+    updateGenerateFromPromptButton();
+  });
   $("copyPrompt").addEventListener("click", () => copyToClipboard($("generatedPrompt").value));
   $("downloadPrompt").addEventListener("click", downloadPromptOnly);
   $("clearPrompt").addEventListener("click", () => { displayGeneratedPrompt("", null, "", ""); state.lastPrompt = ""; });
