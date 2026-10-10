@@ -458,12 +458,20 @@
   <section class="panel" id="panel-resultado" style="display:none;" aria-labelledby="h-resultado">
     <h2 id="h-resultado">5. Prompts generados — revisa y edita antes de continuar</h2>
     <div id="aviso-truncado" style="display:none;"></div>
+    <div class="hist-toolbar">
+      <span class="hist-contador" id="prompts-contador" aria-live="polite">0 piezas</span>
+      <button type="button" class="peligro" id="btn-borrar-todos-prompts">Borrar todo</button>
+    </div>
     <div id="lista-prompts"></div>
     <button type="button" class="primario grande" id="btn-continuar" disabled>Continuar: generar imágenes con FLUX</button>
   </section>
 
   <section class="panel" id="panel-imagenes" style="display:none;" aria-labelledby="h-imagenes">
     <h2 id="h-imagenes">6. Resultado — outfit generado</h2>
+    <div class="hist-toolbar">
+      <span class="hist-contador" id="imagenes-contador" aria-live="polite">0 imágenes</span>
+      <button type="button" class="peligro" id="btn-borrar-todas-imagenes">Borrar todo</button>
+    </div>
     <div id="resultado"></div>
     <div class="botones">
       <button type="button" class="primario" id="btn-exportar-pdf" disabled>Exportar todas en PDF</button>
@@ -485,7 +493,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 11:17
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:05
 </footer>
 
 <script>
@@ -1091,7 +1099,8 @@ function pintarPrompts(){
     const card = document.createElement("div");
     card.className = "pieza-card";
     card.innerHTML = `<h3>${escapeHTML(pieza.nombre)}</h3>
-      <textarea class="tall mono" data-idx="${i}" data-tipo="pieza">${escapeHTML(pieza.prompt)}</textarea>`;
+      <textarea class="tall mono" data-idx="${i}" data-tipo="pieza">${escapeHTML(pieza.prompt)}</textarea>
+      <div class="botones"><button type="button" class="peligro btn-borrar-pieza" data-idx="${i}">Borrar</button></div>`;
     listaPrompts.appendChild(card);
   });
   if (personaAnalisis !== null){
@@ -1116,11 +1125,33 @@ function pintarPrompts(){
       ? `<span class="badge completa">Con rostro de referencia (FLUX Kontext)</span>`
       : `<span class="badge sin-ref">Generado solo por texto</span>`;
     card.innerHTML = `<h3>Modelo con el outfit completo ${motor}</h3>
-      <textarea class="tall mono" data-tipo="modelo">${escapeHTML(modeloShotPrompt)}</textarea>`;
+      <textarea class="tall mono" data-tipo="modelo">${escapeHTML(modeloShotPrompt)}</textarea>
+      <div class="botones"><button type="button" class="peligro" id="btn-borrar-modelo">Borrar</button></div>`;
     listaPrompts.appendChild(card);
   }
+  listaPrompts.querySelectorAll(".btn-borrar-pieza").forEach(btn => {
+    btn.addEventListener("click", () => {
+      recogerPromptsEditados();
+      piezasActuales.splice(parseInt(btn.dataset.idx, 10), 1);
+      pintarPrompts();
+    });
+  });
+  const btnBorrarModelo = $("btn-borrar-modelo");
+  if (btnBorrarModelo){
+    btnBorrarModelo.addEventListener("click", () => {
+      recogerPromptsEditados();
+      modeloShotPrompt = null;
+      chkIncluirModelo.checked = false;
+      pintarPrompts();
+    });
+  }
+  actualizarContadorPrompts();
   panelResultado.style.display = "block";
-  btnContinuar.disabled = false;
+  btnContinuar.disabled = piezasActuales.length === 0 && modeloShotPrompt === null;
+}
+function actualizarContadorPrompts(){
+  const n = piezasActuales.length;
+  $("prompts-contador").textContent = `${n} ${n === 1 ? "pieza" : "piezas"}`;
 }
 function recogerPromptsEditados(){
   listaPrompts.querySelectorAll("textarea").forEach(ta => {
@@ -1130,6 +1161,14 @@ function recogerPromptsEditados(){
     else if (ta.dataset.tipo === "persona-fisico" && personaAnalisis) personaAnalisis.caracteristicasFisicas = ta.value;
   });
 }
+$("btn-borrar-todos-prompts").addEventListener("click", () => {
+  if (!piezasActuales || piezasActuales.length === 0) return;
+  if (!confirm("¿Borrar todas las piezas generadas? Tendrás que volver a generarlas.")) return;
+  piezasActuales = [];
+  modeloShotPrompt = null;
+  chkIncluirModelo.checked = false;
+  pintarPrompts();
+});
 function escapeHTML(s){
   return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
@@ -1228,9 +1267,23 @@ function pintarImagenPlaceholder(nombre, esModelo, usaPersona){
   card.innerHTML = `<h3>${escapeHTML(nombre)}${badge}</h3>
     <div class="img-wrap"><span class="placeholder">Generando…</span></div>
     <div class="meta-pieza"></div>
-    <div class="botones"><button type="button" class="secundario btn-descargar-png" disabled>Descargar PNG</button></div>`;
+    <div class="botones">
+      <button type="button" class="secundario btn-descargar-png" disabled>Descargar PNG</button>
+      <button type="button" class="peligro btn-borrar-imagen">Borrar</button>
+    </div>`;
+  card.querySelector(".btn-borrar-imagen").addEventListener("click", () => {
+    imagenesGeneradas = imagenesGeneradas.filter(img => img.nombre !== card.dataset.nombre);
+    card.remove();
+    actualizarContadorImagenes();
+    btnExportarPdf.disabled = imagenesGeneradas.length === 0;
+  });
   resultadoDiv.appendChild(card);
+  actualizarContadorImagenes();
   return card;
+}
+function actualizarContadorImagenes(){
+  const n = resultadoDiv.querySelectorAll(".pieza-card").length;
+  $("imagenes-contador").textContent = `${n} ${n === 1 ? "imagen" : "imágenes"}`;
 }
 function actualizarTarjetaImagen(card, dataUrl, error, usaPersona){
   const wrap = card.querySelector(".img-wrap");
@@ -1282,6 +1335,7 @@ async function guardarArchivo(nombreArchivo, contenido, tipoMime){
 async function generarTodasLasImagenes(){
   resultadoDiv.innerHTML = "";
   imagenesGeneradas = [];
+  actualizarContadorImagenes();
   const usaPersonaParaModelo = !!(personaBase64 && modeloShotPrompt);
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
   if (modeloShotPrompt) tareas.push({nombre: "Modelo con el outfit completo", prompt: modeloShotPrompt, modelo: true, usaPersona: usaPersonaParaModelo});
@@ -1555,6 +1609,14 @@ btnExportarPdf.addEventListener("click", async () => {
   try { await exportarPdf(); }
   catch(err){ alert("No se ha podido generar el PDF: " + (err.message || err)); }
   finally { btnExportarPdf.disabled = false; }
+});
+$("btn-borrar-todas-imagenes").addEventListener("click", () => {
+  if (imagenesGeneradas.length === 0) return;
+  if (!confirm("¿Borrar todas las imágenes generadas? Esta acción no se puede deshacer.")) return;
+  resultadoDiv.innerHTML = "";
+  imagenesGeneradas = [];
+  actualizarContadorImagenes();
+  btnExportarPdf.disabled = true;
 });
 
 /* ============================================================================
