@@ -367,7 +367,7 @@
 
 <footer>
   GenPatModa &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 06:48
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 07:07
 </footer>
 
 
@@ -1368,7 +1368,7 @@ async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, a
     estadoPiezas.fijar(`Generando el patrón de la pieza "${pieza.nombre}" (${i+1}/${plan.piezas.length})…`, "busy");
     const svg = await generarSVGPieza(pieza.nombre, pieza.descripcion, opts, avisosTruncado);
     piezasGeneradas.push({nombre: pieza.nombre, descripcion: pieza.descripcion, svg});
-    pintarPieza(pieza.nombre, pieza.descripcion, svg);
+    // Versión alumnos: no se muestran los SVG de las piezas mientras se generan, solo el PDF final.
     promptsUsados.push({etapa:"Pieza: " + pieza.nombre, system: SYSTEM_PROMPT_PATRON, user: "Descripción: " + pieza.descripcion, resultado: "(SVG generado, ver PDF)"});
   }
 

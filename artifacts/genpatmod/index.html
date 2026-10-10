@@ -329,10 +329,13 @@
         <button type="button" class="primario" id="btn-continuar-generacion" style="display:none;">Generar piezas con este plan</button>
         <button type="button" class="primario" id="btn-regenerar-prompt" style="display:none;">Generar con este prompt editado</button>
       </div>
-      <div id="estado-generacion-piezas" class="estado-caja"><div class="spinner"></div><span id="estado-texto-piezas"></span></div>
     </div>
     <div id="aviso-truncado" style="display:none;"></div>
     <div id="resultado"></div>
+    <div class="botones">
+      <button type="button" class="peligro" id="btn-detener-piezas" style="display:none;">&#9209; Detener generación</button>
+    </div>
+    <div id="estado-generacion-piezas" class="estado-caja"><div class="spinner"></div><span id="estado-texto-piezas"></span></div>
     <div class="botones">
       <button type="button" class="primario" id="btn-descargar-pdf" style="display:none;">Descargar PDF</button>
     </div>
@@ -372,7 +375,7 @@
 
 <footer>
   GenPatMod &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 06:48
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 07:07
 </footer>
 
 
@@ -560,6 +563,7 @@ const inputNombrePdf = $("input-nombre-pdf");
 const inputNombreTxt = $("input-nombre-txt");
 const btnGenerar = $("btn-generar");
 const btnDetener = $("btn-detener");
+const btnDetenerPiezas = $("btn-detener-piezas");
 const btnExportarTxt = $("btn-exportar-txt");
 const estadoGeneracion = $("estado-generacion");
 const estadoTexto = $("estado-texto");
@@ -1317,15 +1321,21 @@ function iniciarCancelable(){
   controladorCancelacion = new AbortController();
   btnDetener.disabled = false;
   btnDetener.style.display = "inline-block";
+  btnDetenerPiezas.disabled = false;
+  btnDetenerPiezas.style.display = "inline-block";
 }
 function finalizarCancelable(){
   controladorCancelacion = null;
   btnDetener.style.display = "none";
+  btnDetenerPiezas.style.display = "none";
 }
-btnDetener.addEventListener("click", () => {
+function solicitarDetener(){
   if (controladorCancelacion) controladorCancelacion.abort();
   btnDetener.disabled = true;
-});
+  btnDetenerPiezas.disabled = true;
+}
+btnDetener.addEventListener("click", solicitarDetener);
+btnDetenerPiezas.addEventListener("click", solicitarDetener);
 
 async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, avisosTruncado){
   cajaEstadoActiva = estadoPiezas;
