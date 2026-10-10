@@ -544,7 +544,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 14:07
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 14:17
 </footer>
 
 <script>
@@ -612,13 +612,16 @@ const APP_CONFIG = {
     // body (en la función generarImagenModeloFal) si han cambiado.
     kontext: {
       model: "fal-ai/flux-pro/kontext/multi",
-      // Subido de 3.5 (valor por defecto de fal.ai) a 4.5: con fotos de
-      // cuerpo completo a cierta distancia, el estampado/texto de la prenda
-      // salía reconocible pero poco nítido; algo más de adherencia al
-      // prompt ayuda a que se respete mejor el aviso de fidelidad (ver
-      // AVISO_FIDELIDAD_PRENDA_CON_PERSONA/SIN_PERSONA) sin tener que volver
-      // a forzar aspect_ratio, que es lo que causaba la deformación.
-      guidanceScale: 4.5,
+      // Subido de 3.5 (valor por defecto de fal.ai) a 4.5 para mejorar la
+      // nitidez del estampado/texto de la prenda en fotos de cuerpo completo
+      // a distancia — funcionó. Pero un valor tan alto también parecía
+      // empujar al modelo a "reinventar" más la complexión de la persona al
+      // recomponer una escena muy distinta (nueva pose, nuevo fondo), pese a
+      // la instrucción explícita de conservarla (ver
+      // AVISO_FIDELIDAD_PRENDA_CON_PERSONA). Bajado a 4.0 como punto
+      // intermedio, confiando en que esa instrucción —ahora más estricta—
+      // compense la pérdida de nitidez del estampado.
+      guidanceScale: 4,
       // Al editar una foto de referencia que es SOLO de rostro, el modelo
       // necesita bastante más adherencia al prompt para seguir la
       // instrucción de ampliar a cuerpo completo con proporciones humanas
@@ -705,7 +708,7 @@ const AVISO_PROPORCION_CABEZA_CUERPO = " La imagen de referencia que recibes tie
 // mejorar la fidelidad de la prenda, el modelo también sigue más el texto
 // del prompt, y sin esta aclaración puede acabar generando una complexión
 // distinta a la real a partir de esa estimación aproximada.
-const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía de la persona, cuyo rostro, identidad Y COMPLEXIÓN/CONSTITUCIÓN FÍSICA debes conservar exactamente como se ven en esa foto (altura, anchura de hombros, contextura corporal, etc.) — toma la complexión de lo que se ve literalmente en la fotografía, nunca de ninguna descripción textual aproximada, que puede ser solo una estimación imprecisa; la SEGUNDA es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
+const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía de la persona, cuyo rostro, identidad Y COMPLEXIÓN/CONSTITUCIÓN FÍSICA debes conservar exactamente como se ven en esa foto (altura, anchura de hombros, volumen corporal, contextura, etc.) — toma la complexión de lo que se ve literalmente en la fotografía, nunca de ninguna descripción textual aproximada, que puede ser solo una estimación imprecisa. NO adelgaces ni engordes a la persona, ni cambies su volumen o forma corporal bajo ningún concepto, aunque tengas que recomponer la pose, el encuadre o el fondo de la escena: el cuerpo generado debe ser reconocible como el mismo físico exacto de la fotografía de referencia, solo vestido con el outfit indicado. La SEGUNDA imagen es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
 const AVISO_FIDELIDAD_PRENDA_SIN_PERSONA = " Se te proporciona UNA imagen de referencia: la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
 
 /* ============================================================================
