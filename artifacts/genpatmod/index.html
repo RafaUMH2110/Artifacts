@@ -375,7 +375,7 @@
 
 <footer>
   GenPatMod &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 07:07
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 07:26
 </footer>
 
 
@@ -411,11 +411,22 @@ válido y autocontenido.
   línea de doblez, piquetes, centro delantero/espalda, número de pieza.
 - Incluye el nombre de la pieza como texto (<text>), en español, en mayúsculas,
   bien centrado y sin solaparse con otras líneas.
-- Indica las medidas principales junto a los bordes correspondientes (en cm).
+- Indica las medidas principales junto a los bordes correspondientes (en cm),
+  colocando cada etiqueta de medida LIGERAMENTE POR FUERA del contorno (con una
+  pequeña marca o línea corta que la una al borde que mide), nunca escrita
+  encima del propio trazo de corte.
+- Tamaño de letra: usa un font-size de entre 0.45 y 0.7 (en las mismas unidades
+  del SVG, es decir, cm) para TODOS los textos, sea cual sea el tamaño real de
+  la pieza. Esto es importante incluso en piezas grandes: el PDF final puede
+  reducir la pieza completa para que quepa en A4, y un texto escrito demasiado
+  pequeño en estas unidades quedaría ilegible al imprimir.
+- Si la pieza es pequeña o sencilla, incluye solo las anotaciones esenciales
+  (nombre y medidas imprescindibles): no llenes la pieza de referencias
+  opcionales si no hay espacio limpio para colocarlas sin solapamientos.
 - IMPORTANTE: dos textos nunca deben solaparse ni tocarse entre sí, ni con el
   contorno de la pieza. Deja siempre un margen de separación de al menos 0.5 cm
   alrededor de cada texto. Si no hay espacio suficiente, usa un tamaño de letra
-  más pequeño en vez de invadir otro elemento.
+  más pequeño (nunca por debajo de 0.45) en vez de invadir otro elemento.
 - Todo el contenido (contorno, líneas de margen, referencias y textos) debe
   quedar dentro del rectángulo width x height / viewBox que tú mismo declares
   para la pieza: no dibujes nada fuera de esos límites.
@@ -1008,6 +1019,46 @@ function extraerContenidoInterno(svg){
   return m ? m[1] : "";
 }
 
+// Red de seguridad determinista de legibilidad: el system prompt ya le pide al
+// modelo tamaños de letra razonables, pero una pieza grande que tiene que
+// reducirse mucho para caber en A4 (factorX/factorY < 1) puede dejar, aun así,
+// textos impresos demasiado pequeños. Esta función mide el tamaño de letra
+// REALMENTE impreso de cada <text> (su font-size declarado multiplicado por el
+// factor de escala final a mm) y, si queda por debajo de un mínimo legible,
+// lo amplía envolviéndolo en un <g> con su propio scale(), manteniendo fijo su
+// punto de anclaje (x,y) para no desplazarlo ni hacer que invada otro texto
+// más de lo estrictamente necesario. Si el SVG no se puede parsear, se recurre
+// a la extracción por regex de siempre, sin aplicar ningún ajuste.
+const MIN_LEGIBLE_MM = 2.6;
+function repararTextosParaLegibilidad(svgPieza, factorX, factorY){
+  try{
+    const doc = new DOMParser().parseFromString(svgPieza, "image/svg+xml");
+    const raiz = doc.documentElement;
+    if (!raiz || raiz.nodeName.toLowerCase() !== "svg" || raiz.querySelector("parsererror")){
+      return extraerContenidoInterno(svgPieza);
+    }
+    const svgNS = "http://www.w3.org/2000/svg";
+    const factor = Math.min(factorX, factorY) || 1.0;
+    const textos = Array.from(raiz.getElementsByTagNameNS(svgNS, "text"));
+    textos.forEach(txt => {
+      let fsAttr = parseFloat(txt.getAttribute("font-size"));
+      if (!fsAttr || !isFinite(fsAttr) || fsAttr <= 0) fsAttr = 0.55; // tamaño típico por defecto del system prompt
+      const impresoMm = fsAttr * factor;
+      if (impresoMm >= MIN_LEGIBLE_MM) return; // ya es legible, no se toca
+      const boost = MIN_LEGIBLE_MM / impresoMm;
+      const x = parseFloat(txt.getAttribute("x")) || 0;
+      const y = parseFloat(txt.getAttribute("y")) || 0;
+      const g = doc.createElementNS(svgNS, "g");
+      g.setAttribute("transform", `translate(${x},${y}) scale(${boost}) translate(${-x},${-y})`);
+      txt.parentNode.insertBefore(g, txt);
+      g.appendChild(txt);
+    });
+    return Array.from(raiz.childNodes).map(n => new XMLSerializer().serializeToString(n)).join("");
+  } catch(e){
+    return extraerContenidoInterno(svgPieza);
+  }
+}
+
 function escapeXML(s){
   return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
 }
@@ -1050,8 +1101,6 @@ function medirBBoxReal(svgPieza){
 }
 
 function construirPaginaA4(svgPieza, tituloPrenda, nombrePieza, indicePieza, totalPiezas){
-  const contenido = extraerContenidoInterno(svgPieza);
-
   // Preferimos SIEMPRE la caja real medida en el navegador (incluye textos que
   // se salgan del viewBox declarado). Solo si no se puede medir recurrimos a
   // los atributos que dice tener el propio SVG, como red de seguridad.
@@ -1089,6 +1138,10 @@ function construirPaginaA4(svgPieza, tituloPrenda, nombrePieza, indicePieza, tot
 
   const factorX = cmPorUnidadX * 10.0 * escalaFinal;
   const factorY = cmPorUnidadY * 10.0 * escalaFinal;
+
+  // Aplicamos la red de seguridad de legibilidad ya con el factor de escala
+  // final conocido, para saber exactamente qué tamaño va a quedar impreso.
+  const contenido = repararTextosParaLegibilidad(svgPieza, factorX, factorY);
 
   const longitudReglaMm = 100.0 * escalaFinal;
   const reglaY = A4_ALTO_MM - MARGEN_MM - 6;
