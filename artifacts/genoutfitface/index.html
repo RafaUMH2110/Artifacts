@@ -214,6 +214,36 @@
     background: var(--warn-bg); border: 1px solid var(--warn-border); color: #7a5b12; font-size: .88rem;
   }
 
+  #progreso-imagenes {
+    display: none; margin-top: 1rem; padding: .75rem 1rem; border-radius: 10px;
+    background: var(--blue-50); color: var(--blue-700); font-size: .9rem;
+    align-items: center; gap: .9rem; border: 1px solid var(--blue-100);
+  }
+  #progreso-imagenes.visible { display: flex; }
+  #progreso-imagenes.error { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; }
+  #progreso-imagenes.detenida { background: #eee; color: var(--muted); border-color: var(--border); }
+  #progreso-imagenes.error .progreso-imagenes-info, #progreso-imagenes.detenida .progreso-imagenes-info {
+    white-space: pre-wrap; word-break: break-word;
+  }
+  .anillo-wrap { position: relative; width: 64px; height: 64px; flex-shrink: 0; }
+  .anillo-progreso { transform: rotate(-90deg); }
+  .anillo-fondo { fill: none; stroke: var(--blue-100); stroke-width: 6; }
+  #progreso-imagenes.error .anillo-fondo { stroke: #f3c6c2; }
+  #progreso-imagenes.detenida .anillo-fondo { stroke: var(--border); }
+  .anillo-barra {
+    fill: none; stroke: var(--blue-700); stroke-width: 6; stroke-linecap: round;
+    transition: stroke-dashoffset .35s ease;
+  }
+  #progreso-imagenes.error .anillo-barra { stroke: var(--err); }
+  #progreso-imagenes.detenida .anillo-barra { stroke: var(--muted); }
+  .anillo-numero {
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font-size: .78rem; font-weight: 700;
+  }
+  .progreso-imagenes-info { flex: 1; min-width: 0; display: flex; align-items: center; gap: .6rem; }
+  .progreso-imagenes-info span { flex: 1; min-width: 0; }
+  #btn-detener-imagenes { flex-shrink: 0; padding: .3rem .8rem; font-size: .82rem; }
+
   .spinner {
     width: 16px; height: 16px; border: 3px solid rgba(43,108,176,.25);
     border-top-color: currentColor; border-radius: 50%;
@@ -480,6 +510,19 @@
       <span class="hist-contador" id="imagenes-contador" aria-live="polite">0 imágenes</span>
       <button type="button" class="peligro" id="btn-borrar-todas-imagenes">Borrar todo</button>
     </div>
+    <div id="progreso-imagenes">
+      <div class="anillo-wrap">
+        <svg class="anillo-progreso" viewBox="0 0 64 64" width="64" height="64" aria-hidden="true">
+          <circle class="anillo-fondo" cx="32" cy="32" r="28"></circle>
+          <circle class="anillo-barra" id="anillo-barra" cx="32" cy="32" r="28"></circle>
+        </svg>
+        <span class="anillo-numero" id="progreso-imagenes-numero">0/0</span>
+      </div>
+      <div class="progreso-imagenes-info">
+        <span id="progreso-imagenes-texto"></span>
+        <button type="button" class="peligro hidden" id="btn-detener-imagenes">Detener</button>
+      </div>
+    </div>
     <div id="resultado"></div>
     <div class="botones">
       <button type="button" class="primario" id="btn-exportar-pdf" disabled>Exportar todas en PDF</button>
@@ -501,7 +544,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:55
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 13:22
 </footer>
 
 <script>
@@ -576,12 +619,15 @@ const APP_CONFIG = {
       // realistas; con guidance_scale por defecto (3.5) tiende a ignorarla
       // y a mantener la cabeza al mismo tamaño en píxeles que en la foto
       // original, agrandándola de forma antinatural respecto al cuerpo.
-      guidanceScaleSoloRostro: 6,
-      // aspect_ratio: se pide siempre como parámetro de salida a fal.ai, y
-      // es además la proporción del lienzo ampliado que se compone en el
-      // navegador ANTES de enviar la foto de referencia cuando es solo de
-      // rostro (ver prepararReferenciaKontext): así hay sitio real donde
-      // dibujar el cuerpo completo en vez de comprimirlo bajo la cabeza.
+      guidanceScaleSoloRostro: 7,
+      // aspect_ratio: SOLO se envía a fal.ai cuando la persona es solo de
+      // rostro (ver generarImagenModeloFal), porque es también la
+      // proporción del lienzo ampliado que se compone en el navegador ANTES
+      // de enviar esa foto de referencia (ver prepararReferenciaKontext):
+      // así hay sitio real donde dibujar el cuerpo completo en vez de
+      // comprimirlo bajo la cabeza. En los demás casos NO se envía, para
+      // que Kontext conserve la proporción original de la foto de entrada
+      // en vez de tener que deformarla para encajarla en una distinta.
       aspectRatio: "2:3"
     }
   }
@@ -647,7 +693,7 @@ const AVISO_PROPORCION_CABEZA_CUERPO = " La imagen de referencia que recibes tie
 // parecido a su fotografía: el modelo de edición (FLUX Kontext, variante
 // "multi") recibe esa foto como una imagen de referencia más, aparte de lo
 // que diga el texto del prompt redactado por la IA.
-const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno); la SEGUNDA es la fotografía de la persona, cuyo rostro e identidad debes conservar.";
+const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía de la persona, cuyo rostro e identidad debes conservar; la SEGUNDA es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno).";
 const AVISO_FIDELIDAD_PRENDA_SIN_PERSONA = " Se te proporciona UNA imagen de referencia: la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno).";
 
 /* ============================================================================
@@ -691,6 +737,15 @@ const panelImagenes = $("panel-imagenes");
 const resultadoDiv = $("resultado");
 const btnExportarPdf = $("btn-exportar-pdf");
 const contadorCoste = $("contador-coste");
+const progresoImagenesDiv = $("progreso-imagenes");
+const progresoImagenesTexto = $("progreso-imagenes-texto");
+const progresoImagenesNumero = $("progreso-imagenes-numero");
+const anilloBarra = $("anillo-barra");
+const btnDetenerImagenes = $("btn-detener-imagenes");
+const ANILLO_RADIO = 28;
+const ANILLO_CIRCUNFERENCIA = 2 * Math.PI * ANILLO_RADIO;
+anilloBarra.style.strokeDasharray = String(ANILLO_CIRCUNFERENCIA);
+anilloBarra.style.strokeDashoffset = String(ANILLO_CIRCUNFERENCIA);
 
 let imagenBase64 = null;   // sin el prefijo "data:...;base64,"
 let imagenMediaType = null;
@@ -1349,21 +1404,35 @@ async function prepararReferenciaKontext(dataUrl){
 // preparada (ver prepararReferenciaKontext) cuando la hay — la original si
 // es de cuerpo completo, o la compuesta sobre lienzo ampliado si es solo de
 // rostro; si no se indica, solo se envía la prenda. "soloRostro" indica si
-// corresponde ese segundo caso: entonces se sube además el guidance_scale
-// para que el modelo siga mejor la instrucción de rellenar el área gris con
-// un cuerpo a escala realista.
+// corresponde ese segundo caso: entonces se sube el guidance_scale para que
+// el modelo siga mejor la instrucción de rellenar el área gris con un
+// cuerpo a escala realista.
+//
+// Orden de "image_urls": la persona va PRIMERO cuando la hay (y la prenda
+// después), porque Kontext intenta conservar la proporción/encuadre de la
+// imagen de referencia — interesa que sea la de la persona, no la de la
+// prenda, la que marque el encuadre del resultado.
+//
+// "aspect_ratio" SOLO se fuerza cuando la referencia de la persona es solo
+// de rostro (porque entonces el lienzo ya se compuso a propósito con esa
+// proporción, ver prepararReferenciaKontext): forzarlo en los demás casos
+// (persona de cuerpo completo, o sin persona) hacía que Kontext tuviera que
+// deformar/estirar el encuadre original de la foto para encajarlo en una
+// proporción distinta a la suya — fal.ai documenta que, sin ese parámetro,
+// el modelo conserva la proporción original de la imagen de entrada.
 async function generarImagenModeloFal(prompt, soloRostro, personaImageUrl){
-  const imageUrls = [`data:${imagenMediaType};base64,${imagenBase64}`];
-  if (personaImageUrl) imageUrls.push(personaImageUrl);
-  return llamarFalGenImagen(APP_CONFIG.fal.kontext.model, {
+  const prendaUrl = `data:${imagenMediaType};base64,${imagenBase64}`;
+  const imageUrls = personaImageUrl ? [personaImageUrl, prendaUrl] : [prendaUrl];
+  const body = {
     prompt,
     image_urls: imageUrls,
     guidance_scale: soloRostro ? APP_CONFIG.fal.kontext.guidanceScaleSoloRostro : APP_CONFIG.fal.kontext.guidanceScale,
-    aspect_ratio: APP_CONFIG.fal.kontext.aspectRatio,
     num_images: APP_CONFIG.fal.numImages,
     output_format: obtenerFormatoImagen(),
     safety_tolerance: obtenerSafetyTolerance()
-  });
+  };
+  if (soloRostro) body.aspect_ratio = APP_CONFIG.fal.kontext.aspectRatio;
+  return llamarFalGenImagen(APP_CONFIG.fal.kontext.model, body);
 }
 
 async function dataUrlDesdeImagenUrl(url){
@@ -1470,6 +1539,7 @@ async function generarTodasLasImagenes(){
   resultadoDiv.innerHTML = "";
   imagenesGeneradas = [];
   actualizarContadorImagenes();
+  panelImagenes.style.display = "block";
   const usaPersonaParaModelo = !!(personaBase64 && modeloShotPrompt);
   const soloRostro = usaPersonaParaModelo && personaAnalisis && personaAnalisis.tipoFoto === "rostro";
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
@@ -1491,16 +1561,19 @@ async function generarTodasLasImagenes(){
     tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo, soloRostro, imagenReferenciaUrl});
   }
 
+  const total = tareas.length;
+  mostrarProgresoImagenes(total);
   let cancelada = false;
+  let hechos = 0;
   for (const tarea of tareas){
     if (controladorOperacion && controladorOperacion.signal.aborted){
       cancelada = true;
       break; // el usuario ha pulsado "Detener": no se generan más piezas
     }
     const card = pintarImagenPlaceholder(tarea.nombre, tarea.modelo, tarea.usaPersona);
-    estadoTexto.textContent = tarea.modelo
+    actualizarProgresoImagenes(hechos, total, tarea.modelo
       ? `Generando imagen: ${tarea.nombre}… (editando la foto de la prenda${tarea.usaPersona ? " y la de referencia" : ""} con FLUX Kontext)`
-      : `Generando imagen: ${tarea.nombre}…`;
+      : `Generando imagen: ${tarea.nombre}…`);
     try {
       const urlRemota = tarea.modelo
         ? await generarImagenModeloFal(tarea.prompt, tarea.soloRostro, tarea.imagenReferenciaUrl)
@@ -1512,10 +1585,12 @@ async function generarTodasLasImagenes(){
     } catch(err){
       actualizarTarjetaImagen(card, null, err.message || String(err), tarea.modelo);
       if (err instanceof OperacionCanceladaError){ cancelada = true; break; }
+    } finally {
+      hechos++;
+      actualizarAnillo(hechos, total);
     }
   }
   btnExportarPdf.disabled = imagenesGeneradas.length === 0;
-  panelImagenes.style.display = "block";
   return cancelada;
 }
 
@@ -1720,6 +1795,57 @@ btnDetener.addEventListener("click", () => {
 });
 
 /* ============================================================================
+ * PROGRESO DE GENERACIÓN DE IMÁGENES (anillo circular)
+ * Notificación independiente de #estado-generacion: esta se usa solo durante
+ * la fase de generación de imágenes con FLUX (tras terminar los prompts), y
+ * desaparece en cuanto se han generado todas. Mantiene su propio
+ * AbortController (comparte la variable global controladorOperacion) para
+ * poder detener la generación igual que en la fase de análisis.
+ * ==========================================================================*/
+function actualizarAnillo(hechos, total){
+  const porcentaje = total > 0 ? hechos / total : 0;
+  anilloBarra.style.strokeDashoffset = String(ANILLO_CIRCUNFERENCIA * (1 - porcentaje));
+  progresoImagenesNumero.textContent = `${hechos}/${total}`;
+}
+function mostrarProgresoImagenes(total){
+  progresoImagenesDiv.classList.remove("error", "detenida");
+  progresoImagenesDiv.classList.add("visible");
+  actualizarAnillo(0, total);
+  progresoImagenesTexto.textContent = "Generando imágenes con FLUX…";
+  controladorOperacion = new AbortController();
+  btnDetenerImagenes.classList.remove("hidden");
+  btnDetenerImagenes.disabled = false;
+  btnDetenerImagenes.textContent = "Detener";
+}
+function actualizarProgresoImagenes(hechos, total, texto){
+  actualizarAnillo(hechos, total);
+  progresoImagenesTexto.textContent = texto;
+}
+function ocultarProgresoImagenes(){
+  progresoImagenesDiv.classList.remove("visible");
+  controladorOperacion = null;
+  btnDetenerImagenes.classList.add("hidden");
+}
+function errorProgresoImagenes(err){
+  progresoImagenesDiv.classList.add("visible", "error");
+  progresoImagenesTexto.textContent = "Error: " + (err && err.message ? err.message : String(err));
+  controladorOperacion = null;
+  btnDetenerImagenes.classList.add("hidden");
+}
+function detenidoProgresoImagenes(texto){
+  progresoImagenesDiv.classList.add("visible", "detenida");
+  progresoImagenesTexto.textContent = texto;
+  controladorOperacion = null;
+  btnDetenerImagenes.classList.add("hidden");
+}
+btnDetenerImagenes.addEventListener("click", () => {
+  if (!controladorOperacion) return;
+  btnDetenerImagenes.disabled = true;
+  btnDetenerImagenes.textContent = "Deteniendo…";
+  controladorOperacion.abort();
+});
+
+/* ============================================================================
  * BOTONES PRINCIPALES
  * ==========================================================================*/
 btnGenerar.addEventListener("click", async () => {
@@ -1741,18 +1867,19 @@ btnGenerar.addEventListener("click", async () => {
 
 btnContinuar.addEventListener("click", async () => {
   recogerPromptsEditados();
-  mostrarCargando(btnContinuar, "Generando imágenes con FLUX…");
+  btnContinuar.classList.add("busy");
+  btnContinuar.disabled = true;
   try {
     const cancelada = await generarTodasLasImagenes();
-    if (cancelada) mostrarDetenido(btnContinuar, "Generación detenida por el usuario. Se han conservado las imágenes generadas hasta el momento.");
-    else ocultarCargando(btnContinuar);
+    if (cancelada) detenidoProgresoImagenes("Generación detenida por el usuario. Se han conservado las imágenes generadas hasta el momento.");
+    else ocultarProgresoImagenes();
     if (imagenesGeneradas.length > 0) await guardarEnHistorial();
   } catch(err){
-    if (err instanceof OperacionCanceladaError) mostrarDetenido(btnContinuar, "Generación detenida por el usuario.");
-    else mostrarError(btnContinuar, err);
+    if (err instanceof OperacionCanceladaError) detenidoProgresoImagenes("Generación detenida por el usuario. Se han conservado las imágenes generadas hasta el momento.");
+    else errorProgresoImagenes(err);
   } finally {
+    btnContinuar.classList.remove("busy");
     btnContinuar.disabled = false;
-    btnDetener.textContent = "Detener";
   }
 });
 
