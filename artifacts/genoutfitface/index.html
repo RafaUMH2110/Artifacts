@@ -544,7 +544,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 13:54
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 14:07
 </footer>
 
 <script>
@@ -699,7 +699,13 @@ const AVISO_PROPORCION_CABEZA_CUERPO = " La imagen de referencia que recibes tie
 // parecido a su fotografía: el modelo de edición (FLUX Kontext, variante
 // "multi") recibe esa foto como una imagen de referencia más, aparte de lo
 // que diga el texto del prompt redactado por la IA.
-const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía de la persona, cuyo rostro e identidad debes conservar; la SEGUNDA es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
+// También insiste en tomar la complexión de la persona de la FOTO, no del
+// texto de "physical_characteristics" (que es solo una estimación visual de
+// la IA de análisis y puede ser imprecisa): al subir guidance_scale para
+// mejorar la fidelidad de la prenda, el modelo también sigue más el texto
+// del prompt, y sin esta aclaración puede acabar generando una complexión
+// distinta a la real a partir de esa estimación aproximada.
+const AVISO_FIDELIDAD_PRENDA_CON_PERSONA = " Se te proporcionan DOS imágenes de referencia, en este orden: la PRIMERA es la fotografía de la persona, cuyo rostro, identidad Y COMPLEXIÓN/CONSTITUCIÓN FÍSICA debes conservar exactamente como se ven en esa foto (altura, anchura de hombros, contextura corporal, etc.) — toma la complexión de lo que se ve literalmente en la fotografía, nunca de ninguna descripción textual aproximada, que puede ser solo una estimación imprecisa; la SEGUNDA es la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
 const AVISO_FIDELIDAD_PRENDA_SIN_PERSONA = " Se te proporciona UNA imagen de referencia: la fotografía original de la prenda, que debes reproducir en el outfit con el máximo parecido posible a esa foto (mismo color, estampado, logotipos, textos y demás detalles gráficos, sin inventar ni cambiar ninguno), manteniendo el estampado y los textos legibles y nítidos aunque la prenda ocupe poco espacio en el encuadre final o la foto sea de cuerpo entero a cierta distancia.";
 
 /* ============================================================================
