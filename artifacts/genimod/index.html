@@ -357,7 +357,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 00:55</p>
+    <p>&#218;ltima modificaci&#243;n: 10/10/2026 01:59</p>
   </footer>
 </div>
 
@@ -821,6 +821,27 @@ async function fetchJson(url, options) {
   return data;
 }
 
+/* Algunos modelos de OpenAI (p. ej. la familia de razonamiento gpt-6-*) ya no
+   aceptan "max_tokens" y devuelven un error 400 pidiendo "max_completion_tokens"
+   en su lugar. Esta funci\u00f3n detecta ese error concreto y reintenta la
+   llamada una \u00fanica vez renombrando el par\u00e1metro, sin necesidad de mantener
+   una lista de qu\u00e9 modelos lo requieren. */
+function requiereMaxCompletionTokens(mensaje) {
+  return /max_tokens/i.test(mensaje) && /max_completion_tokens/i.test(mensaje);
+}
+async function fetchOpenAiChat(url, headers, bodyBase) {
+  try {
+    return await fetchJson(url, { method: "POST", headers, body: JSON.stringify(bodyBase) });
+  } catch (err) {
+    if (err instanceof AppError && Object.prototype.hasOwnProperty.call(bodyBase, "max_tokens") && requiereMaxCompletionTokens(err.message || "")) {
+      const { max_tokens, ...resto } = bodyBase;
+      const bodyAlt = { ...resto, max_completion_tokens: max_tokens };
+      return await fetchJson(url, { method: "POST", headers, body: JSON.stringify(bodyAlt) });
+    }
+    throw err;
+  }
+}
+
 /* ==========================================================================
    ANTHROPIC \u2014 MEJORA DEL PROMPT
    ========================================================================== */
@@ -850,14 +871,10 @@ async function mejorarIdeaConIA(systemPrompt, idea, provider, model, maxTokens) 
     const messages = [];
     if (systemPrompt.trim()) messages.push({ role: "system", content: systemPrompt });
     messages.push({ role: "user", content: userMessage });
-    const data = await fetchJson(TEXT_PROVIDERS.openai.endpoint, {
-      method: "POST",
-      headers: {
-        "Authorization": "Bearer " + storageGet(STORAGE.openaiKey),
-        "content-type": "application/json"
-      },
-      body: JSON.stringify({ model, max_tokens: maxTokens, messages })
-    });
+    const data = await fetchOpenAiChat(TEXT_PROVIDERS.openai.endpoint, {
+      "Authorization": "Bearer " + storageGet(STORAGE.openaiKey),
+      "content-type": "application/json"
+    }, { model, max_tokens: maxTokens, messages });
     const usage = data && data.usage ? { input_tokens: data.usage.prompt_tokens, output_tokens: data.usage.completion_tokens } : null;
     const truncated = !!(data && data.choices && data.choices[0] && data.choices[0].finish_reason === "length");
     return { text: extractOpenAiText(data), usage, stopReason: truncated ? "max_tokens" : null };

@@ -360,7 +360,7 @@
 
 <footer>
   GenPatMod &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 00:55
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:59
 </footer>
 
 
@@ -698,6 +698,15 @@ function mensajeErrorHttp(status, cuerpo){
   const detalle = cuerpo && (cuerpo.error && cuerpo.error.message ? cuerpo.error.message : JSON.stringify(cuerpo).slice(0,200));
   return "Error del proveedor (código " + status + ")" + (detalle ? ": " + detalle : ".");
 }
+// Algunos modelos de OpenAI (p. ej. la familia de razonamiento gpt-6-*) ya no
+// aceptan "max_tokens" y devuelven un error 400 pidiendo "max_completion_tokens"
+// en su lugar. Se detecta ese error concreto en el cuerpo de la respuesta para
+// reintentar la llamada una única vez renombrando el parámetro, sin necesidad
+// de mantener una lista de qué modelos lo requieren.
+function requiereMaxCompletionTokens(cuerpo){
+  const msg = cuerpo && cuerpo.error && typeof cuerpo.error.message === "string" ? cuerpo.error.message : "";
+  return /max_tokens/i.test(msg) && /max_completion_tokens/i.test(msg);
+}
 
 async function llamarIA(systemPrompt, userPrompt, opts){
   const {proveedor, modelo, apiKey, maxTokens} = opts;
@@ -728,9 +737,15 @@ async function llamarIA(systemPrompt, userPrompt, opts){
     throw new Error("Proveedor desconocido: " + proveedor);
   }
 
-  const resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
+  let resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(body)});
   let data;
   try { data = await resp.json(); } catch(e){ data = {}; }
+  if (!resp.ok && proveedor === "openai" && requiereMaxCompletionTokens(data)){
+    const { max_tokens, ...bodySinMaxTokens } = body;
+    const bodyAlt = { ...bodySinMaxTokens, max_completion_tokens: max_tokens };
+    resp = await fetchConTimeout(url, {method:"POST", headers, body: JSON.stringify(bodyAlt)});
+    try { data = await resp.json(); } catch(e){ data = {}; }
+  }
 
   if (!resp.ok) throw new Error(mensajeErrorHttp(resp.status, data));
 
