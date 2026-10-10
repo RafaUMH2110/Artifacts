@@ -336,7 +336,7 @@
       </div>
       <div class="field">
         <label for="input-max-tokens">Nº máx. tokens de salida</label>
-        <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="4096">
+        <input type="number" id="input-max-tokens" min="256" max="9999999" step="1" value="8192">
         <p class="hint" id="limite-tokens-modelo"></p>
       </div>
     </div>
@@ -390,17 +390,12 @@
         <p class="hint">Cuántas prendas afines debe proponer la IA, además de la que has subido.</p>
       </div>
       <div class="field">
-        <label for="sel-pasos-inferencia">Pasos de inferencia (FLUX)</label>
-        <select id="sel-pasos-inferencia">
-          <option value="10">10 — más rápido</option>
-          <option value="20" selected>20 — por defecto</option>
-          <option value="30">30</option>
-          <option value="40">40 — más detalle</option>
-        </select>
-        <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai.</p>
+        <label for="input-pasos-inferencia">Pasos de inferencia (FLUX)</label>
+        <input type="number" id="input-pasos-inferencia" min="2" max="20" step="1" value="2">
+        <p class="hint">Más pasos = más detalle pero más lento y más caro en fal.ai. Rango admitido: 2–20.</p>
       </div>
       <div class="field">
-        <label for="sel-safety-tolerance">Tolerancia del filtro de seguridad (FLUX)</label>
+        <label for="sel-safety-tolerance">Tolerancia del filtro de seguridad de fal.ai</label>
         <select id="sel-safety-tolerance">
           <option value="1">1 — más estricto</option>
           <option value="2">2</option>
@@ -487,7 +482,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 10:59
 </footer>
 
 <script>
@@ -527,8 +522,9 @@ const APP_CONFIG = {
   fal: {
     baseUrl: "https://fal.run/",
     defaultModel: "fal-ai/flux-pro/v1.1",
-    inferenceStepsDefecto: 20,
-    inferenceStepsOpciones: [10, 20, 30, 40],
+    inferenceStepsDefecto: 2,
+    inferenceStepsMin: 2,
+    inferenceStepsMax: 20,
     imageSize: "portrait_4_3",
     safetyTolerance: "3",
     outputFormat: "png",
@@ -620,7 +616,7 @@ const inputImagenPersona = $("input-imagen-persona");
 const previewWrapPersona = $("preview-wrap-persona");
 const previewImgPersona = $("preview-img-persona");
 const inputNumPiezas = $("input-num-piezas");
-const selPasosInferencia = $("sel-pasos-inferencia");
+const inputPasosInferencia = $("input-pasos-inferencia");
 const selSafetyTolerance = $("sel-safety-tolerance");
 const chkIncluirModelo = $("chk-incluir-modelo");
 const inputSystemPrompt = $("input-system-prompt");
@@ -663,7 +659,7 @@ function modeloActivo(){ return selModelo.value === "__otro__" ? inputModeloOtro
 function obtenerMaxTokens(){
   const valor = parseInt(inputMaxTokens.value, 10);
   const limite = limiteTokensModelo(modeloActivo());
-  if (!valor || valor < 256) return Math.min(4096, limite);
+  if (!valor || valor < 256) return Math.min(8192, limite);
   return Math.min(valor, limite);
 }
 function ajustarLimiteTokens(){
@@ -1115,8 +1111,10 @@ async function esperarColaFal(encolado, headers){
   throw new Error("Tiempo de espera agotado mientras fal.ai procesaba la imagen en cola.");
 }
 function obtenerPasosInferencia(){
-  const v = parseInt(selPasosInferencia.value, 10);
-  return APP_CONFIG.fal.inferenceStepsOpciones.includes(v) ? v : APP_CONFIG.fal.inferenceStepsDefecto;
+  const {inferenceStepsMin: min, inferenceStepsMax: max, inferenceStepsDefecto: defecto} = APP_CONFIG.fal;
+  const v = parseInt(inputPasosInferencia.value, 10);
+  if (!Number.isFinite(v)) return defecto;
+  return Math.min(max, Math.max(min, v));
 }
 function obtenerSafetyTolerance(){
   const opciones = ["1","2","3","4","5","6"];
