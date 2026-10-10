@@ -493,7 +493,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:05
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:09
 </footer>
 
 <script>
@@ -520,6 +520,7 @@ Si además se adjunta una fotografía de una persona real como referencia para e
 - Extrae y describe de forma respetuosa y profesional los rasgos faciales relevantes para mantener la coherencia de identidad en una imagen generada (forma del rostro, tono de piel, color y forma de los ojos, color y estilo del cabello, rango de edad aproximado, rasgos distintivos visibles), sin hacer ninguna valoración subjetiva sobre el aspecto de la persona.
 - Si la fotografía es de cuerpo completo, añade además una estimación visual aproximada de su complexión y proporciones (altura aproximada, complexión, proporciones de hombros/cintura/cadera, postura), dejando explícito que es una estimación visual y nunca una medición real, útil solo para que el outfit generado se ajuste de forma creíble a su silueta.
 - El prompt de la foto del modelo ("model_shot_prompt") se usará para EDITAR esa fotografía real con un modelo de IA que ya preserva el rostro de la persona a partir de la propia imagen de referencia: por tanto, ese prompt debe centrarse en describir el outfit completo que debe llevar puesto, la pose, la actitud y el entorno, e indicar explícitamente que debe conservarse el rostro, la identidad y la complexión de la persona de la fotografía de referencia — evita volver a describir el rostro en detalle, ya que la identidad la aporta la propia foto.
+- Si la fotografía de referencia es SOLO de rostro/busto (no de cuerpo completo), el modelo de edición de imagen tiene que ampliar el encuadre original para mostrar el cuerpo entero con el outfit puesto, y ahí es fácil que el resultado salga con una cabeza demasiado grande o demasiado pequeña respecto al cuerpo que se inventa. En ese caso, el "model_shot_prompt" debe indicar EXPLÍCITAMENTE que hay que ampliar el plano a cuerpo completo (full-body shot, de pies a cabeza) conservando el rostro de la foto de referencia pero dibujando un cuerpo con proporciones anatómicas humanas realistas y naturales para una persona adulta (la altura total de la figura equivale aproximadamente a 7,5–8 veces la altura de su cabeza; evita cabezas desproporcionadamente grandes —efecto "cabezón"— o desproporcionadamente pequeñas respecto al cuerpo).
 - Nunca inventes ni asumas datos personales, de salud o de identidad de la persona que no sean directamente observables en la fotografía.
 
 Reglas de idioma (estrictas):
@@ -603,6 +604,15 @@ const PRECIOS_POR_MTOK = {
 const CLAVES_LOCALSTORAGE = {anthropic: "ia_anthropic_key", openai: "ia_openai_key", gemini: "ia_gemini_key"};
 const CLAVE_FAL = "ia_fal_key";
 const HISTORIAL_MAX = 30;
+
+// Instrucción de seguridad que se añade SIEMPRE al prompt enviado a FLUX
+// Kontext cuando la foto de referencia de la persona es solo de rostro/busto
+// (no de cuerpo completo): el modelo de edición tiene que inventar el cuerpo
+// entero a partir de un encuadre cerrado, y eso tiende a dejar una cabeza
+// desproporcionada respecto al cuerpo generado. Se añade en código, aparte
+// de lo que pida el prompt redactado por la IA, para que la proporción
+// cabeza/cuerpo quede garantizada aunque el prompt se edite manualmente.
+const AVISO_PROPORCION_CABEZA_CUERPO = " Amplía el encuadre original a un plano de cuerpo completo (de pies a cabeza), dibujando un cuerpo con proporciones anatómicas humanas realistas y naturales para una persona adulta: la altura total de la figura debe equivaler aproximadamente a 7,5–8 veces la altura de la cabeza. Evita una cabeza desproporcionadamente grande o pequeña respecto al cuerpo generado.";
 
 /* ============================================================================
  * ESTADO Y REFERENCIAS DE UI
@@ -1016,7 +1026,7 @@ function analisisPersonaValido(obj){
  * ==========================================================================*/
 function construirMensajeUsuario(numPiezas, incluirModelo, hayPersona){
   const bloquePersona = hayPersona
-    ? `Se adjunta una SEGUNDA imagen con la fotografía de una persona de referencia (en el mismo mensaje: primera imagen = prenda, segunda imagen = persona). Analízala siguiendo las reglas del sistema sobre la persona de referencia: determina si es de cuerpo completo o solo de rostro, extrae sus rasgos faciales y, si es de cuerpo completo, una estimación visual de su complexión/proporciones. El "model_shot_prompt" debe describir el outfit, la pose, la actitud y el entorno, e indicar que debe conservarse el rostro e identidad de esa persona de referencia (la imagen final se generará editando su fotografía, no desde cero).`
+    ? `Se adjunta una SEGUNDA imagen con la fotografía de una persona de referencia (en el mismo mensaje: primera imagen = prenda, segunda imagen = persona). Analízala siguiendo las reglas del sistema sobre la persona de referencia: determina si es de cuerpo completo o solo de rostro, extrae sus rasgos faciales y, si es de cuerpo completo, una estimación visual de su complexión/proporciones. El "model_shot_prompt" debe describir el outfit, la pose, la actitud y el entorno, e indicar que debe conservarse el rostro e identidad de esa persona de referencia (la imagen final se generará editando su fotografía, no desde cero). Si la fotografía es SOLO de rostro/busto, recuerda indicar explícitamente en el "model_shot_prompt" que hay que ampliar el plano a cuerpo completo con proporciones anatómicas humanas realistas (cabeza y cuerpo a escala natural, sin cabezas desproporcionadas), tal y como indican las reglas del sistema.`
     : "";
   return `Analiza la prenda que aparece en la primera imagen adjunta.
 
@@ -1124,8 +1134,13 @@ function pintarPrompts(){
     const motor = personaBase64
       ? `<span class="badge completa">Con rostro de referencia (FLUX Kontext)</span>`
       : `<span class="badge sin-ref">Generado solo por texto</span>`;
+    const soloRostro = personaBase64 && personaAnalisis && personaAnalisis.tipoFoto === "rostro";
+    const avisoProporcion = soloRostro
+      ? `<p class="hint">La foto de referencia es solo de rostro: al generar la imagen final se añadirá automáticamente una instrucción para que el cuerpo generado mantenga proporciones cabeza/cuerpo realistas (no es necesario que la escribas aquí).</p>`
+      : "";
     card.innerHTML = `<h3>Modelo con el outfit completo ${motor}</h3>
       <textarea class="tall mono" data-tipo="modelo">${escapeHTML(modeloShotPrompt)}</textarea>
+      ${avisoProporcion}
       <div class="botones"><button type="button" class="peligro" id="btn-borrar-modelo">Borrar</button></div>`;
     listaPrompts.appendChild(card);
   }
@@ -1337,8 +1352,12 @@ async function generarTodasLasImagenes(){
   imagenesGeneradas = [];
   actualizarContadorImagenes();
   const usaPersonaParaModelo = !!(personaBase64 && modeloShotPrompt);
+  const soloRostro = usaPersonaParaModelo && personaAnalisis && personaAnalisis.tipoFoto === "rostro";
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
-  if (modeloShotPrompt) tareas.push({nombre: "Modelo con el outfit completo", prompt: modeloShotPrompt, modelo: true, usaPersona: usaPersonaParaModelo});
+  if (modeloShotPrompt){
+    const promptModelo = soloRostro ? (modeloShotPrompt + AVISO_PROPORCION_CABEZA_CUERPO) : modeloShotPrompt;
+    tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo});
+  }
 
   let cancelada = false;
   for (const tarea of tareas){
