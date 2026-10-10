@@ -501,7 +501,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:30
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 12:39
 </footer>
 
 <script>
@@ -574,10 +574,11 @@ const APP_CONFIG = {
       // y a mantener la cabeza al mismo tamaño en píxeles que en la foto
       // original, agrandándola de forma antinatural respecto al cuerpo.
       guidanceScaleSoloRostro: 6,
-      // aspect_ratio fuerza un encuadre vertical con más espacio para el
-      // cuerpo que el de una foto de rostro recortada (normalmente más
-      // cuadrada o apaisada); así el modelo tiene sitio real donde dibujar
-      // el cuerpo completo en vez de comprimirlo bajo una cabeza ya grande.
+      // aspect_ratio: se pide siempre como parámetro de salida a fal.ai, y
+      // es además la proporción del lienzo ampliado que se compone en el
+      // navegador ANTES de enviar la foto de referencia cuando es solo de
+      // rostro (ver prepararReferenciaKontext): así hay sitio real donde
+      // dibujar el cuerpo completo en vez de comprimirlo bajo la cabeza.
       aspectRatio: "2:3"
     }
   }
@@ -636,7 +637,7 @@ const HISTORIAL_MAX = 30;
 // desproporcionada respecto al cuerpo generado. Se añade en código, aparte
 // de lo que pida el prompt redactado por la IA, para que la proporción
 // cabeza/cuerpo quede garantizada aunque el prompt se edite manualmente.
-const AVISO_PROPORCION_CABEZA_CUERPO = " Amplía el encuadre original a un plano de cuerpo completo (de pies a cabeza), dibujando un cuerpo con proporciones anatómicas humanas realistas y naturales para una persona adulta: la altura total de la figura debe equivaler aproximadamente a 7,5–8 veces la altura de la cabeza. Evita una cabeza desproporcionadamente grande o pequeña respecto al cuerpo generado.";
+const AVISO_PROPORCION_CABEZA_CUERPO = " La imagen de referencia que recibes tiene la fotografía real de la persona en la parte superior y, debajo, una franja de color GRIS LISO a modo de espacio en blanco. Sustituye ÚNICAMENTE esa franja gris por el resto del cuerpo completo vestido con el outfit (sin dejar ningún resto de gris, generando un fondo coherente con el resto de la escena), MANTENIENDO el tamaño y la posición de la cabeza y el rostro EXACTAMENTE igual que en la fotografía original — no los agrandes ni los reduzcas — y dibujando el cuerpo a la escala anatómica realista que corresponde a esa cabeza (proporción adulta natural, con la altura total de la figura equivalente a unas 7,5–8 veces la altura de la cabeza). Evita una cabeza desproporcionadamente grande respecto al cuerpo generado.";
 
 /* ============================================================================
  * ESTADO Y REFERENCIAS DE UI
@@ -1283,19 +1284,62 @@ async function generarImagenFal(prompt){
     safety_tolerance: obtenerSafetyTolerance()
   });
 }
+// ----------------------------------------------------------------------------
+// PRE-PROCESADO DE LA FOTO DE REFERENCIA (SOLO ROSTRO) ANTES DE FLUX KONTEXT
+// ----------------------------------------------------------------------------
+// Un modelo de EDICIÓN de imagen como Kontext no "redibuja" la foto entera:
+// tiende a mantener el rostro original a su mismo tamaño en píxeles y a
+// comprimir o encajar el cuerpo nuevo en el espacio que quede, por eso pedir
+// solo por texto que "amplíe el plano" o fijar un aspect_ratio de salida
+// distinto NO es suficiente — el cuerpo generado sigue saliendo pequeño y la
+// cabeza, desproporcionada. La solución fiable es dar ese espacio de verdad
+// en la propia imagen de entrada: antes de enviarla a Kontext, si la foto de
+// referencia es solo de rostro/busto, se compone sobre un lienzo más alto
+// (misma proporción 2:3 que pedimos como aspect_ratio de salida) dejando la
+// fotografía real arriba, sin reescalarla, y rellenando el resto con un
+// gris liso — una zona que el prompt le pide explícitamente que sustituya
+// por el cuerpo, a la escala que corresponde a la cabeza ya visible.
+function cargarImagenDesdeDataUrl(dataUrl){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error("No se ha podido procesar la foto de la persona."));
+    img.src = dataUrl;
+  });
+}
+async function prepararReferenciaKontext(dataUrl){
+  const img = await cargarImagenDesdeDataUrl(dataUrl);
+  const [anchoRatio, altoRatio] = APP_CONFIG.fal.kontext.aspectRatio.split(":").map(Number);
+  const altoObjetivo = Math.round(img.width * (altoRatio / anchoRatio));
+  if (!Number.isFinite(altoObjetivo) || altoObjetivo <= img.height){
+    // La foto ya es tan alta (o más) que el lienzo objetivo: no hace falta
+    // añadir espacio adicional, se usa tal cual.
+    return dataUrl;
+  }
+  const canvas = document.createElement("canvas");
+  canvas.width = img.width;
+  canvas.height = altoObjetivo;
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "#c8c8c8";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  ctx.drawImage(img, 0, 0, img.width, img.height);
+  return canvas.toDataURL("image/png");
+}
+
 // Foto del modelo CON persona de referencia: edición de imagen (FLUX Kontext)
 // a partir de la foto subida, preservando el rostro. Ver el aviso sobre
 // APP_CONFIG.fal.kontext al principio del fichero: verifica el identificador
 // del modelo y los nombres de los campos del body si fal.ai los actualiza.
-// "soloRostro" indica que la foto de referencia es solo de rostro/busto (no
-// de cuerpo completo): en ese caso se sube el guidance_scale para que el
-// modelo siga mejor la instrucción de ampliar a cuerpo completo con
-// proporciones realistas, y se fuerza un aspect_ratio vertical que deje
-// sitio real para dibujar el cuerpo en vez de comprimirlo bajo la cabeza.
-async function generarImagenModeloConPersonaFal(prompt, soloRostro){
+// "imageUrl" es la foto de referencia YA preparada (ver
+// prepararReferenciaKontext): la original si es de cuerpo completo, o la
+// compuesta sobre lienzo ampliado si es solo de rostro. "soloRostro" indica
+// si corresponde este segundo caso: entonces se sube además el
+// guidance_scale para que el modelo siga mejor la instrucción de rellenar
+// el área gris con un cuerpo a escala realista.
+async function generarImagenModeloConPersonaFal(prompt, soloRostro, imageUrl){
   return llamarFalGenImagen(APP_CONFIG.fal.kontext.model, {
     prompt,
-    image_url: `data:${personaMediaType};base64,${personaBase64}`,
+    image_url: imageUrl || `data:${personaMediaType};base64,${personaBase64}`,
     guidance_scale: soloRostro ? APP_CONFIG.fal.kontext.guidanceScaleSoloRostro : APP_CONFIG.fal.kontext.guidanceScale,
     aspect_ratio: APP_CONFIG.fal.kontext.aspectRatio,
     num_images: APP_CONFIG.fal.numImages,
@@ -1410,7 +1454,16 @@ async function generarTodasLasImagenes(){
   const tareas = piezasActuales.map(p => ({nombre: p.nombre, prompt: p.prompt, modelo: false, usaPersona: false}));
   if (modeloShotPrompt){
     const promptModelo = soloRostro ? (modeloShotPrompt + AVISO_PROPORCION_CABEZA_CUERPO) : modeloShotPrompt;
-    tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo, soloRostro});
+    // Si es solo de rostro, la imagen de referencia se compone sobre un
+    // lienzo ampliado ANTES de llamar a FLUX Kontext (ver
+    // prepararReferenciaKontext): es lo que de verdad corrige la
+    // desproporción cabeza/cuerpo, más allá del texto del prompt.
+    let imagenReferenciaUrl = `data:${personaMediaType};base64,${personaBase64}`;
+    if (soloRostro){
+      try { imagenReferenciaUrl = await prepararReferenciaKontext(imagenReferenciaUrl); }
+      catch(e){ /* si falla el preprocesado, se sigue con la foto original sin ampliar */ }
+    }
+    tareas.push({nombre: "Modelo con el outfit completo", prompt: promptModelo, modelo: true, usaPersona: usaPersonaParaModelo, soloRostro, imagenReferenciaUrl});
   }
 
   let cancelada = false;
@@ -1425,7 +1478,7 @@ async function generarTodasLasImagenes(){
       : `Generando imagen: ${tarea.nombre}…`;
     try {
       const urlRemota = tarea.usaPersona
-        ? await generarImagenModeloConPersonaFal(tarea.prompt, tarea.soloRostro)
+        ? await generarImagenModeloConPersonaFal(tarea.prompt, tarea.soloRostro, tarea.imagenReferenciaUrl)
         : await generarImagenFal(tarea.prompt);
       const dataUrl = await dataUrlDesdeImagenUrl(urlRemota);
       actualizarTarjetaImagen(card, dataUrl, null, tarea.usaPersona);
