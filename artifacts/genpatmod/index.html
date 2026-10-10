@@ -81,6 +81,7 @@
   }
   textarea { min-height: 90px; resize: vertical; }
   textarea.tall { min-height: 150px; }
+  #prompt-mejorado.tall { min-height: 280px; }
   #input-max-tokens { width: 100%; text-align: right; }
   input:focus-visible, select:focus-visible, textarea:focus-visible, button:focus-visible, summary:focus-visible {
     outline: 3px solid var(--blue-500); outline-offset: 2px;
@@ -117,13 +118,14 @@
   .estado-key { font-size: .85rem; margin-top: .5rem; color: var(--muted); }
   .estado-key.si { color: var(--ok); font-weight: 600; }
 
-  #estado-generacion {
+  .estado-caja {
     display: none; margin-top: 1rem; padding: .75rem 1rem; border-radius: 10px;
     background: var(--blue-50); color: var(--blue-700); font-size: .9rem;
     align-items: center; gap: .6rem; border: 1px solid var(--blue-100);
   }
-  #estado-generacion.visible { display: flex; }
-  #estado-generacion.error { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; }
+  .estado-caja.visible { display: flex; }
+  .estado-caja.error { background: var(--err-bg); color: var(--err); border-color: #f3c6c2; }
+  .estado-caja.ok .spinner, .estado-caja.error .spinner { display: none; }
 
   #aviso-truncado {
     margin-top: .9rem; padding: .7rem 1rem; border-radius: 10px;
@@ -306,6 +308,7 @@
     <div class="botones">
       <button type="button" class="primario grande" id="btn-generar" disabled>Generar patrón</button>
       <button type="button" class="secundario" id="btn-estimar-tokens" disabled>Estimar tokens de entrada</button>
+      <button type="button" class="peligro" id="btn-detener" style="display:none;">&#9209; Detener generación</button>
     </div>
     <p class="hint">La estimación consulta solo el conteo de tokens de ENTRADA (gratuito en los proveedores que lo ofrecen) del paso de planificación, con la misma idea que se enviaría; los tokens de SALIDA nunca se pueden conocer antes de generar, solo se puede mostrar el techo configurado.</p>
     <div class="contador-coste" id="estimacion-tokens" style="display:none;"></div>
@@ -313,7 +316,7 @@
       <button type="button" class="secundario" id="btn-exportar-txt" disabled>Exportar prompts (.txt)</button>
     </div>
 
-    <div id="estado-generacion"><div class="spinner"></div><span id="estado-texto"></span></div>
+    <div id="estado-generacion" class="estado-caja"><div class="spinner"></div><span id="estado-texto"></span></div>
   </section>
 
   <section class="panel" id="panel-resultado" style="display:none;" aria-labelledby="h-resultado">
@@ -326,6 +329,7 @@
         <button type="button" class="primario" id="btn-continuar-generacion" style="display:none;">Generar piezas con este plan</button>
         <button type="button" class="primario" id="btn-regenerar-prompt" style="display:none;">Generar con este prompt editado</button>
       </div>
+      <div id="estado-generacion-piezas" class="estado-caja"><div class="spinner"></div><span id="estado-texto-piezas"></span></div>
     </div>
     <div id="aviso-truncado" style="display:none;"></div>
     <div id="resultado"></div>
@@ -354,13 +358,21 @@
     </div>
   </section>
 
+  <section class="panel" aria-labelledby="h-borrado">
+    <h2 id="h-borrado">Borrar datos</h2>
+    <p class="hint" style="margin-top:0">Borra la idea, el prompt mejorado, las piezas en SVG y el PDF mostrados, y los nombres de fichero si los has cambiado. No afecta al proveedor, el modelo, el número máximo de tokens ni a tu API key, y no borra el historial guardado.</p>
+    <div class="botones">
+      <button type="button" class="peligro" id="btn-borrar-todo">&#128465;&#65039; Borrar todos los datos introducidos</button>
+    </div>
+  </section>
+
 </main>
 
 <div id="svg-render-host"></div>
 
 <footer>
   GenPatMod &middot; Generado con ayuda de IA &middot; Revisa siempre el patrón antes de cortar tela<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 01:59
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 06:48
 </footer>
 
 
@@ -547,9 +559,13 @@ const inputIdea = $("input-idea");
 const inputNombrePdf = $("input-nombre-pdf");
 const inputNombreTxt = $("input-nombre-txt");
 const btnGenerar = $("btn-generar");
+const btnDetener = $("btn-detener");
 const btnExportarTxt = $("btn-exportar-txt");
 const estadoGeneracion = $("estado-generacion");
 const estadoTexto = $("estado-texto");
+const estadoGeneracionPiezas = $("estado-generacion-piezas");
+const estadoTextoPiezas = $("estado-texto-piezas");
+const btnBorrarTodo = $("btn-borrar-todo");
 const panelResultado = $("panel-resultado");
 const resultadoDiv = $("resultado");
 const promptMejoradoWrap = $("prompt-mejorado-wrap");
@@ -678,16 +694,25 @@ ajustarLimiteTokens();
 /* ============================================================================
  * LLAMADA UNIFICADA A LA IA (Anthropic / OpenAI / Gemini)
  * ==========================================================================*/
+// Permite cancelar una generación en curso desde el botón "Detener generación".
+let controladorCancelacion = null;
+class OperacionCancelada extends Error {}
+
 async function fetchConTimeout(url, opciones, timeoutMs = 60000){
   const controlador = new AbortController();
   const id = setTimeout(() => controlador.abort(), timeoutMs);
+  const senalCancelacion = controladorCancelacion ? controladorCancelacion.signal : null;
+  const onCancelacionGlobal = () => controlador.abort();
+  if (senalCancelacion) senalCancelacion.addEventListener("abort", onCancelacionGlobal);
   try{
     return await fetch(url, {...opciones, signal: controlador.signal});
   } catch(e){
+    if (senalCancelacion && senalCancelacion.aborted) throw new OperacionCancelada("Generación detenida por el usuario.");
     if (e.name === "AbortError") throw new Error("La petición ha superado el tiempo máximo de espera (60 s). Inténtalo de nuevo.");
     throw new Error("Error de red: no se ha podido contactar con el servidor de la IA. Revisa tu conexión.");
   } finally {
     clearTimeout(id);
+    if (senalCancelacion) senalCancelacion.removeEventListener("abort", onCancelacionGlobal);
   }
 }
 
@@ -1268,14 +1293,42 @@ function mostrarAvisoTruncado(avisosTruncado){
 /* ============================================================================
  * ORQUESTACIÓN PRINCIPAL
  * ==========================================================================*/
-function fijarEstado(texto, esError){
-  estadoGeneracion.classList.add("visible");
-  estadoGeneracion.classList.toggle("error", !!esError);
-  estadoTexto.textContent = texto;
+// Cada caja de estado (la del plan de piezas y la de la generación de las
+// piezas) se controla igual: "busy" muestra el círculo de carga, "ok" y
+// "error" lo detienen y solo dejan el mensaje.
+function crearControladorEstado(contenedor, textoEl){
+  return {
+    fijar(texto, tipo){
+      contenedor.classList.add("visible");
+      contenedor.classList.toggle("error", tipo === "error");
+      contenedor.classList.toggle("ok", tipo === "ok");
+      textoEl.textContent = texto;
+    },
+    ocultar(){
+      contenedor.classList.remove("visible", "error", "ok");
+    }
+  };
 }
-function ocultarEstado(){ estadoGeneracion.classList.remove("visible"); }
+const estadoPlan = crearControladorEstado(estadoGeneracion, estadoTexto);
+const estadoPiezas = crearControladorEstado(estadoGeneracionPiezas, estadoTextoPiezas);
+let cajaEstadoActiva = estadoPlan; // a qué caja dirigir un error o una cancelación
+
+function iniciarCancelable(){
+  controladorCancelacion = new AbortController();
+  btnDetener.disabled = false;
+  btnDetener.style.display = "inline-block";
+}
+function finalizarCancelable(){
+  controladorCancelacion = null;
+  btnDetener.style.display = "none";
+}
+btnDetener.addEventListener("click", () => {
+  if (controladorCancelacion) controladorCancelacion.abort();
+  btnDetener.disabled = true;
+});
 
 async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, avisosTruncado){
+  cajaEstadoActiva = estadoPiezas;
   resultadoDiv.innerHTML = "";
   btnDescargarPdf.style.display = "none";
   pdfPreview.style.display = "none";
@@ -1284,15 +1337,16 @@ async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, a
   const promptsUsados = promptsPrevios.slice();
   const piezasGeneradas = [];
   for (let i = 0; i < plan.piezas.length; i++){
+    if (controladorCancelacion && controladorCancelacion.signal.aborted) throw new OperacionCancelada("Generación detenida por el usuario.");
     const pieza = plan.piezas[i];
-    fijarEstado(`Generando el patrón de la pieza "${pieza.nombre}" (${i+1}/${plan.piezas.length})…`, false);
+    estadoPiezas.fijar(`Generando el patrón de la pieza "${pieza.nombre}" (${i+1}/${plan.piezas.length})…`, "busy");
     const svg = await generarSVGPieza(pieza.nombre, pieza.descripcion, opts, avisosTruncado);
     piezasGeneradas.push({nombre: pieza.nombre, descripcion: pieza.descripcion, svg});
     pintarPieza(pieza.nombre, pieza.descripcion, svg);
     promptsUsados.push({etapa:"Pieza: " + pieza.nombre, system: SYSTEM_PROMPT_PATRON, user: "Descripción: " + pieza.descripcion, resultado: "(SVG generado, ver PDF)"});
   }
 
-  fijarEstado("Construyendo el PDF (portada + una página A4 por pieza, autoescalado)…", false);
+  estadoPiezas.fijar("Construyendo el PDF (portada + una página A4 por pieza, autoescalado)…", "busy");
   const pdf = await construirPDF(piezasGeneradas, plan.prenda, generarTextoResumen(plan));
   const blobUrl = pdf.output("bloburl");
   ultimoPdfBlobUrl = blobUrl;
@@ -1310,7 +1364,7 @@ async function generarPiezasYPDF(plan, opts, ideaParaExportar, promptsPrevios, a
   btnExportarTxt.disabled = false;
 
   mostrarAvisoTruncado(avisosTruncado);
-  fijarEstado(`Listo. Se han generado ${piezasGeneradas.length} pieza(s) para "${plan.prenda}".`, false);
+  estadoPiezas.fijar(`Listo. Se han generado ${piezasGeneradas.length} pieza(s) para "${plan.prenda}".`, "ok");
 
   try {
     await guardarEnHistorial({
@@ -1345,13 +1399,16 @@ btnGenerar.addEventListener("click", async () => {
   btnRegenerarPrompt.style.display = "none";
   pendienteContinuar = null;
   mostrarAvisoTruncado(null);
+  estadoPiezas.ocultar();
 
   const opts = {proveedor, modelo, apiKey};
   ultimosOpts = opts;
   const avisosTruncado = [];
 
+  cajaEstadoActiva = estadoPlan;
+  iniciarCancelable();
   try{
-    fijarEstado("Analizando la idea y planificando las piezas del patrón…", false);
+    estadoPlan.fijar("Analizando la idea y planificando las piezas del patrón…", "busy");
     const plan = await planificarPiezas(idea, opts, avisosTruncado);
     ultimoPlanGenerado = plan;
     const promptsUsados = [{etapa:"Planificación", system: SYSTEM_PROMPT_PLANIFICAR, user: "Idea inicial de la prenda: " + idea, resultado: JSON.stringify(plan, null, 2)}];
@@ -1360,16 +1417,22 @@ btnGenerar.addEventListener("click", async () => {
       pintarPromptMejorado(plan);
       pendienteContinuar = {plan, opts, idea, promptsUsados, avisosTruncado};
       btnContinuarGeneracion.style.display = "inline-block";
-      fijarEstado("Revisa el plan de piezas. Edítalo si quieres, o pulsa \"Generar piezas con este plan\" para continuar.", false);
+      estadoPlan.fijar("Plan de piezas obtenido. Revísalo o edítalo, y pulsa «Generar piezas con este plan» para continuar.", "ok");
       return;
     }
 
     promptMejoradoWrap.style.display = "none";
+    estadoPlan.fijar("Plan de piezas obtenido.", "ok");
     await generarPiezasYPDF(plan, opts, idea, promptsUsados, avisosTruncado);
   } catch(err){
-    console.error(err);
-    fijarEstado("❌ " + err.message, true);
+    if (err instanceof OperacionCancelada){
+      cajaEstadoActiva.fijar("⏹ " + err.message, "ok");
+    } else {
+      console.error(err);
+      cajaEstadoActiva.fijar("❌ " + err.message, "error");
+    }
   } finally {
+    finalizarCancelable();
     actualizarBotonGenerar();
   }
 });
@@ -1400,13 +1463,20 @@ btnContinuarGeneracion.addEventListener("click", async () => {
   btnEditarPrompt.style.display = "none";
   btnGenerar.disabled = true;
 
+  cajaEstadoActiva = estadoPiezas;
+  iniciarCancelable();
   try{
-    fijarEstado("Generando las piezas a partir del plan revisado…", false);
+    estadoPiezas.fijar("Generando las piezas a partir del plan revisado…", "busy");
     await generarPiezasYPDF(plan, opts, idea, promptsUsados, avisosTruncado);
   } catch(err){
-    console.error(err);
-    fijarEstado("❌ " + err.message, true);
+    if (err instanceof OperacionCancelada){
+      estadoPiezas.fijar("⏹ " + err.message, "ok");
+    } else {
+      console.error(err);
+      estadoPiezas.fijar("❌ " + err.message, "error");
+    }
   } finally {
+    finalizarCancelable();
     btnEditarPrompt.style.display = "inline-block";
     actualizarBotonGenerar();
   }
@@ -1437,13 +1507,20 @@ btnRegenerarPrompt.addEventListener("click", async () => {
   const avisosTruncado = [];
   const promptsUsados = [{etapa:"Planificación (prompt editado a mano)", system: "(el usuario editó manualmente el prompt mejorado)", user: textoEditado, resultado: JSON.stringify(planEditado, null, 2)}];
 
+  cajaEstadoActiva = estadoPiezas;
+  iniciarCancelable();
   try{
-    fijarEstado("Regenerando el patrón a partir del prompt editado…", false);
+    estadoPiezas.fijar("Regenerando el patrón a partir del prompt editado…", "busy");
     await generarPiezasYPDF(planEditado, ultimosOpts, inputIdea.value.trim(), promptsUsados, avisosTruncado);
   } catch(err){
-    console.error(err);
-    fijarEstado("❌ " + err.message, true);
+    if (err instanceof OperacionCancelada){
+      estadoPiezas.fijar("⏹ " + err.message, "ok");
+    } else {
+      console.error(err);
+      estadoPiezas.fijar("❌ " + err.message, "error");
+    }
   } finally {
+    finalizarCancelable();
     btnRegenerarPrompt.disabled = false;
     actualizarBotonGenerar();
   }
@@ -1550,7 +1627,8 @@ function cargarDesdeHistorial(rec){
   btnRegenerarPrompt.style.display = "none";
   resultadoDiv.innerHTML = "";
   mostrarAvisoTruncado(null);
-  fijarEstado(`Generación del ${formatearFechaHist(rec.createdAt)} cargada. Edita la idea o el plan y pulsa "Generar patrón" para repetirla.`, false);
+  estadoPiezas.ocultar();
+  estadoPlan.fijar(`Generación del ${formatearFechaHist(rec.createdAt)} cargada. Edita la idea o el plan y pulsa "Generar patrón" para repetirla.`, "ok");
   actualizarBotonGenerar();
   $("input-idea").scrollIntoView({behavior:"smooth", block:"center"});
 }
@@ -1590,7 +1668,7 @@ async function renderHistorial(){
       if (cb.checked){
         if (historySelection.size >= 4){
           cb.checked = false;
-          fijarEstado("Puedes comparar como máximo 4 generaciones.", false);
+          estadoPlan.fijar("Puedes comparar como máximo 4 generaciones.", "ok");
           return;
         }
         historySelection.add(rec.id);
@@ -1709,6 +1787,57 @@ $("historial-vaciar").addEventListener("click", async () => {
   cerrarComparacionHistorial();
   await renderHistorial();
 });
+
+/* ============================================================================
+ * BORRADO DE DATOS INTRODUCIDOS
+ * No modifica proveedor, modelo, número máximo de tokens, API key ni el
+ * historial guardado en IndexedDB.
+ * ==========================================================================*/
+function borrarTodosLosDatos(){
+  if (!confirm("¿Borrar la idea, el prompt mejorado, las piezas y el PDF mostrados? El proveedor, el modelo, el número de tokens y la API key no se modifican. Esta acción no se puede deshacer.")) return;
+
+  if (controladorCancelacion) controladorCancelacion.abort();
+
+  inputIdea.value = "";
+  inputNombrePdf.value = "";
+  inputNombreTxt.value = "";
+  chkMostrarPrompt.checked = true;
+
+  pendienteContinuar = null;
+  ultimoPlanGenerado = null;
+  ultimosPrompts = null;
+
+  promptMejoradoWrap.style.display = "none";
+  promptMejoradoTexto.value = "";
+  promptMejoradoTexto.readOnly = true;
+  promptMejoradoTexto.style.background = "var(--blue-50)";
+  btnEditarPrompt.textContent = "✏️ Editar prompt mejorado";
+  btnEditarPrompt.style.display = "inline-block";
+  btnContinuarGeneracion.style.display = "none";
+  btnRegenerarPrompt.style.display = "none";
+
+  mostrarAvisoTruncado(null);
+  resultadoDiv.innerHTML = "";       // también elimina los SVG de las piezas mostradas
+  btnDescargarPdf.style.display = "none";
+  btnDescargarPdf.onclick = null;
+  if (ultimoPdfBlobUrl){ URL.revokeObjectURL(ultimoPdfBlobUrl); ultimoPdfBlobUrl = null; }
+  pdfPreview.src = "about:blank";
+  pdfPreview.style.display = "none";
+  btnExportarTxt.disabled = true;
+
+  estimacionTokensDiv.style.display = "none";
+  estimacionTokensDiv.textContent = "";
+
+  costeAcumulado = {entrada: 0, salida: 0, usd: 0};
+  pintarContadorCoste();
+
+  estadoPlan.ocultar();
+  estadoPiezas.ocultar();
+  panelResultado.style.display = "none";
+
+  actualizarBotonGenerar();
+}
+btnBorrarTodo.addEventListener("click", borrarTodosLosDatos);
 
 renderHistorial();
 
