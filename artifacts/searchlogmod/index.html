@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SearchLogMod</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232d3b6b'/%3E%3Cpath d='M32 9 L55 22 L55 45 L32 58 L9 45 L9 22 Z' fill='none' stroke='%23c97a2b' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M32 9 L32 33.5 M9 22 L32 33.5 M55 22 L32 33.5' stroke='%23c97a2b' stroke-width='3.5' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c97a2b'/%3E%3Cpath d='M32 6 L58 20 L32 34 L6 20 Z' fill='%234a5fa0'/%3E%3Cpath d='M6 20 L32 34 L32 58 L6 46 Z' fill='%23131a30'/%3E%3Cpath d='M58 20 L58 46 L32 58 L32 34 Z' fill='%23232f57'/%3E%3C/svg%3E">
 <style>
 /* ===================================================================
    SearchLogMod — ficha de consulta IA sobre logística en la moda
@@ -433,7 +433,7 @@ footer b{ color:var(--ink); }
   </section>
 
   <footer>
-    <b>Rafa Puerto</b> · Departamento de Ingeniería de Sistemas y Automática · Universidad Miguel Hernández de Elche · <a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a><br>
+    <b>Rafael Puerto</b> · Departamento de Ingeniería de Sistemas y Automática · Universidad Miguel Hernández de Elche · <a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a><br>
     <span class="legend">Generado con IA · Revisado por el autor</span><br>
     Última modificación: <span id="lastMod"></span>
   </footer>
@@ -483,17 +483,17 @@ var PROVIDERS = {
   openai: {
     label: "OpenAI (GPT)",
     models: [
+      {id:"gpt-6-luna", label:"GPT-6 Luna (por defecto)", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
       {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}},
       {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}},
-      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   },
   gemini: {
     label: "Google (Gemini)",
     models: [
+      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash (por defecto)", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
       {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}},
-      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
       {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
@@ -614,7 +614,8 @@ function onModelChange(){
   if (model && model.price){
     lines.push(
       "Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
-      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b> &nbsp;·&nbsp; " +
+      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b>");
+    lines.push(
       "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida");
     if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
   } else {
@@ -800,6 +801,10 @@ async function onRun(){
   $("panelResult").hidden = false;
   $("reportBody").innerHTML = "<p class=\"empty-report\">Generando informe…</p>";
   $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML =
+    "Tokens entrada: <b>0</b> &nbsp;·&nbsp; salida: <b>0</b>" +
+    " &nbsp;·&nbsp; coste de esta consulta: <b>$0.0000</b>" +
+    " &nbsp;·&nbsp; coste acumulado de la sesión: <b>$" + state.sessionCost.toFixed(4) + "</b>";
 
   try{
     var r = await callAI(fullPrompt, maxTokens);
