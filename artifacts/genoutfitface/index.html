@@ -178,6 +178,11 @@
   .hint { font-size: .85rem; color: var(--muted); margin: .35rem 0 0; font-weight: 400; }
 
   .botones { display: flex; gap: .6rem; margin-top: .8rem; flex-wrap: wrap; }
+  .campo-nombre-archivo {
+    flex: 1 1 100%; display: flex; align-items: center; gap: .4rem; min-width: 180px;
+  }
+  .campo-nombre-archivo input[type=text] { flex: 1; padding: .45rem .6rem; font-size: .85rem; }
+  .campo-nombre-archivo .extension-archivo { font-size: .85rem; color: var(--muted); white-space: nowrap; }
   button {
     cursor: pointer; border: 1px solid var(--border-strong); border-radius: 10px;
     padding: .55rem 1rem; font-size: .92rem; font-weight: 600; font-family: inherit;
@@ -347,7 +352,7 @@
       <li>La IA (Claude, GPT o Gemini, a tu elección) analiza la(s) foto(s) y devuelve una descripción breve y un prompt en español, listo para FLUX, de cada pieza del outfit; si subiste foto de persona, también sus rasgos y, si procede, sus proporciones.</li>
       <li>Puedes revisar y editar cada prompt y cada característica extraída antes de continuar.</li>
       <li>Al pulsar "Continuar", GenOutFitFace genera con FLUX una imagen PNG de cada pieza. La foto del modelo se genera de dos formas distintas según el caso: si subiste una foto de persona, se genera con FLUX Kontext editando esa foto para vestir el outfit (conservando su rostro real); si no, se genera igual que el resto de piezas, solo a partir de texto.</li>
-      <li>Puedes descargar cada imagen por separado o exportarlas todas juntas en un PDF.</li>
+      <li>Puedes descargar cada imagen por separado o exportarlas todas juntas en un PDF; en ambos casos puedes escribir el nombre de fichero que quieras antes de descargar.</li>
     </ol>
     <p><strong>Avisos frecuentes:</strong> error 401/403 &#8594; la clave no es válida o no tiene permisos. Error 429 &#8594; límite de uso alcanzado, espera e inténtalo de nuevo. Error 404 &#8594; el modelo no existe o no está disponible en tu cuenta (revisa también el identificador del modelo Kontext en <code>APP_CONFIG.fal.kontext</code> si falla solo la foto del modelo con referencia). "La respuesta no tiene el formato esperado" &#8594; GenOutFitFace reintenta automáticamente una vez; si persiste, prueba con otro modelo o fotos más claras.</p>
   </details>
@@ -525,6 +530,10 @@
     </div>
     <div id="resultado"></div>
     <div class="botones">
+      <div class="campo-nombre-archivo">
+        <input type="text" id="input-nombre-pdf" value="genoutfit_outfit" aria-label="Nombre del fichero PDF (sin extensión)">
+        <span class="extension-archivo">.pdf</span>
+      </div>
       <button type="button" class="primario" id="btn-exportar-pdf" disabled>Exportar todas en PDF</button>
     </div>
     <div class="contador-coste" id="contador-coste"></div>
@@ -544,7 +553,7 @@
 
 <footer>
   GenOutFitFace &middot; Generado con ayuda de IA &middot; Revisa siempre el resultado antes de usarlo profesionalmente<br>
-  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 10/10/2026 14:17
+  Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) &middot; &Uacute;ltima modificaci&oacute;n: 11/10/2026 11:51
 </footer>
 
 <script>
@@ -751,6 +760,7 @@ const btnContinuar = $("btn-continuar");
 const panelImagenes = $("panel-imagenes");
 const resultadoDiv = $("resultado");
 const btnExportarPdf = $("btn-exportar-pdf");
+const inputNombrePdf = $("input-nombre-pdf");
 const contadorCoste = $("contador-coste");
 const progresoImagenesDiv = $("progreso-imagenes");
 const progresoImagenesTexto = $("progreso-imagenes-texto");
@@ -1464,6 +1474,20 @@ async function dataUrlDesdeImagenUrl(url){
   });
 }
 
+// Nombre de fichero por defecto, derivado del nombre de la pieza/modelo: se
+// usa solo como valor inicial del campo editable, nunca se fuerza — el
+// usuario puede escribir el nombre que quiera antes de descargar.
+function sugerirNombreArchivo(nombre){
+  return (nombre || "imagen").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"") || "imagen";
+}
+// Limpia el nombre que haya escrito el usuario quitando solo los caracteres
+// no válidos en un nombre de fichero (separadores de ruta y similares);
+// mantiene espacios, mayúsculas y acentos tal y como los haya escrito.
+function sanitizarNombreArchivo(nombre){
+  const limpio = (nombre || "").trim().replace(/[\\/:*?"<>|]+/g, "_");
+  return limpio || "archivo";
+}
+
 function pintarImagenPlaceholder(nombre, esModelo, usaPersona){
   const card = document.createElement("div");
   card.className = "pieza-card" + (esModelo ? " modelo" : "");
@@ -1473,6 +1497,10 @@ function pintarImagenPlaceholder(nombre, esModelo, usaPersona){
     <div class="img-wrap"><span class="placeholder">Generando…</span></div>
     <div class="meta-pieza"></div>
     <div class="botones">
+      <div class="campo-nombre-archivo">
+        <input type="text" class="input-nombre-archivo" value="${escapeHTML(sugerirNombreArchivo(nombre))}" aria-label="Nombre del fichero para ${escapeHTML(nombre)} (sin extensión)">
+        <span class="extension-archivo"></span>
+      </div>
       <button type="button" class="secundario btn-descargar-png" disabled>Descargar imagen</button>
       <button type="button" class="peligro btn-borrar-imagen">Borrar</button>
     </div>`;
@@ -1515,11 +1543,15 @@ function actualizarTarjetaImagen(card, dataUrl, error, usaKontext, blobReal){
   meta.textContent = usaKontext
     ? `Formato ${formatoTexto} · ~${pesoKb} KB · fal.ai / FLUX Kontext (edición con imágenes de referencia) · tolerancia de seguridad ${obtenerSafetyTolerance()}`
     : `Formato ${formatoTexto} · ~${pesoKb} KB · fal.ai / FLUX · ${obtenerPasosInferencia()} pasos · tolerancia de seguridad ${obtenerSafetyTolerance()}`;
+  const extension = extensionDesdeMime(mime);
+  const spanExtension = card.querySelector(".extension-archivo");
+  if (spanExtension) spanExtension.textContent = "." + extension;
   btn.disabled = false;
   btn.textContent = "Descargar " + formatoTexto;
   btn.addEventListener("click", () => {
-    const nombreArchivo = card.dataset.nombre.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g,"").replace(/[^a-z0-9]+/g,"_") + "." + extensionDesdeMime(mime);
-    guardarArchivo(nombreArchivo, blob);
+    const inputNombre = card.querySelector(".input-nombre-archivo");
+    const base = sanitizarNombreArchivo(inputNombre ? inputNombre.value : card.dataset.nombre);
+    guardarArchivo(base + "." + extension, blob);
   });
 }
 function dataUrlABlob(dataUrl){
@@ -1626,7 +1658,8 @@ async function exportarPdf(){
     if (h > altoMax){ h = altoMax; w = (propiedades.width / propiedades.height) * h; }
     doc.addImage(img.dataUrl, tipoPdfDesdeMime(img.mime), margen, 30, w, h);
   });
-  await guardarArchivo("genoutfit_outfit.pdf", doc.output("blob"), "application/pdf");
+  const nombrePdf = sanitizarNombreArchivo(inputNombrePdf.value || "genoutfit_outfit");
+  await guardarArchivo(nombrePdf + ".pdf", doc.output("blob"), "application/pdf");
 }
 
 /* ============================================================================
