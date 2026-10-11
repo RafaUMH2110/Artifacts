@@ -21,6 +21,10 @@ CONTACT_NAME = "Rafael Puerto"
 CONTACT_EMAIL = "r.puerto@umh.es"
 
 
+class DestinationAuthError(RuntimeError):
+    """Error de autenticación/autorización en el repo destino."""
+
+
 def api_request(url, token, method="GET", payload=None):
     headers = {
         "Authorization": f"Bearer {token}",
@@ -82,25 +86,34 @@ def get_existing_sha(owner, repo, path, branch, token):
         return body["sha"]
     if status == 404:
         return None
+    if status in (401, 403):
+        raise DestinationAuthError(f"Error comprobando destino (HTTP {status}): {body.get('message', body)}")
     raise RuntimeError(f"Error comprobando destino (HTTP {status}): {body.get('message', body)}")
 
 
 def put_file(owner, repo, path, branch, content_bytes, message, token):
-    sha = get_existing_sha(owner, repo, path, branch, token)
+    try:
+        sha = get_existing_sha(owner, repo, path, branch, token)
+    except DestinationAuthError as e:
+        print(f"WARNING: {e}. Se omite la sincronización del portal.")
+        return False
     payload = {"message": message, "content": base64.b64encode(content_bytes).decode("ascii"), "branch": branch}
     if sha:
         payload["sha"] = sha
     status, body = api_request(f"{API_ROOT}/repos/{owner}/{repo}/contents/{path}", token, method="PUT", payload=payload)
+    if status in (401, 403):
+        print(f"WARNING: Fallo al subir el portal (HTTP {status}): {body.get('message', body)}. Se omite la sincronización del portal.")
+        return False
     if status not in (200, 201):
         raise RuntimeError(f"Fallo al subir el portal (HTTP {status}): {body.get('message', body)}")
-    return body
+    return True
 
 
 def main():
     token = os.environ.get("DEST_TOKEN")
     if not token:
-        print("ERROR: falta la variable de entorno DEST_TOKEN", file=sys.stderr)
-        sys.exit(1)
+        print("WARNING: falta la variable de entorno DEST_TOKEN; se omite la sincronización del portal.")
+        return
 
     pages_owner_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if "/" not in pages_owner_repo:
@@ -124,9 +137,10 @@ def main():
         contact_name=CONTACT_NAME, contact_email=CONTACT_EMAIL,
     ).encode("utf-8")
 
-    put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
-             "Update artifacts portal (auto-sync)", token)
-    print(f"Portal actualizado con {len(catalog)} apps -> {DEST_OWNER}/{DEST_REPO}:{DEST_PATH}")
+    updated = put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
+                       "Update artifacts portal (auto-sync)", token)
+    if updated:
+        print(f"Portal actualizado con {len(catalog)} apps -> {DEST_OWNER}/{DEST_REPO}:{DEST_PATH}")
 
 
 if __name__ == "__main__":
