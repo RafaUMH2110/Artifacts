@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SearchLogMod</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232d3b6b'/%3E%3Cpath d='M32 9 L55 22 L55 45 L32 58 L9 45 L9 22 Z' fill='none' stroke='%23c97a2b' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M32 9 L32 33.5 M9 22 L32 33.5 M55 22 L32 33.5' stroke='%23c97a2b' stroke-width='3.5' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
 <style>
 /* ===================================================================
    SearchLogMod — ficha de consulta IA sobre logística en la moda
@@ -49,6 +50,7 @@
 }
 
 *{box-sizing:border-box}
+[hidden]{ display:none !important; } /* evita que .formrow/.switchrow/.modal-backdrop (display:flex) lo anulen */
 body{
   margin:0; background:var(--bg); color:var(--ink);
   font-family:'Public Sans',-apple-system,'Segoe UI',sans-serif;
