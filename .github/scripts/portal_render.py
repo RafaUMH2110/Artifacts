@@ -313,7 +313,16 @@ _MESES_ES = [
 
 
 def _fecha_es(dt):
-    return f"{dt.day} de {_MESES_ES[dt.month - 1]} de {dt.year}"
+    # Convierte a hora de Madrid (CET/CEST) cuando hay datos de zona horaria
+    # disponibles; si no (por ejemplo, un runner sin tzdata instalado), se
+    # deja en UTC en vez de fallar o de aplicar un desfase fijo incorrecto
+    # la mitad del año por el cambio de horario de verano.
+    try:
+        from zoneinfo import ZoneInfo
+        dt = dt.astimezone(ZoneInfo("Europe/Madrid"))
+    except Exception:
+        pass
+    return f"{dt.day} de {_MESES_ES[dt.month - 1]} de {dt.year}, {dt.hour:02d}:{dt.minute:02d}"
 
 
 def render_portal_html(catalog, title, subtitle, eyebrow, contact_name="", contact_email=""):
