@@ -149,9 +149,8 @@ textarea{
   font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
   border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
 }
-.row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
 .keyrow{ position:relative; }
-.keyrow button.eye{
+.keyrow button.keybtn{
   position:absolute; right:6px; top:28px; background:none; border:none; cursor:pointer;
   color:var(--muted); font-size:12px; padding:4px 7px;
 }
@@ -301,15 +300,16 @@ footer b{ color:var(--ink); }
     <div class="guide-body">
       <p>SearchLogMod es una herramienta de un único fichero HTML (sin servidor propio) para investigar, con ayuda de un modelo de IA, los métodos y la logística de empresas de la industria de la moda.</p>
       <h3>1. Configura el proveedor</h3>
-      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido.</p>
+      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido; el botón "borrar" la elimina del campo y, si estaba marcada "recordar", también del navegador.</p>
+      <p><b>OpenAI:</b> su API no admite llamadas directas desde el navegador (CORS). Si eliges un modelo GPT, lo más probable es que la consulta falle salvo que uses tu propio servidor intermedio; para que funcione desde aquí usa Anthropic o Gemini.</p>
       <h3>2. Elige empresa y aspecto</h3>
       <p>Selecciona una empresa y un aspecto logístico de las listas, o usa "otra empresa" / "otro aspecto" para escribir cualquier cosa: no hay ninguna lista cerrada.</p>
       <h3>3. Mejora y ejecuta</h3>
       <p>Con la mejora activada, una primera llamada convierte tu selección en una consulta de investigación más precisa, que puedes editar a mano. Una segunda llamada genera el informe en Markdown.</p>
       <h3>4. Tokens y coste</h3>
-      <p>Cuando el proveedor devuelve el recuento real de tokens se usa ese dato; si no, se muestra una estimación (caracteres ÷ 4). Algunos modelos (los "reasoning" de OpenAI) no admiten temperatura personalizada: el campo se deshabilita y se omite de la llamada.</p>
-      <h3>5. Exportar</h3>
-      <p>Descarga el informe en Markdown, texto plano o Word (.docx), con el nombre de fichero que elijas.</p>
+      <p>Cuando el proveedor devuelve el recuento real de tokens se usa ese dato; si no, se muestra una estimación (caracteres ÷ 4). La mayoría de modelos actuales ya no admiten un parámetro de temperatura personalizado, así que la app no lo expone.</p>
+      <h3>5. Exportar e historial</h3>
+      <p>Descarga el informe en Markdown, texto plano o Word (.docx), con el nombre de fichero que elijas. El historial no se guarda solo: pulsa "Guardar en historial" en el informe que quieras conservar.</p>
       <p><b>Aviso:</b> las respuestas se basan en el conocimiento del modelo, sin navegación web, y pueden no reflejar cambios recientes en la empresa consultada.</p>
     </div>
   </details>
@@ -330,16 +330,12 @@ footer b{ color:var(--ink); }
           <label for="customModel">Identificador del modelo</label>
           <input type="text" id="customModel" placeholder="p. ej. claude-opus-5-5">
         </div>
-        <div class="switchrow" id="customTempRow" hidden>
-          <input type="checkbox" id="customSupportsTemp" checked>
-          <label for="customSupportsTemp">Este modelo personalizado admite el parámetro "temperature"</label>
-        </div>
         <div class="modelspecs" id="modelSpecs"></div>
 
         <div class="keyrow formrow">
           <label for="apiKey">Clave de API</label>
           <input type="password" id="apiKey" autocomplete="off" placeholder="Pega aquí tu clave">
-          <button type="button" class="eye" id="btnEye">mostrar</button>
+          <button type="button" class="keybtn" id="btnClearKey">borrar</button>
         </div>
         <div class="switchrow">
           <input type="checkbox" id="rememberKey">
@@ -347,16 +343,9 @@ footer b{ color:var(--ink); }
         </div>
       </div>
       <div>
-        <div class="row2">
-          <div class="formrow">
-            <label for="maxTokens">Máx. tokens de salida</label>
-            <input type="number" id="maxTokens" min="64" step="64">
-          </div>
-          <div class="formrow">
-            <label for="temperature">Temperatura</label>
-            <input type="number" id="temperature" min="0" max="1" step="0.1" value="0.4">
-            <p class="hint" id="tempNote" style="margin:4px 0 0"></p>
-          </div>
+        <div class="formrow">
+          <label for="maxTokens">Máx. tokens de salida</label>
+          <input type="number" id="maxTokens" min="64" step="64">
         </div>
         <div class="switchrow">
           <input type="checkbox" id="useImprove" checked>
@@ -414,6 +403,10 @@ footer b{ color:var(--ink); }
       <div class="report" id="reportBody"><p class="empty-report">Aún no se ha ejecutado ninguna consulta.</p></div>
     </div>
     <div class="costline" id="resultCostline"></div>
+    <div class="btnrow">
+      <button class="btn subtle small" id="btnSaveHistory" type="button">💾 Guardar en historial</button>
+      <span class="hint" id="saveHistHint" style="margin:0"></span>
+    </div>
   </section>
 
   <section class="panel" id="panelExport" hidden>
@@ -476,35 +469,34 @@ var PROVIDERS = {
   anthropic: {
     label: "Anthropic (Claude)",
     models: [
-      {id:"claude-sonnet-5", label:"Claude Sonnet 5 (por defecto)", context:1000000, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:true},
-      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}, supportsTemperature:true},
-      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:true},
-      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}, supportsTemperature:true},
+      {id:"claude-sonnet-5", label:"Claude Sonnet 5 (por defecto)", context:1000000, maxOutput:128000, price:{in:2, out:10}},
+      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}},
+      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}},
+      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   },
   openai: {
     label: "OpenAI (GPT)",
     models: [
-      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}, supportsTemperature:false},
-      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:false},
-      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}, supportsTemperature:false},
+      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}},
+      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}},
+      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   },
   gemini: {
     label: "Google (Gemini)",
     models: [
-      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}, supportsTemperature:true},
-      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}, supportsTemperature:true},
-      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}, supportsTemperature:true},
+      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}},
+      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
+      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   }
 };
-/* GPT-6 Astra/Sol/Luna son modelos de la familia "reasoning" de OpenAI: solo admiten
-   el parámetro reasoning_effort y rechazan 'temperature' distinta de la por defecto
-   (error unsupported_parameter), igual que la serie o1/o3/GPT-5 reasoning. */
+/* La mayoría de modelos actuales ("reasoning") ya no admiten un parámetro 'temperature'
+   personalizado (solo reasoning_effort), así que la app no lo expone ni lo envía. */
 
 /* ===================== estado ===================== */
 var state = {
@@ -606,36 +598,25 @@ function buildModelSelect(){
   sel.onchange = onModelChange;
   onModelChange();
 }
-function modelSupportsTemperature(model){
-  if (!model) return true;
-  if (model.price) return model.supportsTemperature !== false;
-  var cb = $("customSupportsTemp");
-  return cb ? cb.checked : true;
-}
-function applyTemperatureSupport(model){
-  var supported = modelSupportsTemperature(model);
-  var temp = $("temperature");
-  temp.disabled = !supported;
-  $("tempNote").textContent = supported ? "" : "Este modelo no admite temperatura personalizada: se omite en la llamada.";
-  return supported;
-}
 function onModelChange(){
   var id = $("selModel").value;
   $("customModelRow").hidden = (id !== "custom");
-  $("customTempRow").hidden = (id !== "custom");
   var model = currentModel();
   var specs = $("modelSpecs");
-  applyTemperatureSupport(model);
+  var lines = [];
+  if (state.provider === "openai"){
+    lines.push("<span style=\"color:var(--warn)\">⚠ OpenAI no admite llamadas directas desde el navegador (CORS): esta opción puede fallar salvo que uses tu propio servidor intermedio.</span>");
+  }
   if (model && model.price){
-    specs.innerHTML =
+    lines.push(
       "Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
       "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b> &nbsp;·&nbsp; " +
-      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida" +
-      " &nbsp;·&nbsp; temperatura: <b>" + (model.supportsTemperature === false ? "no admitida" : "admitida") + "</b>";
+      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida");
     if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
   } else {
-    specs.innerHTML = "Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado y si admite 'temperature'.";
+    lines.push("Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.");
   }
+  specs.innerHTML = lines.join("<br>");
   updateBar();
 }
 function updateBar(){
@@ -647,18 +628,28 @@ function updateBar(){
 }
 
 /* ===================== llamadas a proveedores ===================== */
+function networkErrorMessage(){
+  if (state.provider === "openai"){
+    return "OpenAI ha rechazado la conexión directa desde el navegador (CORS). Su API no admite este tipo de llamada desde una página web sin un servidor intermedio propio; esto no se puede evitar desde aquí. Prueba con Anthropic o Gemini, que sí permiten llamadas directas desde el navegador.";
+  }
+  return "No se ha podido conectar con el proveedor (red o CORS). Comprueba tu conexión a internet y la clave de API.";
+}
+async function doFetch(url, options){
+  try{
+    return await fetch(url, options);
+  } catch(networkErr){
+    throw new Error(networkErrorMessage());
+  }
+}
 async function callAI(prompt, maxTokens){
   var model = currentModel();
   var apiKey = $("apiKey").value.trim();
-  var temperature = parseFloat($("temperature").value); if (isNaN(temperature)) temperature = 0.4;
-  var supportsTemp = modelSupportsTemperature(model);
   if (!apiKey) throw new Error("Falta la clave de API.");
   if (!model || !model.id || model.id === "") throw new Error("Selecciona o indica un modelo válido.");
 
   if (state.provider === "anthropic"){
     var anthropicBody = { model: model.id, max_tokens: maxTokens, messages:[{role:"user", content: prompt}] };
-    if (supportsTemp) anthropicBody.temperature = temperature;
-    var res = await fetch("https://api.anthropic.com/v1/messages", {
+    var res = await doFetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{
         "content-type":"application/json",
@@ -681,8 +672,7 @@ async function callAI(prompt, maxTokens){
 
   if (state.provider === "openai"){
     var openaiBody = { model: model.id, max_completion_tokens: maxTokens, messages:[{role:"user", content: prompt}] };
-    if (supportsTemp) openaiBody.temperature = temperature;
-    var res2 = await fetch("https://api.openai.com/v1/chat/completions", {
+    var res2 = await doFetch("https://api.openai.com/v1/chat/completions", {
       method:"POST",
       headers:{ "content-type":"application/json", "authorization":"Bearer " + apiKey },
       body: JSON.stringify(openaiBody)
@@ -701,8 +691,7 @@ async function callAI(prompt, maxTokens){
   if (state.provider === "gemini"){
     var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model.id) + ":generateContent?key=" + encodeURIComponent(apiKey);
     var generationConfig = { maxOutputTokens: maxTokens };
-    if (supportsTemp) generationConfig.temperature = temperature;
-    var res3 = await fetch(url, {
+    var res3 = await doFetch(url, {
       method:"POST",
       headers:{ "content-type":"application/json" },
       body: JSON.stringify({ contents:[{parts:[{text: prompt}]}], generationConfig: generationConfig })
@@ -827,7 +816,7 @@ async function onRun(){
     renderResult();
     $("panelExport").hidden = false;
     $("filename").value = sanitizeFilename("searchlogmod_" + selectedEmpresa() + "_" + selectedAspecto());
-    saveHistory(state.lastResult);
+    $("saveHistHint").textContent = "";
     $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
   } catch(err){
     $("reportBody").innerHTML = "<p class=\"empty-report\">Error: " + esc(err.message) + "</p>";
@@ -956,6 +945,12 @@ function clearHistory(){
   try{ localStorage.removeItem(HIST_KEY); } catch(e){}
   renderHistory(); toast("Historial vaciado.");
 }
+function onSaveHistory(){
+  if (!state.lastResult){ toast("No hay ningún informe que guardar."); return; }
+  saveHistory(state.lastResult);
+  $("saveHistHint").textContent = "Guardado en el historial.";
+  toast("Guardado en el historial.");
+}
 
 /* ===================== clave recordada ===================== */
 var KEY_STORE = "searchlogmod_key_";
@@ -972,6 +967,13 @@ function maybeStoreKey(){
     else localStorage.removeItem(KEY_STORE + state.provider);
   } catch(e){}
 }
+function clearApiKey(){
+  $("apiKey").value = "";
+  $("rememberKey").checked = false;
+  try{ localStorage.removeItem(KEY_STORE + state.provider); } catch(e){}
+  updateBar();
+  toast("Clave eliminada.");
+}
 
 /* ===================== wiring ===================== */
 function init(){
@@ -984,16 +986,11 @@ function init(){
   $("lastMod").textContent = nowStamp();
 
   $("maxTokens").addEventListener("input", function(){ this.dataset.userEdited = "1"; });
-  $("customSupportsTemp").addEventListener("change", onModelChange);
   $("customModel").addEventListener("input", updateBar);
   $("apiKey").addEventListener("input", function(){ updateBar(); });
   $("apiKey").addEventListener("change", maybeStoreKey);
   $("rememberKey").addEventListener("change", maybeStoreKey);
-  $("btnEye").addEventListener("click", function(){
-    var inp = $("apiKey");
-    if (inp.type === "password"){ inp.type = "text"; this.textContent = "ocultar"; }
-    else { inp.type = "password"; this.textContent = "mostrar"; }
-  });
+  $("btnClearKey").addEventListener("click", clearApiKey);
 
   $("btnPrepare").addEventListener("click", onPrepare);
   $("btnRegeneratePrompt").addEventListener("click", onRegeneratePrompt);
@@ -1003,6 +1000,7 @@ function init(){
   $("btnDlDoc").addEventListener("click", downloadDoc);
   $("btnCopy").addEventListener("click", copyResult);
   $("btnClearHist").addEventListener("click", clearHistory);
+  $("btnSaveHistory").addEventListener("click", onSaveHistory);
 
   updateBar();
 }
