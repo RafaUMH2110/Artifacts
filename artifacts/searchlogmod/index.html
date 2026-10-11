@@ -303,7 +303,7 @@ footer b{ color:var(--ink); }
     <div class="guide-body">
       <p>SearchLogMod es una herramienta de un único fichero HTML (sin servidor propio) para investigar, con ayuda de un modelo de IA, los métodos y la logística de empresas de la industria de la moda.</p>
       <h3>1. Configura el proveedor</h3>
-      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido; el botón "borrar" la elimina del campo y, si estaba marcada "recordar", también del navegador.</p>
+      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido; el botón "Borrar" la elimina del campo y, si estaba marcada "recordar", también del navegador.</p>
       <p><b>OpenAI:</b> su API no admite llamadas directas desde el navegador (CORS). Si eliges un modelo GPT, lo más probable es que la consulta falle salvo que uses tu propio servidor intermedio; para que funcione desde aquí usa Anthropic o Gemini.</p>
       <h3>2. Elige empresa y aspecto</h3>
       <p>Selecciona una empresa y un aspecto logístico de las listas, o usa "otra empresa" / "otro aspecto" para escribir cualquier cosa: no hay ninguna lista cerrada.</p>
@@ -338,7 +338,7 @@ footer b{ color:var(--ink); }
         <div class="keyrow formrow">
           <label for="apiKey">Clave de API</label>
           <input type="password" id="apiKey" autocomplete="off" placeholder="Pega aquí tu clave">
-          <button type="button" class="keybtn" id="btnClearKey">borrar</button>
+          <button type="button" class="keybtn" id="btnClearKey">Borrar</button>
         </div>
         <div class="switchrow">
           <input type="checkbox" id="rememberKey">
@@ -389,7 +389,7 @@ footer b{ color:var(--ink); }
     <div class="panel-head"><h2>3 · Consulta a ejecutar</h2><span class="tag" id="promptTag">mejorada por IA</span></div>
     <p class="hint">Puedes editar el texto antes de ejecutar la consulta final.</p>
     <div class="promptbox">
-      <textarea id="finalPrompt" style="min-height:190px"></textarea>
+      <textarea id="finalPrompt" style="min-height:275px"></textarea>
       <div class="costline" id="prepareCostline"></div>
     </div>
     <div class="btnrow">
@@ -424,7 +424,7 @@ footer b{ color:var(--ink); }
       <button class="btn subtle" id="btnDlDoc" type="button">⬇ Word (.docx)</button>
       <button class="btn ghost" id="btnCopy" type="button">Copiar resultado</button>
     </div>
-    <p class="hint" style="margin-top:10px">Cada descarga pide confirmación mediante el cuadro de guardado del navegador. "Word (.docx)" genera un documento HTML compatible que Microsoft Word abre y reformatea automáticamente al formato nativo (puede mostrar un aviso de compatibilidad al abrirlo).</p>
+    <p class="hint" style="margin-top:10px">Cada descarga pide confirmación mediante el cuadro de guardado del navegador. "Word (.docx)" genera un documento nativo de Word (negrita, cursiva, listas, tablas y enlaces incluidos), listo para abrir sin avisos de compatibilidad.</p>
   </section>
 
   <section class="panel">
@@ -443,6 +443,7 @@ footer b{ color:var(--ink); }
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.0.3/build/index.umd.js"></script>
 <script>
 (function(){
 "use strict";
@@ -877,17 +878,166 @@ function downloadTxt(){
   var name = sanitizeFilename($("filename").value) + ".txt";
   triggerDownload(new Blob([markdownToPlainText(state.lastResult.markdown)], {type:"text/plain;charset=utf-8"}), name);
 }
-function downloadDoc(){
+/* ---------- parser Markdown → bloques (para la exportación a Word) ---------- */
+function parseMarkdownBlocks(markdown){
+  var lineas = (markdown || "").replace(/\r\n/g, "\n").split("\n");
+  var bloques = [];
+  var i = 0;
+  function esSeparadorTabla(linea){ return /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(linea); }
+  function dividirFilaTabla(linea){
+    var l = linea.trim();
+    if (l.indexOf("|") === 0) l = l.slice(1);
+    if (l.charAt(l.length - 1) === "|") l = l.slice(0, -1);
+    return l.split("|").map(function(c){ return c.trim(); });
+  }
+  while (i < lineas.length){
+    var linea = lineas[i];
+    if (linea.trim() === ""){ i++; continue; }
+    if (/^\s*```/.test(linea)){
+      var codigoLineas = []; i++;
+      while (i < lineas.length && !/^\s*```/.test(lineas[i])){ codigoLineas.push(lineas[i]); i++; }
+      i++;
+      bloques.push({tipo:"code", texto: codigoLineas.join("\n")});
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(linea)){ bloques.push({tipo:"hr"}); i++; continue; }
+    var mHead = linea.match(/^(#{1,6})\s+(.*)$/);
+    if (mHead){ bloques.push({tipo:"heading", nivel: mHead[1].length, texto: mHead[2].trim()}); i++; continue; }
+    if (linea.indexOf("|") !== -1 && i + 1 < lineas.length && esSeparadorTabla(lineas[i + 1])){
+      var cabecera = dividirFilaTabla(linea); i += 2;
+      var filas = [];
+      while (i < lineas.length && lineas[i].indexOf("|") !== -1 && lineas[i].trim() !== ""){ filas.push(dividirFilaTabla(lineas[i])); i++; }
+      bloques.push({tipo:"table", cabecera: cabecera, filas: filas});
+      continue;
+    }
+    if (/^\s*>\s?/.test(linea)){
+      var citaLineas = [];
+      while (i < lineas.length && /^\s*>\s?/.test(lineas[i])){ citaLineas.push(lineas[i].replace(/^\s*>\s?/, "")); i++; }
+      bloques.push({tipo:"blockquote", texto: citaLineas.join(" ")});
+      continue;
+    }
+    if (/^\s*[-*+]\s+/.test(linea)){
+      var items = [];
+      while (i < lineas.length && /^\s*[-*+]\s+/.test(lineas[i])){ items.push(lineas[i].replace(/^\s*[-*+]\s+/, "")); i++; }
+      bloques.push({tipo:"ul", items: items});
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(linea)){
+      var itemsOl = [];
+      while (i < lineas.length && /^\s*\d+\.\s+/.test(lineas[i])){
+        var mItem = lineas[i].match(/^\s*(\d+)\.\s+(.*)$/);
+        itemsOl.push({numero: parseInt(mItem[1], 10), texto: mItem[2]}); i++;
+      }
+      bloques.push({tipo:"ol", items: itemsOl});
+      continue;
+    }
+    var parrafoLineas = [];
+    while (i < lineas.length && lineas[i].trim() !== "" &&
+      !/^\s*```/.test(lineas[i]) && !/^(#{1,6})\s+/.test(lineas[i]) &&
+      !/^\s*>\s?/.test(lineas[i]) && !/^\s*[-*+]\s+/.test(lineas[i]) &&
+      !/^\s*\d+\.\s+/.test(lineas[i]) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lineas[i])){
+      parrafoLineas.push(lineas[i]); i++;
+    }
+    bloques.push({tipo:"paragraph", texto: parrafoLineas.join(" ")});
+  }
+  return bloques;
+}
+function tokenizeInline(texto){
+  var tokens = [];
+  var re = /(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+  var ultimoIndice = 0, m;
+  while ((m = re.exec(texto)) !== null){
+    if (m.index > ultimoIndice) tokens.push({tipo:"text", texto: texto.slice(ultimoIndice, m.index)});
+    if (m[1] !== undefined) tokens.push({tipo:"boldItalic", texto: m[2]});
+    else if (m[3] !== undefined) tokens.push({tipo:"bold", texto: m[4]});
+    else if (m[5] !== undefined) tokens.push({tipo:"bold", texto: m[6]});
+    else if (m[7] !== undefined) tokens.push({tipo:"italic", texto: m[8]});
+    else if (m[9] !== undefined) tokens.push({tipo:"italic", texto: m[10]});
+    else if (m[11] !== undefined) tokens.push({tipo:"code", texto: m[12]});
+    else if (m[13] !== undefined) tokens.push({tipo:"link", texto: m[14], url: m[15]});
+    ultimoIndice = re.lastIndex;
+  }
+  if (ultimoIndice < texto.length) tokens.push({tipo:"text", texto: texto.slice(ultimoIndice)});
+  return tokens;
+}
+async function validateDocxPackage(blob){
+  var buffer = await blob.arrayBuffer();
+  var bytes = new Uint8Array(buffer);
+  var firmaValida = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B; // "PK" (cabecera ZIP/OOXML)
+  if (!firmaValida || bytes.length < 500) throw new Error("El documento Word generado no es un paquete válido.");
+}
+async function downloadDoc(){
   if (!state.lastResult) return;
+  if (!window.docx){ toast("No se ha podido cargar la librería de generación de Word."); return; }
   var name = sanitizeFilename($("filename").value) + ".docx";
-  var bodyHtml = (window.DOMPurify && window.marked) ? DOMPurify.sanitize(marked.parse(state.lastResult.markdown)) : esc(state.lastResult.markdown);
-  var head = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>" +
-    "<head><meta charset='utf-8'><title>SearchLogMod</title>" +
-    "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
-    "<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;} h1{font-size:20pt} h2{font-size:16pt} h3{font-size:13pt} table{border-collapse:collapse} td,th{border:1px solid #999;padding:4px}</style>" +
-    "</head><body>";
-  var foot = "<p style='color:#888;font-size:9pt;margin-top:24pt'>Generado con IA · Revisado por el autor — Rafa Puerto, UMH — " + esc(nowStamp()) + "</p></body></html>";
-  triggerDownload(new Blob(["﻿", head + bodyHtml + foot], {type:"application/msword;charset=utf-8"}), name);
+  var Document = docx.Document, Packer = docx.Packer, Paragraph = docx.Paragraph, TextRun = docx.TextRun,
+      HeadingLevel = docx.HeadingLevel, ExternalHyperlink = docx.ExternalHyperlink,
+      Table = docx.Table, TableRow = docx.TableRow, TableCell = docx.TableCell, WidthType = docx.WidthType,
+      BorderStyle = docx.BorderStyle, Footer = docx.Footer, PageNumber = docx.PageNumber, AlignmentType = docx.AlignmentType;
+
+  var bloques = parseMarkdownBlocks(state.lastResult.markdown);
+  var nivelesEncabezado = {
+    1: HeadingLevel.HEADING_1, 2: HeadingLevel.HEADING_2, 3: HeadingLevel.HEADING_3,
+    4: HeadingLevel.HEADING_4, 5: HeadingLevel.HEADING_5, 6: HeadingLevel.HEADING_6
+  };
+  function construirHijosDeTexto(texto){
+    return tokenizeInline(texto).map(function(token){
+      if (token.tipo === "link") return new ExternalHyperlink({ link: token.url, children:[new TextRun({text: token.texto, color:"2D3B6B", underline:{}})] });
+      var opciones = { text: token.texto };
+      if (token.tipo === "bold") opciones.bold = true;
+      if (token.tipo === "italic") opciones.italics = true;
+      if (token.tipo === "boldItalic"){ opciones.bold = true; opciones.italics = true; }
+      if (token.tipo === "code"){ opciones.font = "Consolas"; opciones.size = 20; opciones.shading = {fill:"F0EEE4"}; }
+      return new TextRun(opciones);
+    });
+  }
+  var parrafosDocx = [];
+  bloques.forEach(function(bloque){
+    if (bloque.tipo === "heading"){
+      parrafosDocx.push(new Paragraph({ heading: nivelesEncabezado[bloque.nivel] || HeadingLevel.HEADING_4, children: construirHijosDeTexto(bloque.texto), spacing:{before:240, after:120} }));
+    } else if (bloque.tipo === "paragraph"){
+      parrafosDocx.push(new Paragraph({ children: construirHijosDeTexto(bloque.texto), spacing:{after:160} }));
+    } else if (bloque.tipo === "ul"){
+      bloque.items.forEach(function(item){ parrafosDocx.push(new Paragraph({ bullet:{level:0}, children: construirHijosDeTexto(item), spacing:{after:80} })); });
+    } else if (bloque.tipo === "ol"){
+      bloque.items.forEach(function(item){ parrafosDocx.push(new Paragraph({ numbering:{reference:"lista-numerada-searchlogmod", level:0}, children: construirHijosDeTexto(item.texto), spacing:{after:80} })); });
+    } else if (bloque.tipo === "blockquote"){
+      parrafosDocx.push(new Paragraph({ indent:{left:480}, border:{left:{color:"C97A2B", space:8, style:BorderStyle.SINGLE, size:12}}, children: construirHijosDeTexto(bloque.texto), spacing:{after:160} }));
+    } else if (bloque.tipo === "code"){
+      bloque.texto.split("\n").forEach(function(linea){
+        parrafosDocx.push(new Paragraph({ children:[new TextRun({text: linea || " ", font:"Consolas", size:18})], shading:{fill:"F0EEE4"}, spacing:{after:0} }));
+      });
+      parrafosDocx.push(new Paragraph({ text:"", spacing:{after:240} }));
+    } else if (bloque.tipo === "hr"){
+      parrafosDocx.push(new Paragraph({ border:{bottom:{color:"D8DDD0", space:1, style:BorderStyle.SINGLE, size:6}}, spacing:{after:200} }));
+    } else if (bloque.tipo === "table"){
+      var filaCabecera = new TableRow({ children: bloque.cabecera.map(function(texto){ return new TableCell({ shading:{fill:"E3E8DD"}, children:[new Paragraph({children:[new TextRun({text:texto, bold:true})]})] }); }) });
+      var filasDatos = bloque.filas.map(function(fila){ return new TableRow({ children: fila.map(function(texto){ return new TableCell({ children:[new Paragraph({children: construirHijosDeTexto(texto)})] }); }) }); });
+      parrafosDocx.push(new Table({ width:{size:100, type: WidthType.PERCENTAGE}, rows:[filaCabecera].concat(filasDatos) }));
+      parrafosDocx.push(new Paragraph({ text:"", spacing:{after:240} }));
+    }
+  });
+
+  var documento = new Document({
+    creator: "SearchLogMod",
+    title: "Informe generado por SearchLogMod",
+    description: "Documento generado automáticamente por la aplicación SearchLogMod.",
+    styles: { default: { document: { run: { font: "Calibri", size: 22 } } } },
+    numbering: { config: [{ reference:"lista-numerada-searchlogmod", levels:[{level:0, format:"decimal", text:"%1.", alignment:"start"}] }] },
+    sections: [{
+      properties: {},
+      footers: { default: new Footer({ children:[ new Paragraph({ alignment: AlignmentType.RIGHT, children:[ new TextRun({children:["Página ", PageNumber.CURRENT, " de ", PageNumber.TOTAL_PAGES], size:18, color:"6b7a63"}) ] }) ] }) },
+      children: parrafosDocx
+    }]
+  });
+
+  try{
+    var blob = await Packer.toBlob(documento);
+    await validateDocxPackage(blob);
+    triggerDownload(blob, name);
+  } catch(err){
+    toast("Error al generar el Word: " + err.message);
+  }
 }
 function copyResult(){
   if (!state.lastResult) return;
