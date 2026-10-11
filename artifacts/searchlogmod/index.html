@@ -1,0 +1,994 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SearchLogMod</title>
+<style>
+/* ===================================================================
+   SearchLogMod — ficha de consulta IA sobre logística en la moda
+   Layout: tira de manifiesto de envío en cabecera, selección por
+   "etiquetas de embalaje" (empresa / aspecto), panel de configuración
+   tipo ficha de carga, y resultado como informe impreso con un sello
+   de aduana (tokens / coste) en el margen.
+   ------------------------------------------------------------------- */
+:root{
+  --bg:#eef1ec; --surface:#ffffff; --surface-2:#e3e8dd; --surface-3:#d8ddd0;
+  --ink:#1c2320; --muted:#5b665f; --border:#c7cfc0;
+  --accent:#2d3b6b; --accent-ink:#ffffff; --accent-soft:#dde1f1;
+  --accent2:#c97a2b; --accent2-soft:#f3e2cc;
+  --ok:#3f7d53; --ok-soft:#dcefe1;
+  --warn:#b8511b; --warn-soft:#f6e2d3;
+  --danger:#a3302b; --danger-soft:#f5dcda;
+  --shadow: 0 1px 0 rgba(28,35,32,.06), 0 8px 24px -16px rgba(28,35,32,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151a; --surface:#171d22; --surface-2:#1e262c; --surface-3:#273039;
+    --ink:#e7ece6; --muted:#9aa6a0; --border:#2c353d;
+    --accent:#8695e8; --accent-ink:#0f1320; --accent-soft:#232c4c;
+    --accent2:#e2a35a; --accent2-soft:#3c2d18;
+    --ok:#74c48c; --ok-soft:#1b3024;
+    --warn:#e2925a; --warn-soft:#3a2416;
+    --danger:#e2847c; --danger-soft:#3a1d1b;
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 28px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10151a; --surface:#171d22; --surface-2:#1e262c; --surface-3:#273039;
+  --ink:#e7ece6; --muted:#9aa6a0; --border:#2c353d;
+  --accent:#8695e8; --accent-ink:#0f1320; --accent-soft:#232c4c;
+  --accent2:#e2a35a; --accent2-soft:#3c2d18;
+  --ok:#74c48c; --ok-soft:#1b3024;
+  --warn:#e2925a; --warn-soft:#3a2416;
+  --danger:#e2847c; --danger-soft:#3a1d1b;
+  --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 28px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+*{box-sizing:border-box}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Public Sans',-apple-system,'Segoe UI',sans-serif;
+  font-size:15px; line-height:1.5;
+  padding-inline:16px; padding-block:0;
+}
+h1,h2,h3{ font-family:'Fraunces',Georgia,serif; text-wrap:balance; margin:0 0 .4em; }
+.wrap{ max-width:980px; margin:0 auto; }
+a{ color:var(--accent); }
+code,pre,.mono{ font-family:'JetBrains Mono','SFMono-Regular',Consolas,monospace; }
+
+/* ---------- header / manifest strip ---------- */
+header.manifest{
+  margin-top:20px; background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:var(--shadow); overflow:hidden;
+}
+.manifest-top{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+  padding:22px 24px 16px; flex-wrap:wrap;
+}
+.manifest-top h1{ font-size:clamp(28px,4vw,38px); font-weight:600; letter-spacing:-.01em; }
+.manifest-top p{ margin:.25em 0 0; color:var(--muted); max-width:46ch; }
+.manifest-stamp{
+  font-family:'JetBrains Mono',monospace; font-size:11.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--accent2); border:1.5px solid var(--accent2);
+  border-radius:6px; padding:6px 10px; white-space:nowrap; transform:rotate(-2deg);
+}
+.manifest-bar{
+  display:flex; flex-wrap:wrap; gap:0; border-top:1px dashed var(--border);
+  background:var(--surface-2); font-family:'JetBrains Mono',monospace; font-size:12px;
+}
+.manifest-bar div{
+  padding:9px 16px; border-right:1px dashed var(--border); color:var(--muted);
+  display:flex; gap:6px; align-items:center;
+}
+.manifest-bar div:last-child{ border-right:none; }
+.manifest-bar b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
+.dot.ok{ background:var(--ok); }
+.dot.warn{ background:var(--warn); }
+
+/* ---------- generic panel ---------- */
+section.panel{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:var(--shadow); margin-top:16px; padding:20px 22px 22px;
+}
+.panel-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:4px; flex-wrap:wrap; }
+.panel-head h2{ font-size:18px; font-weight:600; }
+.panel-head .tag{
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted); border:1px solid var(--border);
+  border-radius:4px; padding:3px 7px;
+}
+.hint{ color:var(--muted); font-size:13.5px; margin:.2em 0 14px; }
+
+/* ---------- two-column grid for config + selection ---------- */
+.grid2{ display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:start; }
+@media (max-width:760px){ .grid2{ grid-template-columns:1fr; } }
+
+/* ---------- chip radiogroups (empresa / aspecto) ---------- */
+.chipfield{ margin-bottom:16px; }
+.chipfield > label.fieldlabel{
+  display:block; font-weight:600; font-size:13px; margin-bottom:8px;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+}
+.chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.chip{
+  font:inherit; font-size:13.5px; background:var(--surface-2); color:var(--ink);
+  border:1px solid var(--border); border-radius:999px; padding:7px 13px;
+  cursor:pointer; transition:background .12s,border-color .12s,color .12s;
+}
+.chip:hover{ border-color:var(--accent); }
+.chip[aria-checked="true"]{
+  background:var(--accent); color:var(--accent-ink); border-color:var(--accent);
+  font-weight:600;
+}
+.chip.other{ border-style:dashed; }
+input.otherbox{
+  margin-top:8px; width:100%; font:inherit; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink);
+}
+input.otherbox:focus, textarea:focus, select:focus, .chip:focus-visible, button:focus-visible{
+  outline:2px solid var(--accent); outline-offset:1px;
+}
+
+textarea{
+  width:100%; font:inherit; font-size:14px; padding:10px 12px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink);
+  resize:vertical; min-height:72px; line-height:1.5;
+}
+
+/* ---------- config form ---------- */
+.formrow{ display:flex; flex-direction:column; gap:5px; margin-bottom:13px; }
+.formrow label{ font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.formrow select, .formrow input[type=text], .formrow input[type=password], .formrow input[type=number]{
+  font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
+}
+.row2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.keyrow{ position:relative; }
+.keyrow button.eye{
+  position:absolute; right:6px; top:28px; background:none; border:none; cursor:pointer;
+  color:var(--muted); font-size:12px; padding:4px 7px;
+}
+.switchrow{ display:flex; align-items:center; gap:9px; margin:10px 0 4px; }
+.switchrow input{ width:16px; height:16px; }
+.switchrow label{ font-size:13.5px; color:var(--ink); }
+.providerpicker{ display:flex; gap:8px; margin-bottom:14px; }
+.providerpicker button{
+  flex:1; font:inherit; font-size:13px; font-weight:600; padding:9px 6px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface-2); color:var(--ink); cursor:pointer;
+}
+.providerpicker button[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+.modelspecs{
+  font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:7px;
+  padding:8px 10px; margin-top:-5px; margin-bottom:13px; display:flex; flex-wrap:wrap; gap:4px 14px;
+}
+.modelspecs b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+
+/* ---------- buttons ---------- */
+.btnrow{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+button.btn{
+  font:inherit; font-size:14px; font-weight:600; padding:11px 18px; border-radius:8px;
+  border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink);
+  cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+}
+button.btn:hover{ filter:brightness(1.07); }
+button.btn:disabled{ opacity:.5; cursor:not-allowed; filter:none; }
+button.btn.ghost{ background:transparent; color:var(--accent); }
+button.btn.amber{ background:var(--accent2); border-color:var(--accent2); color:#201405; }
+button.btn.small{ padding:7px 12px; font-size:12.5px; border-radius:6px; }
+button.btn.subtle{ background:var(--surface-2); color:var(--ink); border-color:var(--border); }
+
+/* ---------- promptbox (mejora) ---------- */
+.promptbox{
+  background:var(--surface-2); border:1px dashed var(--border); border-radius:8px; padding:12px;
+}
+.costline{
+  font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-top:9px;
+  display:flex; flex-wrap:wrap; gap:4px 16px;
+}
+.costline b{ color:var(--ink); }
+
+/* ---------- result / printed report ---------- */
+.reportshell{ position:relative; }
+.stamp{
+  position:absolute; top:-10px; right:14px; background:var(--surface);
+  border:1.5px solid var(--ok); color:var(--ok); border-radius:7px; padding:6px 10px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; text-transform:uppercase;
+  letter-spacing:.05em; transform:rotate(2deg); box-shadow:var(--shadow);
+}
+.stamp.truncated{ border-color:var(--warn); color:var(--warn); }
+.report{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:22px 24px; margin-top:10px; max-width:100%; overflow-wrap:anywhere;
+}
+.report :is(h1,h2,h3,h4){ margin-top:1.1em; }
+.report h1{ font-size:21px; } .report h2{ font-size:18px; } .report h3{ font-size:15.5px; }
+.report p{ margin:.7em 0; }
+.report ul,.report ol{ padding-left:1.3em; }
+.report li{ margin:.3em 0; }
+.report table{ border-collapse:collapse; width:100%; margin:1em 0; font-size:13.5px; display:block; overflow-x:auto; }
+.report th,.report td{ border:1px solid var(--border); padding:6px 9px; text-align:left; }
+.report th{ background:var(--surface-3); }
+.report code{ background:var(--surface-3); padding:1px 5px; border-radius:4px; font-size:.92em; }
+.report pre{ background:var(--surface-3); padding:10px 12px; border-radius:7px; overflow-x:auto; }
+.report pre code{ background:none; padding:0; }
+.report blockquote{ margin:.8em 0; padding:2px 14px; border-left:3px solid var(--accent2); color:var(--muted); }
+.empty-report{ color:var(--muted); font-size:14px; padding:26px 10px; text-align:center; }
+
+/* ---------- export ---------- */
+.exportgrid{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.exportgrid .formrow{ flex:1 1 220px; margin-bottom:0; }
+
+/* ---------- history ---------- */
+.histlist{ display:flex; flex-direction:column; gap:7px; max-height:280px; overflow-y:auto; }
+.histitem{
+  display:flex; justify-content:space-between; gap:10px; align-items:center;
+  border:1px solid var(--border); background:var(--surface-2); border-radius:7px;
+  padding:9px 12px; cursor:pointer; font-size:13px;
+}
+.histitem:hover{ border-color:var(--accent); }
+.histitem .meta{ color:var(--muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; }
+.histempty{ color:var(--muted); font-size:13.5px; }
+
+/* ---------- toast ---------- */
+#toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(10px);
+  background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:8px;
+  font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+  z-index:50; max-width:90vw; text-align:center;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---------- modal guide ---------- */
+.modal-backdrop{
+  position:fixed; inset:0; background:rgba(10,12,10,.5); display:flex; align-items:center;
+  justify-content:center; padding:20px; z-index:60;
+}
+.modal{
+  background:var(--surface); border:1px solid var(--border); border-radius:12px;
+  max-width:620px; width:100%; max-height:85vh; overflow-y:auto; padding:24px 26px;
+  box-shadow:var(--shadow);
+}
+.modal h2{ font-size:20px; }
+.modal h3{ font-size:15px; margin-top:1.1em; }
+.modal p, .modal li{ font-size:14px; color:var(--ink); line-height:1.6; }
+.modal ul{ padding-left:1.2em; }
+.modal .closebar{ text-align:right; margin-top:16px; }
+
+/* ---------- footer ---------- */
+footer{
+  margin:26px 0 36px; padding-top:16px; border-top:1px solid var(--border);
+  color:var(--muted); font-size:12.5px; line-height:1.7;
+}
+footer b{ color:var(--ink); }
+.legend{ font-style:italic; }
+
+.visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+</style>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+</head>
+<body
+  data-app-title="SearchLogMod"
+  data-app-description="Consulta asistida por IA (Anthropic, OpenAI o Gemini) sobre métodos y logística de empresas de la industria de la moda, con estimación de tokens y coste, y exportación a Markdown, texto plano y Word."
+  data-categories="ia,investigacion,docencia"
+  data-tags="Claude,OpenAI,Gemini,Logística,Moda,Cadena de suministro"
+  data-client-only="true"
+>
+
+<div class="wrap">
+
+  <header class="manifest">
+    <div class="manifest-top">
+      <div>
+        <h1>SearchLogMod</h1>
+        <p>Consulta asistida por IA sobre métodos y logística de empresas de la industria de la moda.</p>
+      </div>
+      <div class="manifest-stamp">Dossier logístico · moda</div>
+    </div>
+    <div class="manifest-bar">
+      <div><span class="dot" id="dotProvider"></span> Proveedor: <b id="barProvider">sin configurar</b></div>
+      <div>Modelo: <b id="barModel">—</b></div>
+      <div>Coste de la sesión: <b id="barCost">$0.0000</b></div>
+      <div><button class="btn small subtle" id="btnGuide" type="button" style="margin:-3px 0">Guía de uso</button></div>
+    </div>
+  </header>
+
+  <section class="panel">
+    <div class="panel-head"><h2>1 · Configuración del proveedor de IA</h2><span class="tag">obligatorio</span></div>
+    <p class="hint">La clave de API se usa solo en tu navegador para llamar directamente al proveedor elegido. No se envía a ningún otro sitio ni se guarda salvo que marques la casilla.</p>
+
+    <div class="providerpicker" id="providerPicker" role="radiogroup" aria-label="Proveedor de IA"></div>
+
+    <div class="grid2">
+      <div>
+        <div class="formrow">
+          <label for="selModel">Modelo</label>
+          <select id="selModel"></select>
+        </div>
+        <div class="formrow" id="customModelRow" hidden>
+          <label for="customModel">Identificador del modelo</label>
+          <input type="text" id="customModel" placeholder="p. ej. claude-opus-5-5">
+        </div>
+        <div class="modelspecs" id="modelSpecs"></div>
+
+        <div class="keyrow formrow">
+          <label for="apiKey">Clave de API</label>
+          <input type="password" id="apiKey" autocomplete="off" placeholder="Pega aquí tu clave">
+          <button type="button" class="eye" id="btnEye">mostrar</button>
+        </div>
+        <div class="switchrow">
+          <input type="checkbox" id="rememberKey">
+          <label for="rememberKey">Recordar clave en este navegador (localStorage)</label>
+        </div>
+      </div>
+      <div>
+        <div class="row2">
+          <div class="formrow">
+            <label for="maxTokens">Máx. tokens de salida</label>
+            <input type="number" id="maxTokens" min="64" step="64">
+          </div>
+          <div class="formrow">
+            <label for="temperature">Temperatura</label>
+            <input type="number" id="temperature" min="0" max="1" step="0.1" value="0.4">
+          </div>
+        </div>
+        <div class="switchrow">
+          <input type="checkbox" id="useImprove" checked>
+          <label for="useImprove">Mejorar la consulta con IA antes de ejecutarla (2 llamadas)</label>
+        </div>
+        <p class="hint" style="margin-top:10px">No hay ningún límite propio de temas, empresas o aspectos: puedes escribir cualquier empresa o aspecto logístico en los campos "otro".</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>2 · Selección de la consulta</h2><span class="tag">empresa + aspecto</span></div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" id="lblEmpresa">Empresa</label>
+      <div class="chips" id="chipsEmpresa" role="radiogroup" aria-labelledby="lblEmpresa"></div>
+      <input type="text" class="otherbox" id="otherEmpresa" placeholder="Escribe el nombre de la empresa…" hidden>
+    </div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" id="lblAspecto">Aspecto logístico</label>
+      <div class="chips" id="chipsAspecto" role="radiogroup" aria-labelledby="lblAspecto"></div>
+      <input type="text" class="otherbox" id="otherAspecto" placeholder="Describe el aspecto logístico…" hidden>
+    </div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" for="detalle">Detalle adicional (opcional)</label>
+      <textarea id="detalle" placeholder="Ej.: céntrate en el mercado europeo, compara con un competidor, enfócate en los últimos dos años…"></textarea>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn" id="btnPrepare" type="button">Generar consulta →</button>
+      <span class="hint" id="prepareHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelPrompt" hidden>
+    <div class="panel-head"><h2>3 · Consulta a ejecutar</h2><span class="tag" id="promptTag">mejorada por IA</span></div>
+    <p class="hint">Puedes editar el texto antes de ejecutar la consulta final.</p>
+    <div class="promptbox">
+      <textarea id="finalPrompt" style="min-height:110px"></textarea>
+      <div class="costline" id="prepareCostline"></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnRun" type="button">Ejecutar consulta ▶</button>
+      <button class="btn ghost small" id="btnRegeneratePrompt" type="button">Regenerar mejora</button>
+      <span class="hint" id="runHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelResult" hidden>
+    <div class="panel-head"><h2>4 · Informe</h2><span class="tag" id="resultTag">—</span></div>
+    <div class="reportshell">
+      <div class="stamp" id="resultStamp" hidden></div>
+      <div class="report" id="reportBody"><p class="empty-report">Aún no se ha ejecutado ninguna consulta.</p></div>
+    </div>
+    <div class="costline" id="resultCostline"></div>
+  </section>
+
+  <section class="panel" id="panelExport" hidden>
+    <div class="panel-head"><h2>5 · Exportar</h2></div>
+    <div class="exportgrid">
+      <div class="formrow">
+        <label for="filename">Nombre de fichero</label>
+        <input type="text" id="filename" placeholder="searchlogmod_empresa_aspecto">
+      </div>
+      <button class="btn amber" id="btnDlMd" type="button">⬇ Markdown (.md)</button>
+      <button class="btn subtle" id="btnDlTxt" type="button">⬇ Texto plano (.txt)</button>
+      <button class="btn subtle" id="btnDlDoc" type="button">⬇ Word (.docx)</button>
+      <button class="btn ghost" id="btnCopy" type="button">Copiar resultado</button>
+    </div>
+    <p class="hint" style="margin-top:10px">Cada descarga pide confirmación mediante el cuadro de guardado del navegador. "Word (.docx)" genera un documento HTML compatible que Microsoft Word abre y reformatea automáticamente al formato nativo (puede mostrar un aviso de compatibilidad al abrirlo).</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Historial de esta sesión</h2><button class="btn ghost small" id="btnClearHist" type="button">Vaciar historial</button></div>
+    <div class="histlist" id="histList"><p class="histempty">Sin consultas todavía.</p></div>
+  </section>
+
+  <footer>
+    <b>Rafa Puerto</b> · Departamento de Ingeniería de Sistemas y Automática · Universidad Miguel Hernández de Elche · r.puerto@umh.es<br>
+    <span class="legend">Generado con IA · Revisado por el autor</span><br>
+    Última modificación: <span id="lastMod"></span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<div class="modal-backdrop" id="guideBackdrop" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="guideTitle">
+    <h2 id="guideTitle">Guía de uso de SearchLogMod</h2>
+    <p>SearchLogMod es una herramienta de un único fichero HTML (sin servidor propio) para investigar, con ayuda de un modelo de IA, los métodos y la logística de empresas de la industria de la moda.</p>
+    <h3>1. Configura el proveedor</h3>
+    <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido.</p>
+    <h3>2. Elige empresa y aspecto</h3>
+    <p>Selecciona una empresa y un aspecto logístico de las listas, o usa "otra empresa" / "otro aspecto" para escribir cualquier cosa: no hay ninguna lista cerrada.</p>
+    <h3>3. Mejora y ejecuta</h3>
+    <p>Con la mejora activada, una primera llamada convierte tu selección en una consulta de investigación más precisa, que puedes editar a mano. Una segunda llamada genera el informe en Markdown.</p>
+    <h3>4. Tokens y coste</h3>
+    <p>Cuando el proveedor devuelve el recuento real de tokens se usa ese dato; si no, se muestra una estimación (caracteres ÷ 4). El coste se calcula con las tarifas públicas por millón de tokens cargadas en la app para cada modelo.</p>
+    <h3>5. Exportar</h3>
+    <p>Descarga el informe en Markdown, texto plano o Word (.docx), con el nombre de fichero que elijas, cada una con confirmación del navegador antes de guardarse.</p>
+    <p><b>Aviso:</b> las respuestas se basan en el conocimiento del modelo, sin navegación web, y pueden no reflejar cambios recientes en la empresa consultada.</p>
+    <div class="closebar"><button class="btn" id="btnCloseGuide" type="button">Cerrar</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ===================== datos de dominio ===================== */
+var EMPRESAS = [
+  "Inditex (Zara, Pull&Bear, Bershka, Massimo Dutti…)","H&M Group","Shein",
+  "Fast Retailing (Uniqlo)","Primark","Mango","Nike","Adidas","Puma","New Balance",
+  "LVMH (Louis Vuitton, Dior, Fendi…)","Kering (Gucci, Saint Laurent, Balenciaga…)",
+  "PVH Corp (Calvin Klein, Tommy Hilfiger)","VF Corporation (The North Face, Vans, Timberland)",
+  "Levi Strauss & Co.","ASOS","Zalando","Boohoo Group","Decathlon","Patagonia","C&A","Desigual"
+];
+
+var ASPECTOS = [
+  "Cadena de suministro global","Sourcing y fabricación / deslocalización",
+  "Gestión de inventario y stock","Almacenamiento y centros de distribución",
+  "Transporte y distribución internacional","Logística de última milla",
+  "Logística inversa y devoluciones","Omnicanalidad (online-offline)",
+  "Automatización y robotización de almacenes","Trazabilidad y tecnología (RFID, IoT, blockchain)",
+  "Previsión de demanda y planificación","Sostenibilidad y logística verde",
+  "Fast fashion y tiempos de producción (lead time)","Gestión de proveedores y relaciones B2B",
+  "Packaging, etiquetado y cumplimiento normativo"
+];
+
+/* precios en USD por millón de tokens (tarifa estándar, pueden variar) */
+var PROVIDERS = {
+  anthropic: {
+    label: "Anthropic (Claude)",
+    models: [
+      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}},
+      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}},
+      {id:"claude-sonnet-5", label:"Claude Sonnet 5", context:1000000, maxOutput:128000, price:{in:2, out:10}},
+      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  },
+  openai: {
+    label: "OpenAI (GPT)",
+    models: [
+      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}},
+      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}},
+      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  },
+  gemini: {
+    label: "Google (Gemini)",
+    models: [
+      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}},
+      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
+      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  }
+};
+
+/* ===================== estado ===================== */
+var state = {
+  provider: "anthropic",
+  empresa: null, empresaCustom: "",
+  aspecto: null, aspectoCustom: "",
+  improvedPrompt: "", basePrompt: "",
+  lastResult: null,      // {markdown, inputTokens, outputTokens, estimated, truncated, provider, model}
+  sessionCost: 0
+};
+
+/* ===================== utilidades ===================== */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function toast(msg){
+  var t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._h); toast._h = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+function estimateTokens(text){ return Math.max(1, Math.ceil((text||"").length / 4)); }
+function currentModel(){
+  var cfg = PROVIDERS[state.provider];
+  var id = $("selModel").value;
+  if (id === "custom") {
+    var customId = $("customModel").value.trim() || "custom";
+    return {id: customId, label: customId, context:null, maxOutput:null, price:null};
+  }
+  var found = null;
+  cfg.models.forEach(function(m){ if (m.id === id) found = m; });
+  return found;
+}
+function priceFor(model, inTok, outTok){
+  if (!model || !model.price) return null;
+  return (inTok/1e6)*model.price.in + (outTok/1e6)*model.price.out;
+}
+function fmtUSD(v){ if (v == null) return "sin datos de tarifa"; return "$" + v.toFixed(4); }
+function fmtNum(n){ return n.toLocaleString("es-ES"); }
+function nowStamp(){
+  return new Date().toLocaleString("es-ES", {dateStyle:"long", timeStyle:"short"});
+}
+function sanitizeFilename(s){
+  return (s||"searchlogmod").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,80) || "searchlogmod";
+}
+
+/* ===================== construcción de chips ===================== */
+function buildChips(containerId, otherInputId, items, stateKey, customKey, labelPrefix){
+  var box = $(containerId);
+  box.innerHTML = "";
+  items.forEach(function(item){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("role","radio");
+    b.setAttribute("aria-checked","false"); b.textContent = item;
+    b.addEventListener("click", function(){
+      state[stateKey] = item; state[customKey] = "";
+      $(otherInputId).hidden = true; $(otherInputId).value = "";
+      refreshChipSelection(containerId, b);
+    });
+    box.appendChild(b);
+  });
+  var other = document.createElement("button");
+  other.type = "button"; other.className = "chip other"; other.setAttribute("role","radio");
+  other.setAttribute("aria-checked","false"); other.textContent = labelPrefix;
+  other.addEventListener("click", function(){
+    state[stateKey] = "__other__";
+    $(otherInputId).hidden = false; $(otherInputId).focus();
+    refreshChipSelection(containerId, other);
+  });
+  box.appendChild(other);
+  $(otherInputId).addEventListener("input", function(){ state[customKey] = this.value; });
+}
+function refreshChipSelection(containerId, activeBtn){
+  var box = $(containerId);
+  Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-checked", c === activeBtn ? "true" : "false"); });
+}
+function selectedEmpresa(){ return state.empresa === "__other__" ? (state.empresaCustom.trim()||"(empresa sin especificar)") : state.empresa; }
+function selectedAspecto(){ return state.aspecto === "__other__" ? (state.aspectoCustom.trim()||"(aspecto sin especificar)") : state.aspecto; }
+
+/* ===================== UI: proveedor / modelo ===================== */
+function buildProviderPicker(){
+  var box = $("providerPicker"); box.innerHTML = "";
+  Object.keys(PROVIDERS).forEach(function(key){
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = PROVIDERS[key].label;
+    b.setAttribute("role","radio"); b.setAttribute("aria-pressed", key === state.provider ? "true":"false");
+    b.addEventListener("click", function(){
+      state.provider = key;
+      Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c===b ? "true":"false"); });
+      buildModelSelect(); updateBar();
+    });
+    box.appendChild(b);
+  });
+}
+function buildModelSelect(){
+  var sel = $("selModel"); sel.innerHTML = "";
+  PROVIDERS[state.provider].models.forEach(function(m){
+    var o = document.createElement("option"); o.value = m.id; o.textContent = m.label;
+    sel.appendChild(o);
+  });
+  sel.onchange = onModelChange;
+  onModelChange();
+}
+function onModelChange(){
+  var id = $("selModel").value;
+  $("customModelRow").hidden = (id !== "custom");
+  var model = currentModel();
+  var specs = $("modelSpecs");
+  if (model && model.price){
+    specs.innerHTML =
+      "Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
+      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b> &nbsp;·&nbsp; " +
+      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida";
+    if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
+  } else {
+    specs.innerHTML = "Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.";
+  }
+  updateBar();
+}
+function updateBar(){
+  var model = currentModel();
+  $("barProvider").textContent = PROVIDERS[state.provider].label;
+  $("barModel").textContent = model ? model.label : "—";
+  $("dotProvider").className = "dot " + ($("apiKey") && $("apiKey").value ? "ok" : "");
+  $("barCost").textContent = "$" + state.sessionCost.toFixed(4);
+}
+
+/* ===================== llamadas a proveedores ===================== */
+async function callAI(prompt, maxTokens){
+  var model = currentModel();
+  var apiKey = $("apiKey").value.trim();
+  var temperature = parseFloat($("temperature").value) || 0.4;
+  if (!apiKey) throw new Error("Falta la clave de API.");
+  if (!model || !model.id || model.id === "") throw new Error("Selecciona o indica un modelo válido.");
+
+  if (state.provider === "anthropic"){
+    var res = await fetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key": apiKey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body: JSON.stringify({ model: model.id, max_tokens: maxTokens, temperature: temperature,
+        messages:[{role:"user", content: prompt}] })
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || ("Error HTTP " + res.status));
+    var text = (data.content || []).map(function(c){ return c.text || ""; }).join("");
+    return {
+      text: text,
+      inputTokens: data.usage ? data.usage.input_tokens : null,
+      outputTokens: data.usage ? data.usage.output_tokens : null,
+      truncated: data.stop_reason === "max_tokens"
+    };
+  }
+
+  if (state.provider === "openai"){
+    var res2 = await fetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST",
+      headers:{ "content-type":"application/json", "authorization":"Bearer " + apiKey },
+      body: JSON.stringify({ model: model.id, max_completion_tokens: maxTokens, temperature: temperature,
+        messages:[{role:"user", content: prompt}] })
+    });
+    var data2 = await res2.json();
+    if (!res2.ok) throw new Error((data2 && data2.error && data2.error.message) || ("Error HTTP " + res2.status));
+    var choice = (data2.choices || [])[0] || {};
+    return {
+      text: (choice.message && choice.message.content) || "",
+      inputTokens: data2.usage ? data2.usage.prompt_tokens : null,
+      outputTokens: data2.usage ? data2.usage.completion_tokens : null,
+      truncated: choice.finish_reason === "length"
+    };
+  }
+
+  if (state.provider === "gemini"){
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model.id) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    var res3 = await fetch(url, {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify({ contents:[{parts:[{text: prompt}]}],
+        generationConfig:{ maxOutputTokens: maxTokens, temperature: temperature } })
+    });
+    var data3 = await res3.json();
+    if (!res3.ok) throw new Error((data3 && data3.error && data3.error.message) || ("Error HTTP " + res3.status));
+    var cand = (data3.candidates || [])[0] || {};
+    var parts = (cand.content && cand.content.parts) || [];
+    var text3 = parts.map(function(p){ return p.text || ""; }).join("");
+    var um = data3.usageMetadata || {};
+    return {
+      text: text3,
+      inputTokens: um.promptTokenCount != null ? um.promptTokenCount : null,
+      outputTokens: um.candidatesTokenCount != null ? um.candidatesTokenCount : null,
+      truncated: cand.finishReason === "MAX_TOKENS"
+    };
+  }
+
+  throw new Error("Proveedor no reconocido.");
+}
+
+/* ===================== paso 1: generar/mejorar consulta ===================== */
+function buildBasePrompt(){
+  var detalle = $("detalle").value.trim();
+  var lines = [
+    "Empresa objetivo: " + selectedEmpresa(),
+    "Aspecto logístico: " + selectedAspecto()
+  ];
+  if (detalle) lines.push("Detalle adicional del usuario: " + detalle);
+  return lines.join("\n");
+}
+function buildImprovePrompt(base){
+  return "Eres un analista experto en logística y cadena de suministro de la industria de la moda. " +
+    "A partir de estos datos, redacta en español una única consulta de investigación clara, específica y " +
+    "bien delimitada, que luego se usará para generar un informe. Devuelve solo la consulta mejorada, sin " +
+    "explicaciones ni texto adicional.\n\n" + base;
+}
+function buildReportPrompt(query){
+  return "Eres un analista de logística y cadena de suministro especializado en la industria de la moda. " +
+    "Responde en español y en formato Markdown, con una estructura clara (encabezados ##, listas y, si procede, " +
+    "una tabla). Elabora un informe detallado sobre la siguiente consulta, basándote en tu conocimiento:\n\n" +
+    query + "\n\nTermina con una nota breve indicando que la información puede no reflejar cambios muy recientes " +
+    "y conviene contrastarla con fuentes actualizadas de la propia empresa.";
+}
+
+async function onPrepare(){
+  if (!state.empresa) { toast("Elige una empresa."); return; }
+  if (!state.aspecto) { toast("Elige un aspecto logístico."); return; }
+  if (state.empresa === "__other__" && !state.empresaCustom.trim()){ toast("Escribe el nombre de la empresa."); return; }
+  if (state.aspecto === "__other__" && !state.aspectoCustom.trim()){ toast("Describe el aspecto logístico."); return; }
+
+  var base = buildBasePrompt();
+  state.basePrompt = base;
+  var btn = $("btnPrepare"); btn.disabled = true; $("prepareHint").textContent = "Preparando…";
+
+  try{
+    if ($("useImprove").checked){
+      var improvePrompt = buildImprovePrompt(base);
+      var estIn = estimateTokens(improvePrompt);
+      var r = await callAI(improvePrompt, 600);
+      state.improvedPrompt = r.text.trim();
+      var model = currentModel();
+      var inTok = r.inputTokens != null ? r.inputTokens : estIn;
+      var outTok = r.outputTokens != null ? r.outputTokens : estimateTokens(r.text);
+      var cost = priceFor(model, inTok, outTok);
+      if (cost != null) state.sessionCost += cost;
+      $("promptTag").textContent = "mejorada por IA";
+      $("prepareCostline").innerHTML =
+        "Mejora de consulta — tokens: <b>" + fmtNum(inTok) + "</b> entrada / <b>" + fmtNum(outTok) + "</b> salida" +
+        (r.inputTokens==null ? " (estimado)" : " (real)") +
+        " &nbsp;·&nbsp; coste: <b>" + fmtUSD(cost) + "</b>";
+    } else {
+      state.improvedPrompt = buildReportPrompt(base);
+      $("promptTag").textContent = "consulta directa (sin mejora)";
+      $("prepareCostline").innerHTML = "Mejora desactivada: se ejecutará la consulta base directamente.";
+    }
+    $("finalPrompt").value = state.improvedPrompt;
+    $("panelPrompt").hidden = false;
+    $("panelPrompt").scrollIntoView({behavior:"smooth", block:"start"});
+    $("prepareHint").textContent = "";
+  } catch(err){
+    toast("Error al preparar la consulta: " + err.message);
+    $("prepareHint").textContent = "";
+  } finally {
+    btn.disabled = false; updateBar();
+  }
+}
+
+async function onRegeneratePrompt(){
+  $("useImprove").checked = true;
+  await onPrepare();
+}
+
+/* ===================== paso 2: ejecutar consulta final ===================== */
+async function onRun(){
+  var query = $("finalPrompt").value.trim();
+  if (!query){ toast("No hay consulta que ejecutar."); return; }
+  var fullPrompt = $("useImprove").checked ? buildReportPrompt(query) : query;
+  var maxTokens = parseInt($("maxTokens").value, 10) || 2000;
+  var btn = $("btnRun"); btn.disabled = true; $("runHint").textContent = "Consultando al proveedor…";
+
+  $("panelResult").hidden = false;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Generando informe…</p>";
+  $("resultStamp").hidden = true;
+
+  try{
+    var r = await callAI(fullPrompt, maxTokens);
+    var model = currentModel();
+    var estIn = estimateTokens(fullPrompt);
+    var inTok = r.inputTokens != null ? r.inputTokens : estIn;
+    var outTok = r.outputTokens != null ? r.outputTokens : estimateTokens(r.text);
+    var cost = priceFor(model, inTok, outTok);
+    if (cost != null) state.sessionCost += cost;
+
+    state.lastResult = {
+      markdown: r.text, inputTokens: inTok, outputTokens: outTok,
+      estimated: (r.inputTokens == null), truncated: !!r.truncated,
+      provider: PROVIDERS[state.provider].label, model: model.label,
+      empresa: selectedEmpresa(), aspecto: selectedAspecto(), cost: cost, ts: Date.now()
+    };
+
+    renderResult();
+    $("panelExport").hidden = false;
+    $("filename").value = sanitizeFilename("searchlogmod_" + selectedEmpresa() + "_" + selectedAspecto());
+    saveHistory(state.lastResult);
+    $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
+  } catch(err){
+    $("reportBody").innerHTML = "<p class=\"empty-report\">Error: " + esc(err.message) + "</p>";
+    toast("Error al ejecutar la consulta: " + err.message);
+  } finally {
+    btn.disabled = false; $("runHint").textContent = ""; updateBar();
+  }
+}
+
+function renderResult(){
+  var r = state.lastResult;
+  var html = (window.DOMPurify && window.marked) ? DOMPurify.sanitize(marked.parse(r.markdown)) : esc(r.markdown);
+  $("reportBody").innerHTML = html || "<p class=\"empty-report\">Sin contenido.</p>";
+  $("resultTag").textContent = r.provider + " · " + r.model;
+  var stamp = $("resultStamp");
+  stamp.hidden = false;
+  if (r.truncated){
+    stamp.textContent = "⚠ truncado por límite de tokens"; stamp.className = "stamp truncated";
+  } else {
+    stamp.textContent = "informe completo"; stamp.className = "stamp";
+  }
+  $("resultCostline").innerHTML =
+    "Tokens entrada: <b>" + fmtNum(r.inputTokens) + "</b> &nbsp;·&nbsp; salida: <b>" + fmtNum(r.outputTokens) + "</b>" +
+    (r.estimated ? " (estimados, el proveedor no devolvió recuento)" : " (recuento real del proveedor)") +
+    " &nbsp;·&nbsp; coste de esta consulta: <b>" + fmtUSD(r.cost) + "</b>" +
+    " &nbsp;·&nbsp; coste acumulado de la sesión: <b>$" + state.sessionCost.toFixed(4) + "</b>";
+  updateBar();
+}
+
+/* ===================== exportación ===================== */
+function markdownToPlainText(md){
+  return md
+    .replace(/```[\s\S]*?```/g, function(m){ return m.replace(/```/g,""); })
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "• ")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+    .trim();
+}
+function triggerDownload(blob, filename){
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  toast("Descargando " + filename);
+}
+function downloadMd(){
+  if (!state.lastResult) return;
+  var name = sanitizeFilename($("filename").value) + ".md";
+  triggerDownload(new Blob([state.lastResult.markdown], {type:"text/markdown;charset=utf-8"}), name);
+}
+function downloadTxt(){
+  if (!state.lastResult) return;
+  var name = sanitizeFilename($("filename").value) + ".txt";
+  triggerDownload(new Blob([markdownToPlainText(state.lastResult.markdown)], {type:"text/plain;charset=utf-8"}), name);
+}
+function downloadDoc(){
+  if (!state.lastResult) return;
+  var name = sanitizeFilename($("filename").value) + ".docx";
+  var bodyHtml = (window.DOMPurify && window.marked) ? DOMPurify.sanitize(marked.parse(state.lastResult.markdown)) : esc(state.lastResult.markdown);
+  var head = "<html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>" +
+    "<head><meta charset='utf-8'><title>SearchLogMod</title>" +
+    "<!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->" +
+    "<style>body{font-family:Calibri,Arial,sans-serif;font-size:11pt;} h1{font-size:20pt} h2{font-size:16pt} h3{font-size:13pt} table{border-collapse:collapse} td,th{border:1px solid #999;padding:4px}</style>" +
+    "</head><body>";
+  var foot = "<p style='color:#888;font-size:9pt;margin-top:24pt'>Generado con IA · Revisado por el autor — Rafa Puerto, UMH — " + esc(nowStamp()) + "</p></body></html>";
+  triggerDownload(new Blob(["﻿", head + bodyHtml + foot], {type:"application/msword;charset=utf-8"}), name);
+}
+function copyResult(){
+  if (!state.lastResult) return;
+  var text = state.lastResult.markdown;
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast("Informe copiado."); })
+      .catch(function(){ fallbackCopy(text); });
+  } else { fallbackCopy(text); }
+}
+function fallbackCopy(text){
+  var ta = document.createElement("textarea"); ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); toast("Informe copiado."); } catch(e){ toast("No se pudo copiar."); }
+  document.body.removeChild(ta);
+}
+
+/* ===================== historial ===================== */
+var HIST_KEY = "searchlogmod_history_v1";
+function loadHistory(){
+  try{ return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch(e){ return []; }
+}
+function saveHistory(entry){
+  try{
+    var h = loadHistory();
+    h.unshift({
+      ts: entry.ts, empresa: entry.empresa, aspecto: entry.aspecto, provider: entry.provider, model: entry.model,
+      inputTokens: entry.inputTokens, outputTokens: entry.outputTokens, cost: entry.cost, markdown: entry.markdown
+    });
+    h = h.slice(0, 30);
+    localStorage.setItem(HIST_KEY, JSON.stringify(h));
+    renderHistory();
+  } catch(e){ /* almacenamiento no disponible: se ignora */ }
+}
+function renderHistory(){
+  var h = loadHistory();
+  var box = $("histList");
+  if (!h.length){ box.innerHTML = "<p class=\"histempty\">Sin consultas todavía.</p>"; return; }
+  box.innerHTML = "";
+  h.forEach(function(item, idx){
+    var row = document.createElement("div"); row.className = "histitem";
+    var left = document.createElement("div");
+    left.innerHTML = "<div>" + esc(item.empresa) + " — " + esc(item.aspecto) + "</div>" +
+      "<div class=\"meta\">" + esc(item.provider) + " · " + esc(item.model) + " · " + new Date(item.ts).toLocaleString("es-ES") + "</div>";
+    var right = document.createElement("div"); right.className = "meta";
+    right.textContent = fmtUSD(item.cost);
+    row.appendChild(left); row.appendChild(right);
+    row.addEventListener("click", function(){
+      state.lastResult = item;
+      $("panelResult").hidden = false; $("panelExport").hidden = false;
+      renderResult();
+      $("filename").value = sanitizeFilename("searchlogmod_" + item.empresa + "_" + item.aspecto);
+      $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
+    });
+    box.appendChild(row);
+  });
+}
+function clearHistory(){
+  try{ localStorage.removeItem(HIST_KEY); } catch(e){}
+  renderHistory(); toast("Historial vaciado.");
+}
+
+/* ===================== clave recordada ===================== */
+var KEY_STORE = "searchlogmod_key_";
+function loadRememberedKey(){
+  try{
+    var v = localStorage.getItem(KEY_STORE + state.provider);
+    if (v){ $("apiKey").value = v; $("rememberKey").checked = true; }
+    else { $("apiKey").value = ""; $("rememberKey").checked = false; }
+  } catch(e){}
+}
+function maybeStoreKey(){
+  try{
+    if ($("rememberKey").checked) localStorage.setItem(KEY_STORE + state.provider, $("apiKey").value);
+    else localStorage.removeItem(KEY_STORE + state.provider);
+  } catch(e){}
+}
+
+/* ===================== wiring ===================== */
+function init(){
+  buildProviderPicker();
+  buildModelSelect();
+  buildChips("chipsEmpresa", "otherEmpresa", EMPRESAS, "empresa", "empresaCustom", "Otra empresa…");
+  buildChips("chipsAspecto", "otherAspecto", ASPECTOS, "aspecto", "aspectoCustom", "Otro aspecto…");
+  loadRememberedKey();
+  renderHistory();
+  $("lastMod").textContent = nowStamp();
+
+  $("maxTokens").addEventListener("input", function(){ this.dataset.userEdited = "1"; });
+  $("apiKey").addEventListener("input", function(){ updateBar(); });
+  $("apiKey").addEventListener("change", maybeStoreKey);
+  $("rememberKey").addEventListener("change", maybeStoreKey);
+  $("btnEye").addEventListener("click", function(){
+    var inp = $("apiKey");
+    if (inp.type === "password"){ inp.type = "text"; this.textContent = "ocultar"; }
+    else { inp.type = "password"; this.textContent = "mostrar"; }
+  });
+
+  $("btnPrepare").addEventListener("click", onPrepare);
+  $("btnRegeneratePrompt").addEventListener("click", onRegeneratePrompt);
+  $("btnRun").addEventListener("click", onRun);
+  $("btnDlMd").addEventListener("click", downloadMd);
+  $("btnDlTxt").addEventListener("click", downloadTxt);
+  $("btnDlDoc").addEventListener("click", downloadDoc);
+  $("btnCopy").addEventListener("click", copyResult);
+  $("btnClearHist").addEventListener("click", clearHistory);
+
+  $("btnGuide").addEventListener("click", function(){ $("guideBackdrop").hidden = false; });
+  $("btnCloseGuide").addEventListener("click", function(){ $("guideBackdrop").hidden = true; });
+  $("guideBackdrop").addEventListener("click", function(e){ if (e.target === this) this.hidden = true; });
+
+  updateBar();
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+
+})();
+</script>
+</body>
+</html>
