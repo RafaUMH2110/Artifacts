@@ -236,11 +236,13 @@ button.btn.subtle{ background:var(--surface-2); color:var(--ink); border-color:v
 /* ---------- history ---------- */
 .histlist{ display:flex; flex-direction:column; gap:7px; max-height:280px; overflow-y:auto; }
 .histitem{
-  display:flex; justify-content:space-between; gap:10px; align-items:center;
+  display:flex; gap:10px; align-items:center;
   border:1px solid var(--border); background:var(--surface-2); border-radius:7px;
-  padding:9px 12px; cursor:pointer; font-size:13px;
+  padding:9px 12px; font-size:13px;
 }
 .histitem:hover{ border-color:var(--accent); }
+.histitem input[type=checkbox]{ width:16px; height:16px; flex-shrink:0; cursor:pointer; }
+.histitem .histleft{ flex:1; min-width:0; cursor:pointer; }
 .histitem .meta{ color:var(--muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; }
 .histempty{ color:var(--muted); font-size:13.5px; }
 
@@ -366,7 +368,12 @@ footer b{ color:var(--ink); }
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>2 · Selección de la consulta</h2><span class="tag">empresa + aspecto</span></div>
+    <div class="panel-head"><h2>2 · Selección de la consulta</h2>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <span class="tag">empresa + aspecto</span>
+        <button class="btn ghost small" id="btnClearAll" type="button">Borrar todo</button>
+      </div>
+    </div>
 
     <div class="chipfield">
       <label class="fieldlabel" id="lblEmpresa">Empresa</label>
@@ -383,6 +390,9 @@ footer b{ color:var(--ink); }
     <div class="chipfield">
       <label class="fieldlabel" for="detalle">Detalle adicional (opcional)</label>
       <textarea id="detalle" placeholder="Ej.: céntrate en el mercado europeo, compara con un competidor, enfócate en los últimos dos años…"></textarea>
+      <div class="btnrow" style="margin-top:6px">
+        <button class="btn ghost small" id="btnClearDetalle" type="button">Borrar</button>
+      </div>
     </div>
 
     <div class="btnrow">
@@ -401,6 +411,7 @@ footer b{ color:var(--ink); }
     <div class="btnrow">
       <button class="btn" id="btnRun" type="button">Ejecutar consulta ▶</button>
       <button class="btn ghost small" id="btnRegeneratePrompt" type="button">Regenerar mejora</button>
+      <button class="btn ghost small" id="btnClearPrompt" type="button">Borrar</button>
       <span class="hint" id="runHint" style="margin:0"></span>
     </div>
   </section>
@@ -414,6 +425,7 @@ footer b{ color:var(--ink); }
     <div class="costline" id="resultCostline"></div>
     <div class="btnrow">
       <button class="btn subtle small" id="btnSaveHistory" type="button">💾 Guardar en historial</button>
+      <button class="btn ghost small" id="btnClearReport" type="button">Borrar</button>
       <span class="hint" id="saveHistHint" style="margin:0"></span>
     </div>
   </section>
@@ -434,7 +446,12 @@ footer b{ color:var(--ink); }
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>Historial de esta sesión</h2><button class="btn ghost small" id="btnClearHist" type="button">Vaciar historial</button></div>
+    <div class="panel-head"><h2>Historial de esta sesión</h2>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn danger small" id="btnDeleteSelectedHist" type="button">Eliminar seleccionados</button>
+        <button class="btn ghost small" id="btnClearHist" type="button">Vaciar historial</button>
+      </div>
+    </div>
     <div class="histlist" id="histList"><p class="histempty">Sin consultas todavía.</p></div>
   </section>
 
@@ -1074,10 +1091,13 @@ var HIST_KEY = "searchlogmod_history_v1";
 function loadHistory(){
   try{ return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch(e){ return []; }
 }
+var selectedHistIds = {};
+function histId(item){ return item.id || String(item.ts); }
 function saveHistory(entry){
   try{
     var h = loadHistory();
     h.unshift({
+      id: String(entry.ts) + "_" + Math.random().toString(36).slice(2, 8),
       ts: entry.ts, empresa: entry.empresa, aspecto: entry.aspecto, provider: entry.provider, model: entry.model,
       inputTokens: entry.inputTokens, outputTokens: entry.outputTokens, cost: entry.cost, markdown: entry.markdown
     });
@@ -1091,26 +1111,49 @@ function renderHistory(){
   var box = $("histList");
   if (!h.length){ box.innerHTML = "<p class=\"histempty\">Sin consultas todavía.</p>"; return; }
   box.innerHTML = "";
-  h.forEach(function(item, idx){
+  h.forEach(function(item){
+    var id = histId(item);
     var row = document.createElement("div"); row.className = "histitem";
-    var left = document.createElement("div");
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!selectedHistIds[id];
+    cb.addEventListener("click", function(e){ e.stopPropagation(); });
+    cb.addEventListener("change", function(){
+      if (cb.checked) selectedHistIds[id] = true; else delete selectedHistIds[id];
+    });
+
+    var left = document.createElement("div"); left.className = "histleft";
     left.innerHTML = "<div>" + esc(item.empresa) + " — " + esc(item.aspecto) + "</div>" +
       "<div class=\"meta\">" + esc(item.provider) + " · " + esc(item.model) + " · " + new Date(item.ts).toLocaleString("es-ES") + "</div>";
-    var right = document.createElement("div"); right.className = "meta";
-    right.textContent = fmtUSD(item.cost);
-    row.appendChild(left); row.appendChild(right);
-    row.addEventListener("click", function(){
+    left.addEventListener("click", function(){
       state.lastResult = item;
       $("panelResult").hidden = false; $("panelExport").hidden = false;
       renderResult();
       $("filename").value = sanitizeFilename("searchlogmod_" + item.empresa + "_" + item.aspecto);
       $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
     });
+
+    var right = document.createElement("div"); right.className = "meta";
+    right.textContent = fmtUSD(item.cost);
+
+    row.appendChild(cb); row.appendChild(left); row.appendChild(right);
     box.appendChild(row);
   });
 }
+function deleteSelectedHistory(){
+  var ids = Object.keys(selectedHistIds);
+  if (!ids.length){ toast("No has seleccionado ningún elemento del historial."); return; }
+  try{
+    var h = loadHistory().filter(function(item){ return !selectedHistIds[histId(item)]; });
+    localStorage.setItem(HIST_KEY, JSON.stringify(h));
+  } catch(e){}
+  selectedHistIds = {};
+  renderHistory();
+  toast(ids.length === 1 ? "Elemento eliminado del historial." : ids.length + " elementos eliminados del historial.");
+}
 function clearHistory(){
   try{ localStorage.removeItem(HIST_KEY); } catch(e){}
+  selectedHistIds = {};
   renderHistory(); toast("Historial vaciado.");
 }
 function onSaveHistory(){
@@ -1118,6 +1161,40 @@ function onSaveHistory(){
   saveHistory(state.lastResult);
   $("saveHistHint").textContent = "Guardado en el historial.";
   toast("Guardado en el historial.");
+}
+
+/* ===================== borrar campos ===================== */
+function clearDetalle(){
+  $("detalle").value = "";
+  toast("Detalle adicional borrado.");
+}
+function clearFinalPrompt(){
+  $("finalPrompt").value = "";
+  toast("Consulta borrada.");
+}
+function clearReport(){
+  state.lastResult = null;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Aún no se ha ejecutado ninguna consulta.</p>";
+  $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML = "";
+  $("saveHistHint").textContent = "";
+  $("panelExport").hidden = true;
+  updateBar();
+  toast("Informe borrado.");
+}
+function clearAllFields(){
+  $("detalle").value = "";
+  $("finalPrompt").value = "";
+  $("panelPrompt").hidden = true;
+  state.lastResult = null;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Aún no se ha ejecutado ninguna consulta.</p>";
+  $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML = "";
+  $("saveHistHint").textContent = "";
+  $("panelExport").hidden = true;
+  $("panelResult").hidden = true;
+  updateBar();
+  toast("Se ha borrado todo el contenido.");
 }
 
 /* ===================== clave recordada ===================== */
@@ -1190,7 +1267,12 @@ function init(){
   $("btnDlDoc").addEventListener("click", downloadDoc);
   $("btnCopy").addEventListener("click", copyResult);
   $("btnClearHist").addEventListener("click", clearHistory);
+  $("btnDeleteSelectedHist").addEventListener("click", deleteSelectedHistory);
   $("btnSaveHistory").addEventListener("click", onSaveHistory);
+  $("btnClearDetalle").addEventListener("click", clearDetalle);
+  $("btnClearPrompt").addEventListener("click", clearFinalPrompt);
+  $("btnClearReport").addEventListener("click", clearReport);
+  $("btnClearAll").addEventListener("click", clearAllFields);
 
   updateBar();
 }
