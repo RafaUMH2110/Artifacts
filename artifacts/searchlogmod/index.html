@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SearchLogMod</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4f1e6'/%3E%3Crect x='10' y='10' width='44' height='44' rx='9' fill='%232d3b6b'/%3E%3Ctext x='32' y='46' font-family='Arial, Helvetica, sans-serif' font-weight='800' font-size='34' text-anchor='middle' fill='%23f4f1e6'%3ES%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232d3b6b'/%3E%3Cpath d='M32 9 L55 22 L55 45 L32 58 L9 45 L9 22 Z' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M32 9 L32 33.5 M9 22 L32 33.5 M55 22 L32 33.5' stroke='%23ffffff' stroke-width='3.5' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
 <style>
 /* ===================================================================
    SearchLogMod — ficha de consulta IA sobre logística en la moda
@@ -149,13 +149,16 @@ textarea{
   font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
   border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
 }
-.keyrow{ position:relative; }
-.keyrow button.keybtn{
-  position:absolute; right:6px; top:24px; cursor:pointer;
-  color:var(--ink); font-size:11.5px; font-weight:600; padding:5px 10px;
-  border:1px solid var(--border); border-radius:6px; background:var(--surface-2);
+.keybox{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:13px; }
+.keybox label{ font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); display:block; margin-bottom:6px; }
+.keybox input[type=password], .keybox input[type=text]{
+  font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
 }
-.keyrow button.keybtn:hover{ background:var(--surface-3); }
+.keybox .btnrow{ margin-top:9px; }
+.keybox .keystatus{ margin-top:9px; margin-bottom:0; font-size:12.5px; }
+.keybox .keystatus.saved{ color:var(--ok); }
+button.btn.danger{ background:var(--warn-soft); border-color:var(--warn); color:var(--warn); }
 .switchrow{ display:flex; align-items:center; gap:9px; margin:10px 0 4px; }
 .switchrow input{ width:16px; height:16px; }
 .switchrow label{ font-size:13.5px; color:var(--ink); }
@@ -305,7 +308,7 @@ footer b{ color:var(--ink); }
     <div class="guide-body">
       <p>SearchLogMod es una herramienta de un único fichero HTML (sin servidor propio) para investigar, con ayuda de un modelo de IA, los métodos y la logística de empresas de la industria de la moda.</p>
       <h3>1. Configura el proveedor</h3>
-      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido; el botón "Borrar" la elimina del campo y, si estaba marcada "recordar", también del navegador.</p>
+      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido. Pulsa "Guardar clave" para recordarla en este navegador (se guarda por separado para cada proveedor), "Mostrar"/"Ocultar" para verla, y "Borrar clave" para eliminarla del campo y del navegador.</p>
       <p><b>OpenAI:</b> su API no admite llamadas directas desde el navegador (CORS). Si eliges un modelo GPT, lo más probable es que la consulta falle salvo que uses tu propio servidor intermedio; para que funcione desde aquí usa Anthropic o Gemini.</p>
       <h3>2. Elige empresa y aspecto</h3>
       <p>Selecciona una empresa y un aspecto logístico de las listas, o usa "otra empresa" / "otro aspecto" para escribir cualquier cosa: no hay ninguna lista cerrada.</p>
@@ -337,14 +340,15 @@ footer b{ color:var(--ink); }
         </div>
         <div class="modelspecs" id="modelSpecs"></div>
 
-        <div class="keyrow formrow">
-          <label for="apiKey">Clave de API</label>
+        <div class="keybox">
+          <label for="apiKey">Clave de API del proveedor activo</label>
           <input type="password" id="apiKey" autocomplete="off" placeholder="Pega aquí tu clave">
-          <button type="button" class="keybtn" id="btnClearKey">Borrar</button>
-        </div>
-        <div class="switchrow">
-          <input type="checkbox" id="rememberKey">
-          <label for="rememberKey">Recordar clave en este navegador (localStorage)</label>
+          <div class="btnrow">
+            <button type="button" class="btn small" id="btnSaveKey">Guardar clave</button>
+            <button type="button" class="btn subtle small" id="btnToggleKey">Mostrar</button>
+            <button type="button" class="btn danger small" id="btnClearKey">Borrar clave</button>
+          </div>
+          <p class="keystatus hint" id="keyStatus"></p>
         </div>
       </div>
       <div>
@@ -590,7 +594,7 @@ function buildProviderPicker(){
     b.addEventListener("click", function(){
       state.provider = key;
       Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c===b ? "true":"false"); });
-      buildModelSelect(); updateBar();
+      buildModelSelect(); loadRememberedKey(); updateBar();
     });
     box.appendChild(b);
   });
@@ -619,7 +623,7 @@ function onModelChange(){
       "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b></div>");
     lines.push(
       "<div>Precio: <b>$" + model.price.in + "</b>/MTok entrada &nbsp;·&nbsp; <b>$" + model.price.out + "</b>/MTok salida</div>");
-    if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
+    if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4096, model.maxOutput);
   } else {
     lines.push("<div>Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.</div>");
   }
@@ -632,6 +636,10 @@ function updateBar(){
   $("barModel").textContent = model ? model.label : "—";
   $("dotProvider").className = "dot " + ($("apiKey") && $("apiKey").value ? "ok" : "");
   $("barCost").textContent = "$" + state.sessionCost.toFixed(4);
+  /* Si se cambia de proveedor/modelo durante la sesión, la etiqueta de la
+     sección "4 · Informe" se mantiene sincronizada con la selección actual,
+     aunque el informe mostrado se generara con un modelo distinto. */
+  $("resultTag").textContent = PROVIDERS[state.provider].label + " · " + (model ? model.label : "—");
 }
 
 /* ===================== llamadas a proveedores ===================== */
@@ -797,7 +805,7 @@ async function onRun(){
   var query = $("finalPrompt").value.trim();
   if (!query){ toast("No hay consulta que ejecutar."); return; }
   var fullPrompt = $("useImprove").checked ? buildReportPrompt(query) : query;
-  var maxTokens = parseInt($("maxTokens").value, 10) || 2000;
+  var maxTokens = parseInt($("maxTokens").value, 10) || 4096;
   var btn = $("btnRun"); btn.disabled = true; $("runHint").textContent = "Consultando al proveedor…";
 
   $("panelResult").hidden = false;
@@ -1114,23 +1122,45 @@ function onSaveHistory(){
 
 /* ===================== clave recordada ===================== */
 var KEY_STORE = "searchlogmod_key_";
+function hasStoredKey(){
+  try{ return !!localStorage.getItem(KEY_STORE + state.provider); } catch(e){ return false; }
+}
+function updateKeyStatus(){
+  var el = $("keyStatus");
+  if (hasStoredKey()){
+    el.textContent = "✅ Hay una clave guardada para este proveedor.";
+    el.className = "keystatus hint saved";
+  } else {
+    el.textContent = "Sin guardar: esta clave solo se usará en esta sesión salvo que pulses \"Guardar clave\".";
+    el.className = "keystatus hint";
+  }
+}
 function loadRememberedKey(){
+  var input = $("apiKey");
+  input.type = "password"; $("btnToggleKey").textContent = "Mostrar";
   try{
     var v = localStorage.getItem(KEY_STORE + state.provider);
-    if (v){ $("apiKey").value = v; $("rememberKey").checked = true; }
-    else { $("apiKey").value = ""; $("rememberKey").checked = false; }
-  } catch(e){}
+    input.value = v || "";
+  } catch(e){ input.value = ""; }
+  updateKeyStatus();
 }
-function maybeStoreKey(){
-  try{
-    if ($("rememberKey").checked) localStorage.setItem(KEY_STORE + state.provider, $("apiKey").value);
-    else localStorage.removeItem(KEY_STORE + state.provider);
-  } catch(e){}
+function saveApiKey(){
+  var v = $("apiKey").value;
+  if (!v){ toast("No hay ninguna clave que guardar."); return; }
+  try{ localStorage.setItem(KEY_STORE + state.provider, v); } catch(e){}
+  updateKeyStatus();
+  toast("Clave guardada.");
+}
+function toggleApiKeyVisibility(){
+  var input = $("apiKey");
+  var btn = $("btnToggleKey");
+  if (input.type === "password"){ input.type = "text"; btn.textContent = "Ocultar"; }
+  else { input.type = "password"; btn.textContent = "Mostrar"; }
 }
 function clearApiKey(){
   $("apiKey").value = "";
-  $("rememberKey").checked = false;
   try{ localStorage.removeItem(KEY_STORE + state.provider); } catch(e){}
+  updateKeyStatus();
   updateBar();
   toast("Clave eliminada.");
 }
@@ -1148,8 +1178,8 @@ function init(){
   $("maxTokens").addEventListener("input", function(){ this.dataset.userEdited = "1"; });
   $("customModel").addEventListener("input", updateBar);
   $("apiKey").addEventListener("input", function(){ updateBar(); });
-  $("apiKey").addEventListener("change", maybeStoreKey);
-  $("rememberKey").addEventListener("change", maybeStoreKey);
+  $("btnSaveKey").addEventListener("click", saveApiKey);
+  $("btnToggleKey").addEventListener("click", toggleApiKeyVisibility);
   $("btnClearKey").addEventListener("click", clearApiKey);
 
   $("btnPrepare").addEventListener("click", onPrepare);
