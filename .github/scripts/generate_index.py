@@ -99,8 +99,8 @@ def put_file(owner, repo, path, branch, content_bytes, message, token):
 def main():
     token = os.environ.get("DEST_TOKEN")
     if not token:
-        print("ERROR: falta la variable de entorno DEST_TOKEN", file=sys.stderr)
-        sys.exit(1)
+        print("WARN: falta DEST_TOKEN; se omite la sincronización del portal.", file=sys.stderr)
+        return
 
     pages_owner_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if "/" not in pages_owner_repo:
@@ -124,8 +124,15 @@ def main():
         contact_name=CONTACT_NAME, contact_email=CONTACT_EMAIL,
     ).encode("utf-8")
 
-    put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
-             "Update artifacts portal (auto-sync)", token)
+    try:
+        put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
+                 "Update artifacts portal (auto-sync)", token)
+    except RuntimeError as exc:
+        err = str(exc)
+        if "HTTP 401" in err or "HTTP 403" in err:
+            print(f"WARN: sin permisos para sincronizar el portal ({err}).", file=sys.stderr)
+            return
+        raise
     print(f"Portal actualizado con {len(catalog)} apps -> {DEST_OWNER}/{DEST_REPO}:{DEST_PATH}")
 
 
