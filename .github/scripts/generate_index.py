@@ -21,6 +21,10 @@ CONTACT_NAME = "Rafael Puerto"
 CONTACT_EMAIL = "r.puerto@umh.es"
 
 
+class DestinationAuthError(RuntimeError):
+    pass
+
+
 def api_request(url, token, method="GET", payload=None):
     headers = {
         "Authorization": f"Bearer {token}",
@@ -82,6 +86,8 @@ def get_existing_sha(owner, repo, path, branch, token):
         return body["sha"]
     if status == 404:
         return None
+    if status in (401, 403):
+        raise DestinationAuthError(f"Error comprobando destino (HTTP {status}): {body.get('message', body)}")
     raise RuntimeError(f"Error comprobando destino (HTTP {status}): {body.get('message', body)}")
 
 
@@ -91,6 +97,8 @@ def put_file(owner, repo, path, branch, content_bytes, message, token):
     if sha:
         payload["sha"] = sha
     status, body = api_request(f"{API_ROOT}/repos/{owner}/{repo}/contents/{path}", token, method="PUT", payload=payload)
+    if status in (401, 403):
+        raise DestinationAuthError(f"Fallo al subir el portal (HTTP {status}): {body.get('message', body)}")
     if status not in (200, 201):
         raise RuntimeError(f"Fallo al subir el portal (HTTP {status}): {body.get('message', body)}")
     return body
@@ -99,8 +107,8 @@ def put_file(owner, repo, path, branch, content_bytes, message, token):
 def main():
     token = os.environ.get("DEST_TOKEN")
     if not token:
-        print("ERROR: falta la variable de entorno DEST_TOKEN", file=sys.stderr)
-        sys.exit(1)
+        print("No hay DEST_TOKEN; se omite la sincronización del portal.")
+        return
 
     pages_owner_repo = os.environ.get("GITHUB_REPOSITORY", "")
     if "/" not in pages_owner_repo:
@@ -124,8 +132,12 @@ def main():
         contact_name=CONTACT_NAME, contact_email=CONTACT_EMAIL,
     ).encode("utf-8")
 
-    put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
-             "Update artifacts portal (auto-sync)", token)
+    try:
+        put_file(DEST_OWNER, DEST_REPO, DEST_PATH, DEST_BRANCH, html_out,
+                 "Update artifacts portal (auto-sync)", token)
+    except DestinationAuthError as err:
+        print(f"{err}; se omite la sincronización del portal.")
+        return
     print(f"Portal actualizado con {len(catalog)} apps -> {DEST_OWNER}/{DEST_REPO}:{DEST_PATH}")
 
 
