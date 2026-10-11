@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SearchLogMod</title>
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23c97a2b'/%3E%3Cpath d='M32 6 L58 20 L32 34 L6 20 Z' fill='%234a5fa0'/%3E%3Cpath d='M6 20 L32 34 L32 58 L6 46 Z' fill='%23131a30'/%3E%3Cpath d='M58 20 L58 46 L32 58 L32 34 Z' fill='%23232f57'/%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23f4f1e6'/%3E%3Crect x='10' y='10' width='44' height='44' rx='9' fill='%232d3b6b'/%3E%3Ctext x='32' y='46' font-family='Arial, Helvetica, sans-serif' font-weight='800' font-size='34' text-anchor='middle' fill='%23f4f1e6'%3ES%3C/text%3E%3C/svg%3E">
 <style>
 /* ===================================================================
    SearchLogMod — ficha de consulta IA sobre logística en la moda
@@ -168,9 +168,11 @@ textarea{
 .modelspecs{
   font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);
   background:var(--surface-2); border:1px solid var(--border); border-radius:7px;
-  padding:8px 10px; margin-top:-5px; margin-bottom:13px; display:flex; flex-wrap:wrap; gap:4px 14px;
+  padding:9px 11px; margin-top:-5px; margin-bottom:13px;
 }
 .modelspecs b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+.modelspecs div{ line-height:1.6; margin:3px 0; }
+.modelspecs .warnline{ line-height:1.45; margin-bottom:7px; }
 
 /* ---------- buttons ---------- */
 .btnrow{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
@@ -609,19 +611,19 @@ function onModelChange(){
   var specs = $("modelSpecs");
   var lines = [];
   if (state.provider === "openai"){
-    lines.push("<span style=\"color:var(--warn)\">⚠ OpenAI no admite llamadas directas desde el navegador (CORS): esta opción puede fallar salvo que uses tu propio servidor intermedio.</span>");
+    lines.push("<div class=\"warnline\" style=\"color:var(--warn)\">⚠ OpenAI no admite llamadas directas desde el navegador (CORS): esta opción puede fallar salvo que uses tu propio servidor intermedio.</div>");
   }
   if (model && model.price){
     lines.push(
-      "Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
-      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b>");
+      "<div>Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
+      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b></div>");
     lines.push(
-      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida");
+      "<div>Precio: <b>$" + model.price.in + "</b>/MTok entrada &nbsp;·&nbsp; <b>$" + model.price.out + "</b>/MTok salida</div>");
     if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
   } else {
-    lines.push("Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.");
+    lines.push("<div>Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.</div>");
   }
-  specs.innerHTML = lines.join("<br>");
+  specs.innerHTML = lines.join("");
   updateBar();
 }
 function updateBar(){
