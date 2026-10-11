@@ -315,6 +315,10 @@ footer b{ color:var(--ink); }
           <label for="customModel">Identificador del modelo</label>
           <input type="text" id="customModel" placeholder="p. ej. claude-opus-5-5">
         </div>
+        <div class="switchrow" id="customTempRow" hidden>
+          <input type="checkbox" id="customSupportsTemp" checked>
+          <label for="customSupportsTemp">Este modelo personalizado admite el parámetro "temperature"</label>
+        </div>
         <div class="modelspecs" id="modelSpecs"></div>
 
         <div class="keyrow formrow">
@@ -336,6 +340,7 @@ footer b{ color:var(--ink); }
           <div class="formrow">
             <label for="temperature">Temperatura</label>
             <input type="number" id="temperature" min="0" max="1" step="0.1" value="0.4">
+            <p class="hint" id="tempNote" style="margin:4px 0 0"></p>
           </div>
         </div>
         <div class="switchrow">
@@ -475,32 +480,35 @@ var PROVIDERS = {
   anthropic: {
     label: "Anthropic (Claude)",
     models: [
-      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}},
-      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}},
-      {id:"claude-sonnet-5", label:"Claude Sonnet 5", context:1000000, maxOutput:128000, price:{in:2, out:10}},
-      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}},
+      {id:"claude-sonnet-5", label:"Claude Sonnet 5 (por defecto)", context:1000000, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:true},
+      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}, supportsTemperature:true},
+      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:true},
+      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}, supportsTemperature:true},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   },
   openai: {
     label: "OpenAI (GPT)",
     models: [
-      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}},
-      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}},
-      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
+      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}, supportsTemperature:false},
+      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}, supportsTemperature:false},
+      {id:"gpt-6-luna", label:"GPT-6 Luna", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}, supportsTemperature:false},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   },
   gemini: {
     label: "Google (Gemini)",
     models: [
-      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}},
-      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
-      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}},
+      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}, supportsTemperature:true},
+      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}, supportsTemperature:true},
+      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}, supportsTemperature:true},
       {id:"custom", label:"Otro (indicar id)…"}
     ]
   }
 };
+/* GPT-6 Astra/Sol/Luna son modelos de la familia "reasoning" de OpenAI: solo admiten
+   el parámetro reasoning_effort y rechazan 'temperature' distinta de la por defecto
+   (error unsupported_parameter), igual que la serie o1/o3/GPT-5 reasoning. */
 
 /* ===================== estado ===================== */
 var state = {
@@ -602,19 +610,35 @@ function buildModelSelect(){
   sel.onchange = onModelChange;
   onModelChange();
 }
+function modelSupportsTemperature(model){
+  if (!model) return true;
+  if (model.price) return model.supportsTemperature !== false;
+  var cb = $("customSupportsTemp");
+  return cb ? cb.checked : true;
+}
+function applyTemperatureSupport(model){
+  var supported = modelSupportsTemperature(model);
+  var temp = $("temperature");
+  temp.disabled = !supported;
+  $("tempNote").textContent = supported ? "" : "Este modelo no admite temperatura personalizada: se omite en la llamada.";
+  return supported;
+}
 function onModelChange(){
   var id = $("selModel").value;
   $("customModelRow").hidden = (id !== "custom");
+  $("customTempRow").hidden = (id !== "custom");
   var model = currentModel();
   var specs = $("modelSpecs");
+  applyTemperatureSupport(model);
   if (model && model.price){
     specs.innerHTML =
       "Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
       "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b> &nbsp;·&nbsp; " +
-      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida";
+      "Precio: <b>$" + model.price.in + "</b>/MTok entrada · <b>$" + model.price.out + "</b>/MTok salida" +
+      " &nbsp;·&nbsp; temperatura: <b>" + (model.supportsTemperature === false ? "no admitida" : "admitida") + "</b>";
     if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4000, model.maxOutput);
   } else {
-    specs.innerHTML = "Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.";
+    specs.innerHTML = "Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado y si admite 'temperature'.";
   }
   updateBar();
 }
@@ -630,11 +654,14 @@ function updateBar(){
 async function callAI(prompt, maxTokens){
   var model = currentModel();
   var apiKey = $("apiKey").value.trim();
-  var temperature = parseFloat($("temperature").value) || 0.4;
+  var temperature = parseFloat($("temperature").value); if (isNaN(temperature)) temperature = 0.4;
+  var supportsTemp = modelSupportsTemperature(model);
   if (!apiKey) throw new Error("Falta la clave de API.");
   if (!model || !model.id || model.id === "") throw new Error("Selecciona o indica un modelo válido.");
 
   if (state.provider === "anthropic"){
+    var anthropicBody = { model: model.id, max_tokens: maxTokens, messages:[{role:"user", content: prompt}] };
+    if (supportsTemp) anthropicBody.temperature = temperature;
     var res = await fetch("https://api.anthropic.com/v1/messages", {
       method:"POST",
       headers:{
@@ -643,8 +670,7 @@ async function callAI(prompt, maxTokens){
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true"
       },
-      body: JSON.stringify({ model: model.id, max_tokens: maxTokens, temperature: temperature,
-        messages:[{role:"user", content: prompt}] })
+      body: JSON.stringify(anthropicBody)
     });
     var data = await res.json();
     if (!res.ok) throw new Error((data && data.error && data.error.message) || ("Error HTTP " + res.status));
@@ -658,11 +684,12 @@ async function callAI(prompt, maxTokens){
   }
 
   if (state.provider === "openai"){
+    var openaiBody = { model: model.id, max_completion_tokens: maxTokens, messages:[{role:"user", content: prompt}] };
+    if (supportsTemp) openaiBody.temperature = temperature;
     var res2 = await fetch("https://api.openai.com/v1/chat/completions", {
       method:"POST",
       headers:{ "content-type":"application/json", "authorization":"Bearer " + apiKey },
-      body: JSON.stringify({ model: model.id, max_completion_tokens: maxTokens, temperature: temperature,
-        messages:[{role:"user", content: prompt}] })
+      body: JSON.stringify(openaiBody)
     });
     var data2 = await res2.json();
     if (!res2.ok) throw new Error((data2 && data2.error && data2.error.message) || ("Error HTTP " + res2.status));
@@ -677,11 +704,12 @@ async function callAI(prompt, maxTokens){
 
   if (state.provider === "gemini"){
     var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model.id) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    var generationConfig = { maxOutputTokens: maxTokens };
+    if (supportsTemp) generationConfig.temperature = temperature;
     var res3 = await fetch(url, {
       method:"POST",
       headers:{ "content-type":"application/json" },
-      body: JSON.stringify({ contents:[{parts:[{text: prompt}]}],
-        generationConfig:{ maxOutputTokens: maxTokens, temperature: temperature } })
+      body: JSON.stringify({ contents:[{parts:[{text: prompt}]}], generationConfig: generationConfig })
     });
     var data3 = await res3.json();
     if (!res3.ok) throw new Error((data3 && data3.error && data3.error.message) || ("Error HTTP " + res3.status));
@@ -960,6 +988,8 @@ function init(){
   $("lastMod").textContent = nowStamp();
 
   $("maxTokens").addEventListener("input", function(){ this.dataset.userEdited = "1"; });
+  $("customSupportsTemp").addEventListener("change", onModelChange);
+  $("customModel").addEventListener("input", updateBar);
   $("apiKey").addEventListener("input", function(){ updateBar(); });
   $("apiKey").addEventListener("change", maybeStoreKey);
   $("rememberKey").addEventListener("change", maybeStoreKey);
