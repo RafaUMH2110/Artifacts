@@ -365,7 +365,7 @@
 
   <footer>
     <p>Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>)</p>
-    <p>&#218;ltima modificaci&#243;n: 10/10/2026 08:10</p>
+    <p>&#218;ltima modificaci&#243;n: 12/10/2026 16:38</p>
   </footer>
 </div>
 
@@ -384,7 +384,7 @@ const APP_CONFIG = {
   anthropic: {
     endpoint: "https://api.anthropic.com/v1/messages",
     version: "2023-06-01",
-    defaultModel: "claude-sonnet-4-5-20250929",   // Configurable: no asumas que es v\u00e1lido indefinidamente
+    defaultModel: "claude-sonnet-4-5",   // Configurable: no asumas que es v\u00e1lido indefinidamente
     maxTokens: 4096
   },
   fal: {
@@ -398,12 +398,16 @@ const APP_CONFIG = {
   }
 };
 
-/* Modelos de Claude configurados. Para a\u00f1adir otro, agrega una entrada. */
+/* Modelos de Claude configurados. Para a\u00f1adir otro, agrega una entrada.
+   Misma lista que en GenOutFitFaceM (MODELOS_POR_PROVEEDOR), para que los
+   tres proveedores de texto/visi\u00f3n se comporten igual en toda la familia
+   de apps de un solo fichero. */
 const CLAUDE_MODELS = [
-  { id: "claude-sonnet-4-5-20250929", label: "Claude Sonnet 4.5 (claude-sonnet-4-5-20250929)" },
+  { id: "claude-sonnet-4-5",          label: "Claude Sonnet 4.5 (claude-sonnet-4-5)" },
   { id: "claude-sonnet-5",            label: "Claude Sonnet 5 (claude-sonnet-5)" },
   { id: "claude-opus-5-5",            label: "Claude Opus 5.5 (claude-opus-5-5)" },
-  { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" }
+  { id: "claude-haiku-4-5-20251001",  label: "Claude Haiku 4.5 (claude-haiku-4-5-20251001)" },
+  { id: "claude-fable-5-1",           label: "Claude Fable 5.1 (claude-fable-5-1)" }
 ];
 
 /* Modelos de OpenAI configurados. Para a\u00f1adir otro, agrega una entrada.
@@ -411,10 +415,13 @@ const CLAUDE_MODELS = [
    documentaci\u00f3n oficial de OpenAI y usa "Otro\u2026" con el identificador
    exacto si el modelo que quieres usar no aparece aqu\u00ed. */
 const OPENAI_MODELS = [
-  { id: "gpt-6-astra",  label: "GPT-6 Astra (gpt-6-astra)" },
-  { id: "gpt-6.1-sol",  label: "GPT-6.1 Sol (gpt-6.1-sol)" },
-  { id: "gpt-6-luna",   label: "GPT-6 Luna (gpt-6-luna)" },
-  { id: "gpt-4.1",      label: "GPT-4.1 (gpt-4.1)" }
+  { id: "gpt-6-astra",   label: "GPT-6 Astra (gpt-6-astra)" },
+  { id: "gpt-6.1-sol",   label: "GPT-6.1 Sol (gpt-6.1-sol)" },
+  { id: "gpt-6-luna",    label: "GPT-6 Luna (gpt-6-luna)" },
+  { id: "gpt-4.1",       label: "GPT-4.1 (gpt-4.1)" },
+  { id: "gpt-4.1-mini",  label: "GPT-4.1 Mini (gpt-4.1-mini)" },
+  { id: "gpt-4o",        label: "GPT-4o (gpt-4o)" },
+  { id: "gpt-4o-mini",   label: "GPT-4o Mini (gpt-4o-mini)" }
 ];
 
 /* Modelos de Gemini configurados. Para añadir otro, agrega una entrada.
@@ -422,42 +429,52 @@ const OPENAI_MODELS = [
    documentación oficial de Gemini y usa "Otro…" con el identificador
    exacto si el modelo que quieres usar no aparece aquí. */
 const GEMINI_MODELS = [
-  { id: "gemini-3.8-flash",      label: "Gemini 3.8 Flash (gemini-3.8-flash)" },
-  { id: "gemini-3.5-flash-lite", label: "Gemini 3.5 Flash-Lite (gemini-3.5-flash-lite)" },
-  { id: "gemini-3.1-pro-preview", label: "Gemini 3.1 Pro Preview (gemini-3.1-pro-preview)" }
+  { id: "gemini-1.5-pro",   label: "Gemini 1.5 Pro (gemini-1.5-pro)" },
+  { id: "gemini-1.5-flash", label: "Gemini 1.5 Flash (gemini-1.5-flash)" },
+  { id: "gemini-2.0-flash", label: "Gemini 2.0 Flash (gemini-2.0-flash)" }
 ];
 
-/* M\u00e1ximo de tokens de salida DOCUMENTADO de cada modelo (solo informativo:
-   esta versi\u00f3n no fuerza ning\u00fan tope de "M\u00e1ximo de tokens"). */
+/* M\u00e1ximo de tokens de salida documentado de cada modelo. A diferencia de la
+   versi\u00f3n anterior de esta app, aqu\u00ed S\u00cd se aplica como tope real: el campo
+   "M\u00e1ximo de tokens de salida" no permite superarlo (ver ajustarLimiteTokens)
+   y la llamada a la IA nunca env\u00eda m\u00e1s de este valor. Si el modelo activo no
+   aparece en esta lista (p. ej. un identificador introducido a mano en
+   "Otro\u2026"), se usa LIMITE_TOKENS_DEFECTO. */
+const LIMITE_TOKENS_DEFECTO = 8000;
 const MODEL_TOKEN_LIMITS = {
-  "claude-sonnet-4-5-20250929": 64000, "claude-haiku-4-5-20251001": 64000,
-  "claude-sonnet-5": 128000, "claude-opus-5-5": 128000, "claude-fable-5-1": 128000,
-  "gpt-6-astra": 128000, "gpt-6.1-sol": 128000, "gpt-6-luna": 128000, "gpt-4.1": 32768,
-  "gemini-3.8-flash": 65536, "gemini-3.5-flash-lite": 65536, "gemini-3.1-pro-preview": 65536
+  "claude-sonnet-4-5": 64000, "claude-sonnet-5": 64000, "claude-opus-5-5": 64000,
+  "claude-haiku-4-5-20251001": 64000, "claude-fable-5-1": 64000,
+  "gpt-6-astra": 32768, "gpt-6.1-sol": 32768, "gpt-6-luna": 16384,
+  "gpt-4o": 16384, "gpt-4o-mini": 16384, "gpt-4.1": 32768, "gpt-4.1-mini": 32768,
+  "gemini-1.5-pro": 8192, "gemini-1.5-flash": 8192, "gemini-2.0-flash": 8192
 };
+function limiteTokensModelo(modelo) { return MODEL_TOKEN_LIMITS[modelo] || LIMITE_TOKENS_DEFECTO; }
 
 /* Proveedores de IA disponibles para la mejora del prompt (paso Claude/GPT/Gemini).
    Cada proveedor define su lista de modelos, su modelo por defecto y la
-   clave de localStorage donde se guarda su propia API key. */
+   clave de localStorage donde se guarda su propia API key. Mismos modelos
+   por defecto que GenOutFitFaceM en Anthropic y Gemini; en OpenAI el modelo
+   por defecto de esta app es "gpt-6-luna" (a petición expresa, en vez de
+   "gpt-6.1-sol"). */
 const TEXT_PROVIDERS = {
   anthropic: {
     label: "Anthropic (Claude)",
     models: CLAUDE_MODELS,
-    defaultModel: "claude-sonnet-4-5-20250929",
+    defaultModel: "claude-sonnet-4-5",
     keyStorage: "ia_anthropic_key",
     endpoint: "https://api.anthropic.com/v1/messages"
   },
   openai: {
     label: "OpenAI (GPT)",
     models: OPENAI_MODELS,
-    defaultModel: "gpt-6.1-sol",
+    defaultModel: "gpt-6-luna",
     keyStorage: "ia_openai_key",
     endpoint: "https://api.openai.com/v1/chat/completions"
   },
   gemini: {
     label: "Google (Gemini)",
     models: GEMINI_MODELS,
-    defaultModel: "gemini-3.8-flash",
+    defaultModel: "gemini-1.5-flash",
     keyStorage: "ia_gemini_key",
     endpoint: "https://generativelanguage.googleapis.com/v1beta/models/"
   }
@@ -711,21 +728,28 @@ function getMaxTokens() {
   return raw !== "" && Number.isInteger(n) && n >= 1 ? n : NaN;
 }
 
-/* Texto informativo del campo "M\u00e1ximo de tokens": muestra el m\u00e1ximo
-   documentado del modelo activo, sin limitar nunca el valor introducido. */
-function updateMaxTokensUI() {
+/* Ajusta el campo "M\u00e1ximo de tokens" al modelo de texto activo (igual que
+   ajustarLimiteTokens en GenOutFitFaceM): fija el atributo "max" del campo
+   al tope documentado de ese modelo y recorta el valor actual si lo supera,
+   de forma que nunca se pueda pedir m\u00e1s tokens de los que el modelo admite.
+   Se llama cada vez que cambia el proveedor, el modelo o el valor del campo. */
+function ajustarLimiteTokens() {
+  const limite = limiteTokensModelo(getActiveModel("text"));
+  const input = $("maxTokens");
+  input.max = String(limite);
+  if (parseInt(input.value, 10) > limite) input.value = String(limite);
   const hint = $("maxTokensHint");
-  if (!hint) return;
-  const limite = MODEL_TOKEN_LIMITS[getActiveModel("text")];
-  hint.textContent = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens). Por defecto 4096. Si es demasiado bajo, el prompt puede quedar cortado." +
-    (limite ? ` M\u00e1ximo documentado para este modelo: ${limite.toLocaleString("es-ES")} tokens (la aplicaci\u00f3n no fuerza este tope: es solo informativo).` : "");
+  if (hint) {
+    hint.textContent = "L\u00edmite de longitud de la respuesta del modelo de texto (max_tokens). Por defecto 4096." +
+      ` M\u00e1ximo para este modelo: ${limite.toLocaleString("es-ES")} tokens.`;
+  }
 }
 
 /* El bot\u00f3n principal solo necesita el proveedor de texto: genera el prompt y
    se detiene ah\u00ed. La API key y el modelo de fal.ai solo hacen falta despu\u00e9s,
    para el bot\u00f3n "Generar imagen con este prompt" (ver updateGenerateFromPromptButton). */
 function validateForm() {
-  updateMaxTokensUI();
+  ajustarLimiteTokens();
   const textCfg = TEXT_PROVIDERS[getTextProvider()];
   const hasTextKey = !!storageGet(textCfg.keyStorage);
   const hasIdea = $("idea").value.trim().length > 0;
@@ -1120,7 +1144,21 @@ function renderImageMeta(info, model, steps, w, h) {
 /* ==========================================================================
    DESCARGAS Y PORTAPAPELES
    ========================================================================== */
-function saveBlob(blob, filename) {
+// Dentro de un Artifact publicado, el enlace <a download> no funciona (el
+// visor no concede permiso de descarga a la página): se usa la capacidad
+// "downloads" del propio visor. Fuera de ese entorno (fichero abierto
+// directamente, o alojado en GitHub Pages / servidor propio) se recurre al
+// enlace normal, que sí funciona ahí.
+async function saveBlob(blob, filename) {
+  let downloads = null;
+  if (window.claude && window.claude.use) {
+    try { downloads = await window.claude.use("downloads"); } catch (e) { downloads = null; }
+  }
+  if (downloads) {
+    try { await downloads.save({ filename, data: blob }); }
+    catch (err) { if (!err || err.code !== "declined") showError(`No se ha podido guardar "${filename}".`); }
+    return;
+  }
   const a = document.createElement("a");
   const url = URL.createObjectURL(blob);
   a.href = url; a.download = filename;
@@ -1278,7 +1316,9 @@ async function generar() {
   const idea = $("idea").value.trim();
   const textProvider = getTextProvider();
   const textModel = getActiveModel("text");
-  const maxTokens = getMaxTokens();
+  // Doble seguro además del recorte ya aplicado en el campo por
+  // ajustarLimiteTokens: nunca se envía más del tope del modelo activo.
+  const maxTokens = Math.min(getMaxTokens(), limiteTokensModelo(textModel));
   const providerLabel = TEXT_PROVIDERS[textProvider].label;
 
   resetResults();
