@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Herramientas de IA para la Docencia (HIAD)</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0Ij4KICA8ZGVmcz4KICAgIDxsaW5lYXJHcmFkaWVudCBpZD0iYmciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwJSIgc3RvcC1jb2xvcj0iIzRGNDZFNSIvPgogICAgICA8c3RvcCBvZmZzZXQ9IjEwMCUiIHN0b3AtY29sb3I9IiM3QzNBRUQiLz4KICAgIDwvbGluZWFyR3JhZGllbnQ+CiAgPC9kZWZzPgoKICA8IS0tIEZvbmRvIHJlZG9uZGVhZG8gLS0+CiAgPHJlY3QgeD0iMiIgeT0iMiIgd2lkdGg9IjYwIiBoZWlnaHQ9IjYwIiByeD0iMTQiIGZpbGw9InVybCgjYmcpIi8+CgogIDwhLS0gQmlycmV0ZSAoZ29ycm8gZGUgZ3JhZHVhY2nDs24pIC0tPgogIDxnIHRyYW5zZm9ybT0idHJhbnNsYXRlKDMyLDI1KSI+CiAgICA8cG9seWdvbiBwb2ludHM9IjAsLTkgMjIsLTEuNSAwLDYgLTIyLC0xLjUiIGZpbGw9IiNGRkZGRkYiLz4KICAgIDxwb2x5Z29uIHBvaW50cz0iMCwtOSAyMiwtMS41IDAsNiAtMjIsLTEuNSIgZmlsbD0iI0ZGRkZGRiIgb3BhY2l0eT0iMCIvPgogICAgPHBhdGggZD0iTSAtMTEgMyBMIC0xMSAxMiBDIC0xMSAxNiAxMSAxNiAxMSAxMiBMIDExIDMgTCAwIDcgWiIgZmlsbD0iI0UwRTdGRiIvPgogICAgPGxpbmUgeDE9IjE4IiB5MT0iLTIuNSIgeDI9IjE4IiB5Mj0iMTAiIHN0cm9rZT0iI0ZERTY4QSIgc3Ryb2tlLXdpZHRoPSIxLjYiLz4KICAgIDxjaXJjbGUgY3g9IjE4IiBjeT0iMTEuNSIgcj0iMi4xIiBmaWxsPSIjRkRFNjhBIi8+CiAgPC9nPgoKICA8IS0tIENoaXNwYSBkZSBJQSAtLT4KICA8ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg0NiwxNikiIGZpbGw9IiNGREU2OEEiPgogICAgPHBhdGggZD0iTTAgLTcgTDIgLTEgTDggMCBMMiAxIEwwIDcgTC0yIDEgTC04IDAgTC0yIC0xIFoiLz4KICA8L2c+Cjwvc3ZnPgo=">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+  :root {
+    --blue-900:#0b2545; --blue-800:#123a6b; --blue-700:#1656a3; --blue-600:#1d6fd1;
+    --blue-500:#3b82f6; --blue-100:#e5f0fd; --blue-50:#f4f9ff;
+    --ink:#0f172a; --muted:#5b6b82; --border:#dde7f5; --card-bg:#ffffff;
+    --bg:#f6f9fc; --radius:16px; --shadow:0 4px 22px rgba(15,45,90,0.07);
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; font-family: "Segoe UI", system-ui, -apple-system, sans-serif; background: var(--bg); color: var(--ink); }
+  .header { background: linear-gradient(135deg, var(--blue-900), var(--blue-700)); color:#fff; padding: 56px 24px 92px; }
+  .header-inner { max-width: 1100px; margin: 0 auto; text-align: center; }
+  .header-logo { margin: 0 auto 18px; display:block; filter: drop-shadow(0 4px 14px rgba(0,0,0,.18)); }
+  .eyebrow { font-size: .85rem; letter-spacing:.03em; opacity:.85; margin-bottom: 14px; }
+  .header h1 { font-size: 2.1rem; margin: 0 0 14px; font-weight: 700; }
+  .header p.lede { max-width: 640px; margin: 0 auto 32px; opacity:.92; line-height:1.6; }
+  .stats { display:flex; gap: 44px; flex-wrap:wrap; justify-content: center; }
+  .stat-num { font-size: 2rem; font-weight: 700; }
+  .stat-label { font-size:.82rem; opacity:.82; }
+  .container { max-width: 1100px; margin: -60px auto 60px; padding: 0 24px; }
+  .searchbar { background:#fff; border:1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); padding: 6px 6px 6px 18px; display:flex; align-items:center; gap:10px; }
+  .searchbar input { flex:1; border:none; outline:none; font-size:1rem; padding: 12px 0; color: var(--ink); background: transparent; }
+  .searchbar svg { color: var(--muted); flex-shrink:0; }
+  .categories { display:flex; flex-wrap:wrap; gap: 10px; margin: 28px 0 8px; }
+  .category-btn { display:flex; align-items:center; gap:8px; padding: 9px 16px; border-radius: 999px; border:1px solid var(--border); background:#fff; cursor:pointer; font-size:.9rem; color: var(--ink); transition: all .15s ease; }
+  .category-btn:hover { border-color: var(--blue-500); color: var(--blue-700); }
+  .category-btn.active { background: var(--blue-700); color:#fff; border-color: var(--blue-700); }
+  .category-btn .count { background: rgba(15,45,90,.07); border-radius: 999px; padding: 1px 8px; font-size:.76rem; }
+  .category-btn.active .count { background: rgba(255,255,255,.25); }
+  .category-btn svg { width:16px; height:16px; }
+  .results-line { color: var(--muted); font-size:.88rem; margin: 18px 0 14px; }
+  .grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 20px; }
+  .card { background: var(--card-bg); border:1px solid var(--border); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow); display:flex; flex-direction:column; gap: 12px; transition: transform .15s ease, box-shadow .15s ease; }
+  .card:hover { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(15,45,90,.12); }
+  .card-top { display:flex; align-items:center; gap:12px; }
+  .card-icon { width:40px; height:40px; border-radius:10px; background: var(--blue-100); display:flex; align-items:center; justify-content:center; color: var(--blue-700); flex-shrink:0; }
+  .card-icon svg { width:20px; height:20px; }
+  .card h3 { margin:0; font-size:1.08rem; }
+  .card p.desc { margin:0; color: var(--muted); font-size:.9rem; line-height:1.55; flex:1; }
+  .badges { display:flex; flex-wrap:wrap; gap:6px; }
+  .badge { font-size:.72rem; padding:3px 10px; border-radius:999px; background: var(--blue-50); color: var(--blue-700); border:1px solid var(--border); }
+  .card a.open { margin-top:auto; text-decoration:none; background: var(--blue-700); color:#fff; text-align:center; padding: 11px; border-radius: 10px; font-size:.9rem; font-weight:600; transition: background .15s ease; }
+  .card a.open:hover { background: var(--blue-800); }
+  .empty-state { text-align:center; color: var(--muted); padding: 70px 0; }
+  footer { text-align:center; color: var(--muted); font-size:.82rem; padding: 20px 24px 48px; }
+  @media (max-width:640px) {
+    .header { padding: 44px 18px 80px; }
+    .header h1 { font-size: 1.6rem; }
+    .stats { gap: 26px; }
+    .container { margin-top: -50px; }
+  }
+</style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <svg class="header-logo" width="96" height="96" viewBox="0 0 120 120" aria-hidden="true">
+        <defs>
+          <linearGradient id="hiadCapGrad" x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0%" stop-color="#ffffff"/>
+            <stop offset="100%" stop-color="#E0E7FF"/>
+          </linearGradient>
+        </defs>
+        <circle cx="60" cy="60" r="56" fill="rgba(255,255,255,0.10)" stroke="rgba(255,255,255,0.32)" stroke-width="2"/>
+        <path d="M 38 66 L 38 80 C 38 88 82 88 82 80 L 82 66 L 60 76 Z" fill="#E0E7FF"/>
+        <line x1="94" y1="48" x2="94" y2="72" stroke="#FDE68A" stroke-width="2.4"/>
+        <circle cx="94" cy="75" r="4" fill="#FDE68A"/>
+        <polygon points="60,34 100,50 60,66 20,50" fill="url(#hiadCapGrad)"/>
+        <g stroke="#4F46E5" stroke-width="1.6" stroke-linecap="round" fill="none" opacity="0.85">
+          <path d="M38 50 L50 50 L54 44 L60 50 L66 44 L70 50 L82 50"/>
+          <path d="M50 50 L50 56 L44 60"/>
+          <path d="M70 50 L70 56 L76 60"/>
+          <path d="M60 50 L60 58"/>
+        </g>
+        <g fill="#4F46E5">
+          <circle cx="38" cy="50" r="2.1"/>
+          <circle cx="82" cy="50" r="2.1"/>
+          <circle cx="54" cy="44" r="1.8"/>
+          <circle cx="66" cy="44" r="1.8"/>
+          <circle cx="44" cy="60" r="1.8"/>
+          <circle cx="76" cy="60" r="1.8"/>
+          <circle cx="60" cy="58" r="2.1"/>
+        </g>
+        <g transform="translate(92,30)" fill="#FDE68A">
+          <path d="M0 -9 L2.4 -1.6 L10 0 L2.4 1.6 L0 9 L-2.4 1.6 L-10 0 L-2.4 -1.6 Z"/>
+        </g>
+      </svg>
+      <div class="eyebrow">RafaUMH2110 · UMH</div>
+      <h1>Herramientas de IA para la Docencia (HIAD)</h1>
+      <p class="lede">Aplicaciones de inteligencia artificial para diseño de moda, generación de contenido y automatización de procesos académicos.</p>
+      <div class="stats">
+        <div><div class="stat-num">15</div><div class="stat-label">Herramientas</div></div>
+        <div><div class="stat-num">7</div><div class="stat-label">Categorías</div></div>
+        <div><div class="stat-num">100%</div><div class="stat-label">En el navegador</div></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="searchbar">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+      <input id="search" type="text" placeholder="Buscar por nombre, descripción, categoría o etiqueta...">
+    </div>
+
+    <div id="categories" class="categories"></div>
+    <div id="results-line" class="results-line"></div>
+    <div id="grid" class="grid"></div>
+    <div id="empty" class="empty-state" style="display:none;">No se encontraron aplicaciones con ese criterio.</div>
+  </div>
+
+  <footer>
+    Generado automáticamente a partir de las aplicaciones publicadas.<br>
+    Rafael Puerto (<a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a>) · Última actualización: 12 de octubre de 2026, 17:33
+  </footer>
+
+<script id="catalog-data" type="application/json">[{"title": "ConSultar", "description": "Mejora automáticamente tu consulta y la envía a Claude para obtener una respuesta completa en Markdown, exportable a Word o PDF.", "categories": ["ia", "generacion-contenido", "automatizacion"], "tags": ["Claude", "Markdown", "Word", "PDF", "Productividad"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/consultar/"}, {"title": "DetectIApdf", "description": "Analiza hasta 3 documentos PDF y genera un informe forense de indicios de uso de IA en su redacción, con exportación a PDF; pensada para profesorado universitario.", "categories": ["ia", "docencia", "evaluacion"], "tags": ["deteccion ia", "forense", "pdf", "informes", "anthropic"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/detectiapdf/"}, {"title": "DetectIApdfLite", "description": "Versión ligera de DetectIApdf: analiza un único documento PDF con un prompt reducido (menos tokens y menor coste, especialmente en documentos extensos) y genera un informe conciso de indicios de uso de IA, exportable a PDF.", "categories": ["ia", "docencia", "evaluacion"], "tags": ["deteccion ia", "forense", "pdf", "informes", "anthropic", "documento unico", "version ligera"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/detectiapdflite/"}, {"title": "DetectIApdfOne", "description": "Analiza un único documento PDF y genera un informe forense de indicios de uso de IA en su redacción, con exportación a PDF; pensada para profesorado universitario.", "categories": ["ia", "docencia", "evaluacion"], "tags": ["deteccion ia", "forense", "pdf", "informes", "anthropic", "documento unico"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/detectiapdfone/"}, {"title": "GenImOd", "description": "Genera imágenes de moda con IA: mejora la idea con Claude (Anthropic), GPT (OpenAI) o Gemini (Google) y crea la imagen final con FLUX (fal.ai). Versión completa, con proveedor, modelos y parámetros configurables.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "FLUX", "fal.ai", "Imágenes", "Moda"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genimod/"}, {"title": "GenImOd — Versión alumnos", "description": "Versión de GenImOd para el aula: genera imágenes de moda con Claude, OpenAI o Gemini y FLUX, con modelos y parámetros limitados y fijados por el profesor.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "FLUX", "Docencia", "Imágenes", "Moda"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genimod-alumnos/"}, {"title": "GenImOda", "description": "GenImOda: versión de GenImOd para el aula. Genera imágenes de moda con Claude, OpenAI o Gemini y FLUX, con la opción de omitir la mejora del prompt con IA, y con modelos y parámetros limitados por el profesor.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "FLUX", "Docencia", "Imágenes", "Moda", "GenImOda"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genimoda/"}, {"title": "GenOutFit", "description": "A partir de la foto de una prenda, genera con IA (Claude/GPT/Gemini + FLUX vía fal.ai) los prompts y las imágenes de un outfit completo a juego, con un número de piezas configurable.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "fal.ai", "FLUX", "Moda", "Outfit"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genoutfit/"}, {"title": "GenOutFitFace", "description": "A partir de la foto de una prenda y, opcionalmente, de una persona, genera con IA (Claude/GPT/Gemini + FLUX vía fal.ai) un outfit completo y, si se pide, una foto del modelo que conserva el rostro real de la persona.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "fal.ai", "FLUX", "Kontext", "Moda", "Outfit", "Modelo"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genoutfitface/"}, {"title": "GenOutFitFaceM", "description": "A partir de la foto de hasta dos prendas, de una lista de complementos seleccionables (gafas, collares, bolsos, zapatos...) y, opcionalmente, de una persona, genera con IA (Claude/GPT/Gemini + FLUX vía fal.ai) un outfit completo y, si se pide, una foto del modelo que conserva el rostro real de la persona.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "fal.ai", "FLUX", "Kontext", "Moda", "Outfit", "Modelo", "Complementos"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genoutfitfacem/"}, {"title": "GenOutFitS", "description": "GenOutFitS: versión para alumnos de GenOutFit. A partir de la foto de una prenda, genera con IA (Claude/GPT/Gemini + FLUX vía fal.ai) los prompts y las imágenes de un outfit completo a juego, con el catálogo de modelos de Anthropic, el máximo de tokens, el nº de piezas y los parámetros de FLUX limitados por el profesor.", "categories": ["ia", "diseno-creatividad", "generacion-contenido", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "fal.ai", "FLUX", "Moda", "Outfit"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genoutfits/"}, {"title": "GenPatMod", "description": "Genera patrones de corte de moda en SVG a partir de una idea y los exporta a PDF A4, usando Claude, OpenAI o Gemini. Incluye revisión del plan de piezas e historial local de generaciones.", "categories": ["ia", "diseno-creatividad", "automatizacion", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "SVG", "PDF", "Patrones"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genpatmod/"}, {"title": "GenPatModa", "description": "GenPatModa: versión para alumnos de GenPatMod. Genera patrones de corte de moda en SVG a partir de una idea y los exporta a PDF A4, usando Claude, OpenAI o Gemini, con el catálogo de modelos de Anthropic y el máximo de tokens limitados por el profesor.", "categories": ["ia", "diseno-creatividad", "automatizacion", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "SVG", "PDF", "Patrones", "GenPatModa"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/genpatmoda/"}, {"title": "SearchLogMod", "description": "Consulta asistida por IA (Anthropic, OpenAI o Gemini) sobre métodos y logística de empresas de la industria de la moda, con estimación de tokens y coste, y exportación a Markdown, texto plano y Word.", "categories": ["ia", "investigacion", "docencia"], "tags": ["Claude", "OpenAI", "Gemini", "Logística", "Moda", "Cadena de suministro"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/searchlogmod/"}, {"title": "SearchLogModCB", "description": "Consulta asistida por IA (Anthropic, OpenAI o Gemini) sobre métodos y logística de empresas de la industria de la moda, con caché de resultados, caché de prompts de Anthropic, modo por lotes (cola propia o Batch API) y exportación a Markdown, texto plano y Word.", "categories": ["ia", "investigacion", "docencia", "automatizacion"], "tags": ["Claude", "OpenAI", "Gemini", "Logística", "Moda", "Cadena de suministro", "Caché", "Lotes"], "client_only": true, "url": "https://rafaumh2110.github.io/Artifacts/searchlogmodcb/"}]</script>
+<script id="category-meta" type="application/json">{"automatizacion": {"label": "Automatización", "icon": "cog"}, "diseno-creatividad": {"label": "Diseño y creatividad", "icon": "palette"}, "docencia": {"label": "Docencia", "icon": "graduation-cap"}, "evaluacion": {"label": "Evaluación", "icon": "clipboard-check"}, "generacion-contenido": {"label": "Generación de contenido", "icon": "sparkles"}, "ia": {"label": "Inteligencia Artificial", "icon": "brain-circuit"}, "investigacion": {"label": "Investigación", "icon": "microscope"}}</script>
+<script>
+  const CATALOG = JSON.parse(document.getElementById('catalog-data').textContent);
+  const CATEGORY_META = JSON.parse(document.getElementById('category-meta').textContent);
+
+  let activeCategory = 'all';
+  let query = '';
+
+  function escapeHtml(s) {
+    return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function matches(app) {
+    const inCategory = activeCategory === 'all' || app.categories.includes(activeCategory);
+    if (!inCategory) return false;
+    if (!query) return true;
+    const haystack = [
+      app.title, app.description,
+      ...app.categories.map(c => (CATEGORY_META[c] || {}).label || c),
+      ...app.tags,
+    ].join(' ').toLowerCase();
+    return haystack.includes(query);
+  }
+
+  function renderCategories() {
+    const counts = {};
+    CATALOG.forEach(app => app.categories.forEach(c => { counts[c] = (counts[c] || 0) + 1; }));
+    const slugs = Object.keys(counts).sort((a, b) =>
+      ((CATEGORY_META[a] || {}).label || a).localeCompare((CATEGORY_META[b] || {}).label || b)
+    );
+
+    const allBtn = `<button class="category-btn ${activeCategory === 'all' ? 'active' : ''}" data-cat="all">
+        <i data-lucide="layout-grid"></i> Todas <span class="count">${CATALOG.length}</span>
+      </button>`;
+
+    const buttons = slugs.map(slug => {
+      const meta = CATEGORY_META[slug] || { label: slug, icon: 'tag' };
+      const active = activeCategory === slug ? 'active' : '';
+      return `<button class="category-btn ${active}" data-cat="${slug}">
+          <i data-lucide="${meta.icon}"></i> ${escapeHtml(meta.label)} <span class="count">${counts[slug]}</span>
+        </button>`;
+    }).join('');
+
+    document.getElementById('categories').innerHTML = allBtn + buttons;
+    document.querySelectorAll('.category-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        activeCategory = btn.dataset.cat;
+        renderAll();
+      });
+    });
+  }
+
+  function renderGrid() {
+    const filtered = CATALOG.filter(matches);
+    const grid = document.getElementById('grid');
+    const empty = document.getElementById('empty');
+    const resultsLine = document.getElementById('results-line');
+
+    resultsLine.textContent = filtered.length === CATALOG.length
+      ? `${CATALOG.length} herramienta${CATALOG.length === 1 ? '' : 's'} disponible${CATALOG.length === 1 ? '' : 's'}`
+      : `${filtered.length} resultado${filtered.length === 1 ? '' : 's'}`;
+
+    if (filtered.length === 0) {
+      grid.style.display = 'none';
+      empty.style.display = 'block';
+      return;
+    }
+    grid.style.display = 'grid';
+    empty.style.display = 'none';
+
+    grid.innerHTML = filtered.map(app => {
+      const primaryCat = app.categories[0];
+      const meta = CATEGORY_META[primaryCat] || { label: primaryCat, icon: 'sparkles' };
+      const badges = app.categories.map(c => {
+        const m = CATEGORY_META[c] || { label: c };
+        return `<span class="badge">${escapeHtml(m.label)}</span>`;
+      }).join('');
+      return `<div class="card">
+          <div class="card-top">
+            <div class="card-icon"><i data-lucide="${meta.icon}"></i></div>
+            <h3>${escapeHtml(app.title)}</h3>
+          </div>
+          <p class="desc">${escapeHtml(app.description)}</p>
+          <div class="badges">${badges}</div>
+          <a class="open" href="${app.url}" target="_blank" rel="noopener">Abrir aplicación</a>
+        </div>`;
+    }).join('');
+  }
+
+  function renderAll() {
+    renderCategories();
+    renderGrid();
+    if (window.lucide) lucide.createIcons();
+  }
+
+  document.getElementById('search').addEventListener('input', (e) => {
+    query = e.target.value.trim().toLowerCase();
+    renderAll();
+  });
+
+  renderAll();
+</script>
+</body>
+</html>
