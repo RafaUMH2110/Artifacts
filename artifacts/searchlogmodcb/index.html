@@ -1,0 +1,2107 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SearchLogModCB</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%232d3b6b'/%3E%3Cpath d='M32 9 L55 22 L55 45 L32 58 L9 45 L9 22 Z' fill='none' stroke='%23ffffff' stroke-width='3.5' stroke-linejoin='round'/%3E%3Cpath d='M32 9 L32 33.5 M9 22 L32 33.5 M55 22 L32 33.5' stroke='%23ffffff' stroke-width='3.5' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E">
+<style>
+/* ===================================================================
+   SearchLogModCB — ficha de consulta IA sobre logística en la moda,
+   con caché de resultados, caché de prompts (Anthropic) y modo por
+   lotes (cola propia o Batch API de Anthropic).
+   Layout: mismo "manifiesto de envío" que SearchLogMod, con una
+   segunda cinta de estado para caché/lote y tarjetas de progreso
+   tipo "hoja de ruta de almacén" para las consultas en curso.
+   ------------------------------------------------------------------- */
+:root{
+  --bg:#eef1ec; --surface:#ffffff; --surface-2:#e3e8dd; --surface-3:#d8ddd0;
+  --ink:#1c2320; --muted:#5b665f; --border:#c7cfc0;
+  --accent:#2d3b6b; --accent-ink:#ffffff; --accent-soft:#dde1f1;
+  --accent2:#c97a2b; --accent2-soft:#f3e2cc;
+  --ok:#3f7d53; --ok-soft:#dcefe1;
+  --warn:#b8511b; --warn-soft:#f6e2d3;
+  --danger:#a3302b; --danger-soft:#f5dcda;
+  --cache:#6a4f9b; --cache-soft:#e7e0f3;
+  --shadow: 0 1px 0 rgba(28,35,32,.06), 0 8px 24px -16px rgba(28,35,32,.35);
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#10151a; --surface:#171d22; --surface-2:#1e262c; --surface-3:#273039;
+    --ink:#e7ece6; --muted:#9aa6a0; --border:#2c353d;
+    --accent:#8695e8; --accent-ink:#0f1320; --accent-soft:#232c4c;
+    --accent2:#e2a35a; --accent2-soft:#3c2d18;
+    --ok:#74c48c; --ok-soft:#1b3024;
+    --warn:#e2925a; --warn-soft:#3a2416;
+    --danger:#e2847c; --danger-soft:#3a1d1b;
+    --cache:#b7a4e6; --cache-soft:#2a2340;
+    --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 28px -16px rgba(0,0,0,.6);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#10151a; --surface:#171d22; --surface-2:#1e262c; --surface-3:#273039;
+  --ink:#e7ece6; --muted:#9aa6a0; --border:#2c353d;
+  --accent:#8695e8; --accent-ink:#0f1320; --accent-soft:#232c4c;
+  --accent2:#e2a35a; --accent2-soft:#3c2d18;
+  --ok:#74c48c; --ok-soft:#1b3024;
+  --warn:#e2925a; --warn-soft:#3a2416;
+  --danger:#e2847c; --danger-soft:#3a1d1b;
+  --cache:#b7a4e6; --cache-soft:#2a2340;
+  --shadow: 0 1px 0 rgba(0,0,0,.4), 0 8px 28px -16px rgba(0,0,0,.6);
+  color-scheme: dark;
+}
+
+*{box-sizing:border-box}
+[hidden]{ display:none !important; }
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:'Public Sans',-apple-system,'Segoe UI',sans-serif;
+  font-size:15px; line-height:1.5;
+  padding-inline:16px; padding-block:0;
+}
+h1,h2,h3{ font-family:'Fraunces',Georgia,serif; text-wrap:balance; margin:0 0 .4em; }
+.wrap{ max-width:980px; margin:0 auto; }
+a{ color:var(--accent); }
+code,pre,.mono{ font-family:'JetBrains Mono','SFMono-Regular',Consolas,monospace; }
+
+/* ---------- header / manifest strip ---------- */
+header.manifest{
+  margin-top:20px; background:var(--surface); border:1px solid var(--border);
+  border-radius:10px; box-shadow:var(--shadow); overflow:hidden;
+}
+.manifest-top{
+  display:flex; justify-content:space-between; align-items:flex-start; gap:16px;
+  padding:22px 24px 16px; flex-wrap:wrap;
+}
+.manifest-top h1{ font-size:clamp(28px,4vw,38px); font-weight:600; letter-spacing:-.01em; }
+.manifest-top p{ margin:.25em 0 0; color:var(--muted); max-width:52ch; }
+.manifest-stamp{
+  font-family:'JetBrains Mono',monospace; font-size:11.5px; letter-spacing:.04em;
+  text-transform:uppercase; color:var(--accent2); border:1.5px solid var(--accent2);
+  border-radius:6px; padding:6px 10px; white-space:nowrap; transform:rotate(-2deg);
+}
+.manifest-bar{
+  display:flex; flex-wrap:wrap; gap:0; border-top:1px dashed var(--border);
+  background:var(--surface-2); font-family:'JetBrains Mono',monospace; font-size:12px;
+}
+.manifest-bar div{
+  padding:9px 16px; border-right:1px dashed var(--border); color:var(--muted);
+  display:flex; gap:6px; align-items:center;
+}
+.manifest-bar div:last-child{ border-right:none; }
+.manifest-bar b{ color:var(--ink); font-weight:600; font-variant-numeric:tabular-nums; }
+.dot{ width:7px; height:7px; border-radius:50%; background:var(--muted); flex:none; }
+.dot.ok{ background:var(--ok); }
+.dot.warn{ background:var(--warn); }
+
+/* ---------- generic panel ---------- */
+section.panel{
+  background:var(--surface); border:1px solid var(--border); border-radius:10px;
+  box-shadow:var(--shadow); margin-top:16px; padding:20px 22px 22px;
+}
+.panel-head{ display:flex; align-items:baseline; justify-content:space-between; gap:12px; margin-bottom:4px; flex-wrap:wrap; }
+.panel-head h2{ font-size:18px; font-weight:600; }
+.panel-head .tag{
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; letter-spacing:.07em;
+  text-transform:uppercase; color:var(--muted); border:1px solid var(--border);
+  border-radius:4px; padding:3px 7px;
+}
+.panel-head .tag.cache{ color:var(--cache); border-color:var(--cache); }
+.hint{ color:var(--muted); font-size:13.5px; margin:.2em 0 14px; }
+
+/* ---------- two-column grid ---------- */
+.grid2{ display:grid; grid-template-columns:1.1fr .9fr; gap:16px; align-items:start; }
+@media (max-width:760px){ .grid2{ grid-template-columns:1fr; } }
+.grid2.even{ grid-template-columns:1fr 1fr; }
+@media (max-width:760px){ .grid2.even{ grid-template-columns:1fr; } }
+
+/* ---------- chip fields (selección única o múltiple) ---------- */
+.chipfield{ margin-bottom:16px; min-width:0; }
+.chipfield > label.fieldlabel{
+  display:block; font-weight:600; font-size:13px; margin-bottom:8px;
+  text-transform:uppercase; letter-spacing:.04em; color:var(--muted);
+}
+.chips{ display:flex; flex-wrap:wrap; gap:7px; }
+.chip{
+  font:inherit; font-size:13.5px; background:var(--surface-2); color:var(--ink);
+  border:1px solid var(--border); border-radius:999px; padding:7px 13px;
+  cursor:pointer; transition:background .12s,border-color .12s,color .12s;
+}
+.chip:hover{ border-color:var(--accent); }
+.chip.sel{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); font-weight:600; }
+.chip.other{ border-style:dashed; }
+input.otherbox{
+  margin-top:8px; width:100%; font:inherit; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink);
+}
+input.otherbox:focus, textarea:focus, select:focus, .chip:focus-visible, button:focus-visible{
+  outline:2px solid var(--accent); outline-offset:1px;
+}
+
+textarea{
+  width:100%; font:inherit; font-size:14px; padding:10px 12px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink);
+  resize:vertical; min-height:72px; line-height:1.5;
+}
+textarea.framework{ min-height:220px; font-size:13px; }
+
+/* ---------- config form ---------- */
+.formrow{ display:flex; flex-direction:column; gap:5px; margin-bottom:13px; }
+.formrow label{ font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.formrow select, .formrow input[type=text], .formrow input[type=password], .formrow input[type=number]{
+  font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
+}
+.keybox{ background:var(--surface-2); border:1px solid var(--border); border-radius:8px; padding:12px; margin-bottom:13px; }
+.keybox label{ font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); display:block; margin-bottom:6px; }
+.keybox input[type=password], .keybox input[type=text]{
+  font:inherit; font-size:14px; padding:9px 11px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface); color:var(--ink); width:100%;
+}
+.keybox .btnrow{ margin-top:9px; }
+.keybox .keystatus{ margin-top:9px; margin-bottom:0; font-size:12.5px; }
+.keybox .keystatus.saved{ color:var(--ok); }
+button.btn.danger{ background:var(--warn-soft); border-color:var(--warn); color:var(--warn); }
+.switchrow{ display:flex; align-items:flex-start; gap:9px; margin:10px 0 4px; }
+.switchrow input{ width:16px; height:16px; margin-top:2px; flex:none; }
+.switchrow label{ font-size:13.5px; color:var(--ink); }
+.switchrow .sublabel{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.providerpicker,.modepicker{ display:flex; gap:8px; margin-bottom:14px; flex-wrap:wrap; }
+.providerpicker button,.modepicker button{
+  flex:1; min-width:120px; font:inherit; font-size:13px; font-weight:600; padding:9px 6px; border-radius:7px;
+  border:1px solid var(--border); background:var(--surface-2); color:var(--ink); cursor:pointer;
+}
+.providerpicker button[aria-pressed="true"],.modepicker button[aria-pressed="true"]{ background:var(--accent); color:var(--accent-ink); border-color:var(--accent); }
+.modelspecs{
+  font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:7px;
+  padding:9px 11px; margin-top:-5px; margin-bottom:13px;
+}
+.modelspecs b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+.modelspecs div{ line-height:1.6; margin:3px 0; }
+.modelspecs .warnline{ line-height:1.45; margin-bottom:7px; }
+.cachebox{ background:var(--cache-soft); border:1px solid var(--cache); border-radius:8px; padding:12px 14px; margin-bottom:13px; }
+.cachebox .cachehead{ display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; }
+.cachebox .cachehead b{ color:var(--cache); font-size:13px; }
+.cachebox .hint{ margin-bottom:8px; }
+
+/* ---------- buttons ---------- */
+.btnrow{ display:flex; flex-wrap:wrap; gap:10px; margin-top:6px; }
+button.btn{
+  font:inherit; font-size:14px; font-weight:600; padding:11px 18px; border-radius:8px;
+  border:1px solid var(--accent); background:var(--accent); color:var(--accent-ink);
+  cursor:pointer; display:inline-flex; align-items:center; gap:7px;
+}
+button.btn:hover{ filter:brightness(1.07); }
+button.btn:disabled{ opacity:.5; cursor:not-allowed; filter:none; }
+button.btn.ghost{ background:transparent; color:var(--accent); }
+button.btn.amber{ background:var(--accent2); border-color:var(--accent2); color:#201405; }
+button.btn.small{ padding:7px 12px; font-size:12.5px; border-radius:6px; }
+button.btn.subtle{ background:var(--surface-2); color:var(--ink); border-color:var(--border); }
+button.btn.cache{ background:var(--cache); border-color:var(--cache); color:#fff; }
+
+/* ---------- promptbox ---------- */
+.promptbox{
+  background:var(--surface-2); border:1px dashed var(--border); border-radius:8px; padding:12px;
+}
+.costline{
+  font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-top:9px;
+  display:flex; flex-wrap:wrap; gap:4px 16px;
+}
+.costline b{ color:var(--ink); }
+.costline .cachehit{ color:var(--cache); font-weight:600; }
+
+/* ---------- result / printed report ---------- */
+.reportshell{ position:relative; }
+.stamp{
+  position:absolute; top:-10px; right:14px; background:var(--surface);
+  border:1.5px solid var(--ok); color:var(--ok); border-radius:7px; padding:6px 10px;
+  font-family:'JetBrains Mono',monospace; font-size:11px; text-transform:uppercase;
+  letter-spacing:.05em; transform:rotate(2deg); box-shadow:var(--shadow);
+}
+.stamp.truncated{ border-color:var(--warn); color:var(--warn); }
+.stamp.cache{ border-color:var(--cache); color:var(--cache); }
+.report{
+  background:var(--surface-2); border:1px solid var(--border); border-radius:8px;
+  padding:22px 24px; margin-top:10px; max-width:100%; overflow-wrap:anywhere;
+  min-height:420px; max-height:70vh; overflow-y:auto;
+}
+.report :is(h1,h2,h3,h4){ margin-top:1.1em; }
+.report h1{ font-size:21px; } .report h2{ font-size:18px; } .report h3{ font-size:15.5px; }
+.report p{ margin:.7em 0; }
+.report ul,.report ol{ padding-left:1.3em; }
+.report li{ margin:.3em 0; }
+.report table{ border-collapse:collapse; width:100%; margin:1em 0; font-size:13.5px; display:block; overflow-x:auto; }
+.report th,.report td{ border:1px solid var(--border); padding:6px 9px; text-align:left; }
+.report th{ background:var(--surface-3); }
+.report code{ background:var(--surface-3); padding:1px 5px; border-radius:4px; font-size:.92em; }
+.report pre{ background:var(--surface-3); padding:10px 12px; border-radius:7px; overflow-x:auto; }
+.report pre code{ background:none; padding:0; }
+.report blockquote{ margin:.8em 0; padding:2px 14px; border-left:3px solid var(--accent2); color:var(--muted); }
+.empty-report{ color:var(--muted); font-size:14px; padding:26px 10px; text-align:center; }
+
+/* ---------- export ---------- */
+.exportgrid{ display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; }
+.exportgrid .formrow{ flex:1 1 220px; margin-bottom:0; }
+
+/* ---------- history ---------- */
+.histlist{ display:flex; flex-direction:column; gap:7px; max-height:280px; overflow-y:auto; }
+.histitem{
+  display:flex; gap:10px; align-items:center;
+  border:1px solid var(--border); background:var(--surface-2); border-radius:7px;
+  padding:9px 12px; font-size:13px;
+}
+.histitem:hover{ border-color:var(--accent); }
+.histitem input[type=checkbox]{ width:16px; height:16px; flex-shrink:0; cursor:pointer; }
+.histitem .histleft{ flex:1; min-width:0; cursor:pointer; }
+.histitem .meta{ color:var(--muted); font-size:11.5px; font-family:'JetBrains Mono',monospace; }
+.histempty{ color:var(--muted); font-size:13.5px; }
+
+/* ---------- batch (modo por lotes) ---------- */
+.countline{
+  font-family:'JetBrains Mono',monospace; font-size:12.5px; color:var(--muted);
+  background:var(--surface-2); border:1px solid var(--border); border-radius:7px;
+  padding:9px 12px; margin-bottom:13px;
+}
+.countline b{ color:var(--ink); }
+.concurrencyrow{ display:flex; align-items:center; gap:10px; margin-bottom:13px; flex-wrap:wrap; }
+.concurrencyrow label{ font-size:12.5px; font-weight:600; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); }
+.concurrencyrow input[type=number]{ width:72px; font:inherit; font-size:14px; padding:7px 9px; border-radius:7px; border:1px solid var(--border); background:var(--surface); color:var(--ink); }
+.typepicker{ display:flex; gap:8px; margin-bottom:13px; flex-wrap:wrap; }
+.typepicker button{
+  flex:1; min-width:180px; text-align:left; font:inherit; padding:10px 12px; border-radius:8px;
+  border:1px solid var(--border); background:var(--surface-2); color:var(--ink); cursor:pointer;
+}
+.typepicker button b{ display:block; font-size:13.5px; }
+.typepicker button span{ display:block; color:var(--muted); font-size:12px; margin-top:2px; }
+.typepicker button[aria-pressed="true"]{ background:var(--accent-soft); border-color:var(--accent); }
+.typepicker button[aria-pressed="true"] b{ color:var(--accent); }
+.typepicker button:disabled{ opacity:.45; cursor:not-allowed; }
+
+.progress-wrap{ margin:10px 0 14px; }
+.progress-track{ height:10px; border-radius:999px; background:var(--surface-3); overflow:hidden; border:1px solid var(--border); }
+.progress-fill{ height:100%; background:var(--accent); width:0%; transition:width .25s; }
+.progress-label{ font-family:'JetBrains Mono',monospace; font-size:12px; color:var(--muted); margin-top:6px; display:flex; justify-content:space-between; flex-wrap:wrap; gap:6px; }
+
+.batchlist{ display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto; }
+.batchrow{
+  display:flex; gap:10px; align-items:center; border:1px solid var(--border);
+  background:var(--surface-2); border-radius:7px; padding:8px 11px; font-size:13px; min-width:0;
+}
+.batchrow .brleft{ flex:1; min-width:0; }
+.batchrow .brleft .brtitle{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.batchrow .brleft .brmeta{ color:var(--muted); font-size:11px; font-family:'JetBrains Mono',monospace; }
+.pill{
+  font-family:'JetBrains Mono',monospace; font-size:10.5px; text-transform:uppercase; letter-spacing:.05em;
+  border-radius:999px; padding:4px 9px; white-space:nowrap; flex:none; border:1px solid transparent;
+}
+.pill.pend{ background:var(--surface-3); color:var(--muted); }
+.pill.run{ background:var(--accent-soft); color:var(--accent); }
+.pill.done{ background:var(--ok-soft); color:var(--ok); }
+.pill.cachehit{ background:var(--cache-soft); color:var(--cache); }
+.pill.err{ background:var(--danger-soft); color:var(--danger); }
+
+.pendingbatch{
+  border:1px solid var(--border); background:var(--surface-2); border-radius:8px;
+  padding:12px 14px; margin-bottom:10px;
+}
+.pendingbatch .pbhead{ display:flex; justify-content:space-between; gap:10px; align-items:center; flex-wrap:wrap; }
+.pendingbatch .pbid{ font-family:'JetBrains Mono',monospace; font-size:11.5px; color:var(--muted); }
+.pendingbatch .pbmeta{ color:var(--muted); font-size:12.5px; margin-top:4px; }
+.pendinglist-empty{ color:var(--muted); font-size:13.5px; }
+
+/* ---------- toast ---------- */
+#toast{
+  position:fixed; left:50%; bottom:22px; transform:translateX(-50%) translateY(10px);
+  background:var(--ink); color:var(--bg); padding:10px 16px; border-radius:8px;
+  font-size:13.5px; opacity:0; pointer-events:none; transition:opacity .18s, transform .18s;
+  z-index:50; max-width:90vw; text-align:center;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ---------- guía ---------- */
+details.guide > summary{
+  cursor:pointer; font-family:'Fraunces',Georgia,serif; font-size:17px; font-weight:600;
+  list-style:none; display:flex; align-items:center; gap:8px; color:var(--ink);
+}
+details.guide > summary::-webkit-details-marker{ display:none; }
+details.guide > summary::before{ content:"▸"; color:var(--accent2); display:inline-block; transition:transform .15s; }
+details.guide[open] > summary::before{ transform:rotate(90deg); }
+details.guide .guide-body{ margin-top:14px; }
+details.guide .guide-body h3{ font-size:14.5px; margin:1.1em 0 .3em; }
+details.guide .guide-body p{ font-size:14px; color:var(--ink); line-height:1.6; margin:.5em 0; }
+details.guide .guide-body ul{ padding-left:1.3em; font-size:14px; line-height:1.6; }
+
+/* ---------- footer ---------- */
+footer{
+  margin:26px 0 36px; padding-top:16px; border-top:1px solid var(--border);
+  color:var(--muted); font-size:12.5px; line-height:1.7;
+}
+footer b{ color:var(--ink); }
+.legend{ font-style:italic; }
+
+.visually-hidden{ position:absolute; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+</style>
+</head>
+<body
+  data-app-title="SearchLogModCB"
+  data-app-description="Consulta asistida por IA (Anthropic, OpenAI o Gemini) sobre métodos y logística de empresas de la industria de la moda, con caché de resultados, caché de prompts de Anthropic, modo por lotes (cola propia o Batch API) y exportación a Markdown, texto plano y Word."
+  data-categories="ia,investigacion,docencia,automatizacion"
+  data-tags="Claude,OpenAI,Gemini,Logística,Moda,Cadena de suministro,Caché,Lotes"
+  data-client-only="true"
+>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,700;1,9..144,500&family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap">
+
+<div class="wrap">
+
+  <header class="manifest">
+    <div class="manifest-top">
+      <div>
+        <h1>SearchLogModCB</h1>
+        <p>Consulta asistida por IA sobre métodos y logística de empresas de la industria de la moda, con caché de resultados, caché de prompts y modo por lotes.</p>
+      </div>
+      <div class="manifest-stamp">Dossier logístico · moda · CB</div>
+    </div>
+    <div class="manifest-bar">
+      <div><span class="dot" id="dotProvider"></span> Proveedor: <b id="barProvider">sin configurar</b></div>
+      <div>Modelo: <b id="barModel">—</b></div>
+      <div>Caché: <b id="barCache">0 resultados</b></div>
+      <div>Coste de la sesión: <b id="barCost">$0.0000</b></div>
+    </div>
+  </header>
+
+  <details class="panel guide">
+    <summary>Guía de uso</summary>
+    <div class="guide-body">
+      <p>SearchLogModCB es una herramienta de un único fichero HTML (sin servidor propio) para investigar, con ayuda de un modelo de IA, los métodos y la logística de empresas de la industria de la moda. Añade sobre SearchLogMod dos capacidades: caché (para no repetir ni pagar dos veces la misma consulta) y un modo por lotes (para lanzar muchas combinaciones empresa × aspecto de una vez).</p>
+      <h3>1. Configura el proveedor</h3>
+      <p>Elige Anthropic, OpenAI o Google, selecciona un modelo (o indica "Otro" con el identificador exacto) y pega tu propia clave de API. La clave viaja solo del navegador al proveedor elegido. Pulsa "Guardar clave" para recordarla en este navegador, "Mostrar"/"Ocultar" para verla, y "Borrar clave" para eliminarla.</p>
+      <p><b>OpenAI:</b> su API no admite llamadas directas desde el navegador (CORS). Si eliges un modelo GPT, lo más probable es que la consulta falle salvo que uses tu propio servidor intermedio; para que funcione desde aquí usa Anthropic o Gemini.</p>
+      <h3>2. Caché de resultados</h3>
+      <p>Antes de llamar a la IA, la app comprueba si ya tiene guardada en este navegador una respuesta para la misma combinación de proveedor, modelo, empresa, aspecto, detalle y texto final de la consulta. Si la encuentra, te la devuelve al instante, sin gastar tokens. Se guarda en <code>localStorage</code>, dura mientras no la borres ni borres los datos del sitio, y puedes vaciarla cuando quieras con el botón correspondiente. Si activas "Mejorar la consulta con IA", el texto final puede variar entre ejecuciones, así que la caché puede no coincidir siempre; para aprovecharla al máximo en lotes, lo más fiable es desactivar la mejora.</p>
+      <h3>3. Caché de prompts (solo Anthropic)</h3>
+      <p>El "marco de análisis" de la sección de caché es el bloque de instrucciones fijas que se envía como <code>system</code> en cada informe. Con el proveedor Anthropic y esta opción activada, ese bloque se marca con <code>cache_control</code> para que Anthropic lo reutilice entre llamadas consecutivas y lo cobre más barato en las siguientes. <b>Solo hay ahorro real si el bloque supera el mínimo cacheable del modelo</b> (512 tokens en los modelos "...5.5" y Haiku 5.5, 1024 en Claude Sonnet 5): por debajo de ese umbral, Anthropic procesa el texto con normalidad y no cobra ni más ni menos por activarlo. El marco de análisis que trae la app por defecto ronda ese umbral; si quieres asegurar el ahorro, amplíalo. El ahorro se nota sobre todo en lotes largos con el mismo marco de análisis y el mismo modelo.</p>
+      <h3>4. Modo por lotes</h3>
+      <p>Cambia a "Por lotes", marca varias empresas y varios aspectos (se genera una consulta por cada combinación, es decir, empresas × aspectos) y añade un detalle compartido si quieres. Elige el tipo de lote:</p>
+      <ul>
+        <li><b>Cola en la app:</b> lanza las consultas con las llamadas normales a la API, varias a la vez según el número de "consultas simultáneas" que fijes, con una barra de progreso. Funciona con los tres proveedores (con las mismas limitaciones de CORS de OpenAI). Resultados en segundos o minutos.</li>
+        <li><b>Batch API de Anthropic:</b> envía todas las consultas como un único lote asíncrono al servicio oficial de Anthropic (hasta un 50% más barato), que tarda en resolverse —normalmente minutos, hasta 24 horas—. Solo disponible con proveedor Anthropic, y sin el paso de "mejorar la consulta" (el lote envía la consulta base directamente). Esta app comprueba el estado automáticamente cada 30 segundos mientras la tengas abierta; si cierras la página, el lote sigue procesándose en Anthropic y puedes volver más tarde y pulsar "Comprobar estado" en la sección "Lotes de Anthropic pendientes". Nota: esta llamada no está documentada explícitamente como apta para navegador, así que si falla por CORS, usa "Cola en la app".</li>
+      </ul>
+      <p>Cada informe del lote se guarda como una entrada independiente en el historial (igual que en modo individual) y, además, al terminar puedes exportar el lote completo como un único documento combinado.</p>
+      <h3>5. Tokens y coste</h3>
+      <p>Cuando el proveedor devuelve el recuento real de tokens se usa ese dato; si no, se muestra una estimación (caracteres ÷ 4). El coste de las llamadas con caché de prompts de Anthropic tiene en cuenta el recargo de escritura en caché y el descuento de lectura; el de la Batch API aplica el descuento del 50%. Son cifras aproximadas: la tarifa real puede variar.</p>
+      <h3>6. Exportar e historial</h3>
+      <p>Descarga el informe (individual o combinado de un lote) en Markdown, texto plano o Word (.docx), con el nombre de fichero que elijas. El historial no se guarda solo en modo individual —pulsa "Guardar en historial"—, pero en modo por lotes cada resultado se guarda automáticamente.</p>
+      <p><b>Aviso:</b> las respuestas se basan en el conocimiento del modelo, sin navegación web, y pueden no reflejar cambios recientes en la empresa consultada.</p>
+    </div>
+  </details>
+
+  <section class="panel">
+    <div class="panel-head"><h2>1 · Configuración del proveedor de IA</h2><span class="tag">obligatorio</span></div>
+    <p class="hint">La clave de API se usa solo en tu navegador para llamar directamente al proveedor elegido. No se envía a ningún otro sitio ni se guarda salvo que marques la casilla.</p>
+
+    <div class="providerpicker" id="providerPicker" role="radiogroup" aria-label="Proveedor de IA"></div>
+
+    <div class="grid2">
+      <div>
+        <div class="formrow">
+          <label for="selModel">Modelo</label>
+          <select id="selModel"></select>
+        </div>
+        <div class="formrow" id="customModelRow" hidden>
+          <label for="customModel">Identificador del modelo</label>
+          <input type="text" id="customModel" placeholder="p. ej. claude-opus-5-5">
+        </div>
+        <div class="modelspecs" id="modelSpecs"></div>
+
+        <div class="keybox">
+          <label for="apiKey">Clave de API del proveedor activo</label>
+          <input type="password" id="apiKey" autocomplete="off" placeholder="Pega aquí tu clave">
+          <div class="btnrow">
+            <button type="button" class="btn small" id="btnSaveKey">Guardar clave</button>
+            <button type="button" class="btn subtle small" id="btnToggleKey">Mostrar</button>
+            <button type="button" class="btn danger small" id="btnClearKey">Borrar clave</button>
+          </div>
+          <p class="keystatus hint" id="keyStatus"></p>
+        </div>
+      </div>
+      <div>
+        <div class="formrow">
+          <label for="maxTokens">Máx. tokens de salida</label>
+          <input type="number" id="maxTokens" min="64" step="64">
+        </div>
+        <div class="switchrow">
+          <input type="checkbox" id="useImprove" checked>
+          <label for="useImprove">Mejorar la consulta con IA antes de ejecutarla (2 llamadas)
+            <span class="sublabel">En modo por lotes solo se aplica a la "cola en la app"; la Batch API de Anthropic siempre envía la consulta base directamente.</span>
+          </label>
+        </div>
+        <p class="hint" style="margin-top:10px">No hay ningún límite propio de temas, empresas o aspectos: puedes escribir cualquier empresa o aspecto logístico en los campos "otro(s)".</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>2 · Caché</h2><span class="tag cache">resultados + prompts</span></div>
+    <p class="hint">La caché de resultados evita repetir consultas idénticas (cualquier proveedor). La caché de prompts reutiliza el "marco de análisis" en Anthropic.</p>
+
+    <div class="grid2 even">
+      <div class="cachebox">
+        <div class="cachehead">
+          <b>Caché de resultados</b>
+          <span id="cacheCountLabel" class="hint" style="margin:0">0 guardados</span>
+        </div>
+        <div class="switchrow" style="margin-top:8px">
+          <input type="checkbox" id="cacheResultsEnabled" checked>
+          <label for="cacheResultsEnabled">Reutilizar informes ya generados para la misma combinación</label>
+        </div>
+        <div class="btnrow">
+          <button type="button" class="btn subtle small" id="btnClearCache">Vaciar caché de resultados</button>
+        </div>
+      </div>
+      <div class="cachebox">
+        <div class="cachehead"><b>Caché de prompts (Anthropic)</b></div>
+        <div class="switchrow" style="margin-top:8px">
+          <input type="checkbox" id="promptCachingEnabled" checked>
+          <label for="promptCachingEnabled">Marcar el marco de análisis con <code>cache_control</code> cuando el proveedor sea Anthropic
+            <span class="sublabel" id="promptCachingNote"></span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <details>
+      <summary style="cursor:pointer; font-size:13.5px; font-weight:600; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; margin:10px 0">Editar marco de análisis (instrucciones fijas de cada informe)</summary>
+      <div style="margin-top:10px">
+        <textarea id="framework" class="framework"></textarea>
+        <div class="btnrow">
+          <button type="button" class="btn ghost small" id="btnResetFramework">Restaurar el marco por defecto</button>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>3 · Modo de trabajo</h2></div>
+    <div class="modepicker" id="modePicker" role="radiogroup" aria-label="Modo de trabajo"></div>
+  </section>
+
+  <!-- ===================== MODO INDIVIDUAL ===================== -->
+  <section class="panel" id="panelIndividualSel">
+    <div class="panel-head"><h2>4 · Selección de la consulta</h2>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <span class="tag">empresa + aspecto</span>
+        <button class="btn ghost small" id="btnClearAll" type="button">Borrar todo</button>
+      </div>
+    </div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" id="lblEmpresa">Empresa</label>
+      <div class="chips" id="chipsEmpresa" role="radiogroup" aria-labelledby="lblEmpresa"></div>
+      <input type="text" class="otherbox" id="otherEmpresa" placeholder="Escribe el nombre de la empresa…" hidden>
+    </div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" id="lblAspecto">Aspecto logístico</label>
+      <div class="chips" id="chipsAspecto" role="radiogroup" aria-labelledby="lblAspecto"></div>
+      <input type="text" class="otherbox" id="otherAspecto" placeholder="Describe el aspecto logístico…" hidden>
+    </div>
+
+    <div class="chipfield">
+      <label class="fieldlabel" for="detalle">Detalle adicional (opcional)</label>
+      <textarea id="detalle" placeholder="Ej.: céntrate en el mercado europeo, compara con un competidor, enfócate en los últimos dos años…"></textarea>
+      <div class="btnrow" style="margin-top:6px">
+        <button class="btn ghost small" id="btnClearDetalle" type="button">Borrar</button>
+      </div>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn" id="btnPrepare" type="button">Generar consulta →</button>
+      <span class="hint" id="prepareHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelPrompt" hidden>
+    <div class="panel-head"><h2>5 · Consulta a ejecutar</h2><span class="tag" id="promptTag">mejorada por IA</span></div>
+    <p class="hint">Puedes editar el texto antes de ejecutar la consulta final.</p>
+    <div class="promptbox">
+      <textarea id="finalPrompt" style="min-height:275px"></textarea>
+      <div class="costline" id="prepareCostline"></div>
+    </div>
+    <div class="btnrow">
+      <button class="btn" id="btnRun" type="button">Ejecutar consulta ▶</button>
+      <button class="btn ghost small" id="btnRegeneratePrompt" type="button">Regenerar mejora</button>
+      <button class="btn ghost small" id="btnClearPrompt" type="button">Borrar</button>
+      <span class="hint" id="runHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelResult" hidden>
+    <div class="panel-head"><h2>6 · Informe</h2><span class="tag" id="resultTag">—</span></div>
+    <div class="reportshell">
+      <div class="stamp" id="resultStamp" hidden></div>
+      <div class="report" id="reportBody"><p class="empty-report">Aún no se ha ejecutado ninguna consulta.</p></div>
+    </div>
+    <div class="costline" id="resultCostline"></div>
+    <div class="btnrow">
+      <button class="btn subtle small" id="btnSaveHistory" type="button">💾 Guardar en historial</button>
+      <button class="btn ghost small" id="btnClearReport" type="button">Borrar</button>
+      <span class="hint" id="saveHistHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelExport" hidden>
+    <div class="panel-head"><h2>7 · Exportar informe</h2></div>
+    <div class="exportgrid">
+      <div class="formrow">
+        <label for="filename">Nombre de fichero</label>
+        <input type="text" id="filename" placeholder="searchlogmodcb_empresa_aspecto">
+      </div>
+      <button class="btn amber" id="btnDlMd" type="button">⬇ Markdown (.md)</button>
+      <button class="btn subtle" id="btnDlTxt" type="button">⬇ Texto plano (.txt)</button>
+      <button class="btn subtle" id="btnDlDoc" type="button">⬇ Word (.docx)</button>
+      <button class="btn ghost" id="btnCopy" type="button">Copiar resultado</button>
+    </div>
+    <p class="hint" style="margin-top:10px">Al pulsar una descarga se te pedirá confirmación: dentro de Claude, mediante el cuadro de guardado de la propia plataforma; si abres este HTML fuera de Claude, mediante la descarga normal del navegador. "Word (.docx)" genera un documento nativo de Word, listo para abrir sin avisos de compatibilidad.</p>
+  </section>
+
+  <!-- ===================== MODO POR LOTES ===================== -->
+  <section class="panel" id="panelBatchSel" hidden>
+    <div class="panel-head"><h2>4 · Selección del lote</h2><span class="tag">matriz empresas × aspectos</span></div>
+
+    <div class="grid2 even">
+      <div class="chipfield" style="margin-bottom:0">
+        <label class="fieldlabel" id="lblBatchEmpresa">Empresas (puedes marcar varias)</label>
+        <div class="chips" id="chipsBatchEmpresa"></div>
+        <input type="text" class="otherbox" id="batchEmpresaExtra" placeholder="Otras empresas, separadas por comas…">
+      </div>
+      <div class="chipfield" style="margin-bottom:0">
+        <label class="fieldlabel" id="lblBatchAspecto">Aspectos (puedes marcar varios)</label>
+        <div class="chips" id="chipsBatchAspecto"></div>
+        <input type="text" class="otherbox" id="batchAspectoExtra" placeholder="Otros aspectos, separados por comas…">
+      </div>
+    </div>
+
+    <div class="chipfield" style="margin-top:16px">
+      <label class="fieldlabel" for="batchDetalle">Detalle adicional compartido (opcional)</label>
+      <textarea id="batchDetalle" placeholder="Se añadirá a todas las consultas del lote…"></textarea>
+    </div>
+
+    <div class="countline" id="batchCountLine">Selecciona al menos una empresa y un aspecto.</div>
+
+    <div class="panel-head" style="margin-top:4px"><h2 style="font-size:15px">Tipo de lote</h2></div>
+    <div class="typepicker" id="batchTypePicker" role="radiogroup" aria-label="Tipo de lote"></div>
+
+    <div class="concurrencyrow" id="concurrencyRow">
+      <label for="batchConcurrency">Consultas simultáneas</label>
+      <input type="number" id="batchConcurrency" min="1" max="4" value="2">
+      <span class="hint" style="margin:0">Solo aplica a "Cola en la app"; más simultáneas = más rápido, pero más fácil toparse con límites de tasa del proveedor.</span>
+    </div>
+
+    <div class="btnrow">
+      <button class="btn" id="btnRunBatch" type="button">Lanzar lote ▶</button>
+      <span class="hint" id="batchLaunchHint" style="margin:0"></span>
+    </div>
+  </section>
+
+  <section class="panel" id="panelBatchProgress" hidden>
+    <div class="panel-head"><h2>5 · Progreso del lote</h2><span class="tag" id="batchProgressTag">en cola</span></div>
+    <div class="progress-wrap">
+      <div class="progress-track"><div class="progress-fill" id="batchProgressFill"></div></div>
+      <div class="progress-label">
+        <span id="batchProgressText">0 / 0</span>
+        <span id="batchProgressCost">coste del lote: $0.0000</span>
+      </div>
+    </div>
+    <div class="batchlist" id="batchItemsList"></div>
+  </section>
+
+  <section class="panel" id="panelBatchExport" hidden>
+    <div class="panel-head"><h2>6 · Exportar lote combinado</h2></div>
+    <p class="hint">Un único documento con todos los informes del lote, uno tras otro, además de quedar guardados por separado en el historial.</p>
+    <div class="exportgrid">
+      <div class="formrow">
+        <label for="batchFilename">Nombre de fichero</label>
+        <input type="text" id="batchFilename" placeholder="searchlogmodcb_lote">
+      </div>
+      <button class="btn amber" id="btnBatchDlMd" type="button">⬇ Markdown (.md)</button>
+      <button class="btn subtle" id="btnBatchDlTxt" type="button">⬇ Texto plano (.txt)</button>
+      <button class="btn subtle" id="btnBatchDlDoc" type="button">⬇ Word (.docx)</button>
+    </div>
+  </section>
+
+  <section class="panel" id="panelPendingBatches" hidden>
+    <div class="panel-head"><h2>Lotes de Anthropic pendientes</h2>
+      <button class="btn ghost small" id="btnRefreshPending" type="button">Comprobar todos</button>
+    </div>
+    <div id="pendingBatchesList"></div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Historial de esta sesión</h2>
+      <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap">
+        <button class="btn danger small" id="btnDeleteSelectedHist" type="button">Eliminar seleccionados</button>
+        <button class="btn ghost small" id="btnClearHist" type="button">Vaciar historial</button>
+      </div>
+    </div>
+    <div class="histlist" id="histList"><p class="histempty">Sin consultas todavía.</p></div>
+  </section>
+
+  <footer>
+    <b>Rafael Puerto</b> · Departamento de Ingeniería de Sistemas y Automática · Universidad Miguel Hernández de Elche · <a href="mailto:r.puerto@umh.es">r.puerto@umh.es</a><br>
+    <span class="legend">Generado con IA · Revisado por el autor</span><br>
+    Última modificación: <span id="lastMod"></span>
+  </footer>
+</div>
+
+<div id="toast"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/marked/9.1.2/marked.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docx@9.0.3/build/index.umd.js"></script>
+<script>
+(function(){
+"use strict";
+
+/* ===================== datos de dominio ===================== */
+var EMPRESAS = [
+  "Inditex (Zara, Pull&Bear, Bershka, Massimo Dutti…)","H&M Group","Shein",
+  "Fast Retailing (Uniqlo)","Primark","Mango","Nike","Adidas","Puma","New Balance",
+  "LVMH (Louis Vuitton, Dior, Fendi…)","Kering (Gucci, Saint Laurent, Balenciaga…)",
+  "PVH Corp (Calvin Klein, Tommy Hilfiger)","VF Corporation (The North Face, Vans, Timberland)",
+  "Levi Strauss & Co.","ASOS","Zalando","Boohoo Group","Decathlon","Patagonia","C&A","Desigual"
+];
+
+var ASPECTOS = [
+  "Cadena de suministro global","Sourcing y fabricación / deslocalización",
+  "Gestión de inventario y stock","Almacenamiento y centros de distribución",
+  "Transporte y distribución internacional","Logística de última milla",
+  "Logística inversa y devoluciones","Omnicanalidad (online-offline)",
+  "Automatización y robotización de almacenes","Trazabilidad y tecnología (RFID, IoT, blockchain)",
+  "Previsión de demanda y planificación","Sostenibilidad y logística verde",
+  "Fast fashion y tiempos de producción (lead time)","Gestión de proveedores y relaciones B2B",
+  "Packaging, etiquetado y cumplimiento normativo"
+];
+
+/* precios en USD por millón de tokens (tarifa estándar, pueden variar) */
+var PROVIDERS = {
+  anthropic: {
+    label: "Anthropic (Claude)",
+    models: [
+      {id:"claude-sonnet-5", label:"Claude Sonnet 5 (por defecto)", context:1000000, maxOutput:128000, price:{in:2, out:10}, cacheMin:1024},
+      {id:"claude-opus-5-5", label:"Claude Opus 5.5", context:1000000, maxOutput:128000, price:{in:4, out:20}, cacheMin:512},
+      {id:"claude-sonnet-5-5", label:"Claude Sonnet 5.5", context:1000000, maxOutput:128000, price:{in:2, out:10}, cacheMin:512},
+      {id:"claude-haiku-5-5", label:"Claude Haiku 5.5", context:1000000, maxOutput:128000, price:{in:0.10, out:0.50}, cacheMin:512},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  },
+  openai: {
+    label: "OpenAI (GPT)",
+    models: [
+      {id:"gpt-6-luna", label:"GPT-6 Luna (por defecto)", context:1048576, maxOutput:128000, price:{in:0.10, out:0.50}},
+      {id:"gpt-6-astra", label:"GPT-6 Astra", context:1048576, maxOutput:128000, price:{in:10, out:50}},
+      {id:"gpt-6.1-sol", label:"GPT-6.1 Sol", context:1048576, maxOutput:128000, price:{in:2, out:10}},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  },
+  gemini: {
+    label: "Google (Gemini)",
+    models: [
+      {id:"gemini-3.8-flash", label:"Gemini 3.8 Flash (por defecto)", context:1048576, maxOutput:65536, price:{in:0.75, out:3.75}},
+      {id:"gemini-3.1-pro-preview", label:"Gemini 3.1 Pro", context:1048576, maxOutput:65536, price:{in:2, out:12}},
+      {id:"gemini-3.5-flash-lite", label:"Gemini 3.5 Flash-Lite", context:1048576, maxOutput:65536, price:{in:0.30, out:2.50}},
+      {id:"custom", label:"Otro (indicar id)…"}
+    ]
+  }
+};
+/* La mayoría de modelos actuales ("reasoning") ya no admiten un parámetro 'temperature'
+   personalizado (solo reasoning_effort), así que la app no lo expone ni lo envía. */
+
+var DEFAULT_FRAMEWORK = [
+"Eres un analista sénior de logística y cadena de suministro especializado en la industria de la moda, con experiencia en sourcing internacional, fabricación, distribución omnicanal, última milla y sostenibilidad. Tu función es redactar, para cada consulta que te plantee el usuario, un informe profesional en español, en formato Markdown, pensado como material de apoyo para la docencia universitaria en gestión y tecnología de la moda.",
+"",
+"ESTRUCTURA DEL INFORME",
+"Organiza siempre el contenido con encabezados de nivel 2 (##) siguiendo este esquema, adaptando la extensión de cada bloque a la relevancia del tema tratado:",
+"1. Resumen ejecutivo: entre tres y cinco líneas que condensen la idea principal, sin remitir a secciones posteriores.",
+"2. Contexto: quién es la empresa o qué cubre el aspecto logístico tratado, y por qué resulta relevante en el sector de la moda.",
+"3. Desarrollo del análisis: el cuerpo principal, con subapartados de nivel 3 (###) cuando ayuden a seguir el razonamiento. Explica mecanismos, no solo enumera datos.",
+"4. Una tabla comparativa o de síntesis cuando los datos se presten a ello (actores, fases del proceso, cifras, proveedores, plazos, etc.). Si no hay datos tabulables, omite este bloque sin forzarlo.",
+"5. Implicaciones para la gestión y la tecnología: automatización, robotización, trazabilidad (RFID, IoT, blockchain), analítica de datos e inteligencia artificial, cuando sea pertinente al aspecto tratado.",
+"6. Riesgos, limitaciones y controversias del enfoque actual del sector, incluyendo tensiones entre coste, velocidad y sostenibilidad.",
+"7. Una pregunta o caso de reflexión que un profesor podría plantear en clase a partir de este informe.",
+"",
+"CRITERIOS DE CALIDAD",
+"- Precisión: distingue explícitamente entre datos verificables, cifras públicas conocidas y estimaciones razonadas; marca estas últimas como tales (\"se estima que…\", \"según cifras aproximadas del sector…\").",
+"- Vigencia relativa: basas el informe en tu conocimiento, sin navegación web en tiempo real, así que evita afirmaciones categóricas sobre hechos muy recientes y señala siempre esa limitación.",
+"- Nivel universitario: usa terminología técnica correcta y propia del sector (SKU, lead time, cross-docking, nearshoring, trazabilidad, última milla, logística inversa, omnicanalidad, etc.), explicándola brevemente la primera vez que aparezca.",
+"- Equilibrio: cuando existan enfoques, cifras o posturas contradictorias dentro del sector, menciona el contraste explícitamente en vez de ofrecer un único dato sin matices.",
+"- Especificidad: evita generalidades aplicables a cualquier empresa; ancla el análisis en las particularidades reales del caso consultado siempre que tu conocimiento lo permita.",
+"- Aplicabilidad docente: el informe debe poder usarse como material de clase, con lenguaje claro, bien organizado, sin jerga innecesaria ni relleno.",
+"",
+"ESTILO Y FORMATO",
+"Redacta en español neutro, en un tono profesional pero accesible. Usa listas con viñetas para enumeraciones y tablas en formato Markdown estándar (con fila de cabecera y separador) cuando compares elementos. No uses encabezados de nivel 1 (#); el título ya lo gestiona la aplicación. No repitas literalmente el enunciado de la consulta como título del informe.",
+"",
+"CIERRE OBLIGATORIO",
+"Termina siempre el informe con una nota breve, en cursiva, que indique que la información se basa en el conocimiento del modelo, sin navegación en tiempo real, y que conviene contrastarla con fuentes actualizadas de la propia empresa o de organismos del sector antes de emplearla en un contexto profesional o de toma de decisiones."
+].join("\n");
+
+/* ===================== estado ===================== */
+var state = {
+  provider: "anthropic",
+  mode: "individual", // "individual" | "batch"
+  empresa: null, empresaCustom: "",
+  aspecto: null, aspectoCustom: "",
+  improvedPrompt: "", basePrompt: "",
+  lastResult: null,
+  sessionCost: 0,
+  cache: { enabled:true, promptCaching:true, framework: DEFAULT_FRAMEWORK },
+  batch: {
+    empresasSel: {}, aspectosSel: {},
+    tipo: "cola", // "cola" | "api"
+    running: false,
+    items: [],
+    lastCombinedMarkdown: "", lastCombinedCost: 0
+  }
+};
+var pollingTimers = {};
+
+/* ===================== utilidades ===================== */
+function $(id){ return document.getElementById(id); }
+function esc(s){ return String(s).replace(/[&<>"']/g, function(c){ return {"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]; }); }
+function toast(msg){
+  var t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(toast._h); toast._h = setTimeout(function(){ t.classList.remove("show"); }, 2600);
+}
+function estimateTokens(text){ return Math.max(1, Math.ceil((text||"").length / 4)); }
+function currentModel(){
+  var cfg = PROVIDERS[state.provider];
+  var id = $("selModel").value;
+  if (id === "custom") {
+    var customId = $("customModel").value.trim() || "custom";
+    return {id: customId, label: customId, context:null, maxOutput:null, price:null, cacheMin:null};
+  }
+  var found = null;
+  cfg.models.forEach(function(m){ if (m.id === id) found = m; });
+  return found;
+}
+function priceFor(model, inTok, outTok){
+  if (!model || !model.price) return null;
+  return (inTok/1e6)*model.price.in + (outTok/1e6)*model.price.out;
+}
+function priceForCached(model, inTok, outTok, cacheWriteTok, cacheReadTok){
+  if (!model || !model.price) return null;
+  var base = (inTok/1e6) * model.price.in;
+  var write = cacheWriteTok ? (cacheWriteTok/1e6) * model.price.in * 1.25 : 0;
+  var read = cacheReadTok ? (cacheReadTok/1e6) * model.price.in * 0.1 : 0;
+  var out = (outTok/1e6) * model.price.out;
+  return base + write + read + out;
+}
+function priceForBatchApi(model, inTok, outTok){
+  var p = priceFor(model, inTok, outTok);
+  return p == null ? null : p * 0.5;
+}
+function fmtUSD(v){ if (v == null) return "sin datos de tarifa"; return "$" + v.toFixed(4); }
+function fmtNum(n){ if (n == null) return "—"; return n.toLocaleString("es-ES"); }
+function nowStamp(){
+  return new Date().toLocaleString("es-ES", {dateStyle:"long", timeStyle:"short"});
+}
+function sanitizeFilename(s){
+  return (s||"searchlogmodcb").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"")
+    .replace(/[^a-z0-9]+/g,"_").replace(/^_+|_+$/g,"").slice(0,80) || "searchlogmodcb";
+}
+function hashStr(s){
+  var h = 2166136261;
+  for (var i = 0; i < s.length; i++){ h ^= s.charCodeAt(i); h = (h * 16777619) >>> 0; }
+  return h.toString(36);
+}
+
+/* ===================== construcción de chips (selección única) ===================== */
+function buildChips(containerId, otherInputId, items, stateKey, customKey, labelPrefix){
+  var box = $(containerId);
+  box.innerHTML = "";
+  items.forEach(function(item){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("role","radio");
+    b.setAttribute("aria-checked","false"); b.textContent = item;
+    b.addEventListener("click", function(){
+      state[stateKey] = item; state[customKey] = "";
+      $(otherInputId).hidden = true; $(otherInputId).value = "";
+      refreshSingleChipSelection(containerId, b);
+    });
+    box.appendChild(b);
+  });
+  var other = document.createElement("button");
+  other.type = "button"; other.className = "chip other"; other.setAttribute("role","radio");
+  other.setAttribute("aria-checked","false"); other.textContent = labelPrefix;
+  other.addEventListener("click", function(){
+    state[stateKey] = "__other__";
+    $(otherInputId).hidden = false; $(otherInputId).focus();
+    refreshSingleChipSelection(containerId, other);
+  });
+  box.appendChild(other);
+  $(otherInputId).addEventListener("input", function(){ state[customKey] = this.value; });
+}
+function refreshSingleChipSelection(containerId, activeBtn){
+  var box = $(containerId);
+  Array.prototype.forEach.call(box.children, function(c){
+    var on = c === activeBtn;
+    c.classList.toggle("sel", on);
+    c.setAttribute("aria-checked", on ? "true" : "false");
+  });
+}
+function selectedEmpresa(){ return state.empresa === "__other__" ? (state.empresaCustom.trim()||"(empresa sin especificar)") : state.empresa; }
+function selectedAspecto(){ return state.aspecto === "__other__" ? (state.aspectoCustom.trim()||"(aspecto sin especificar)") : state.aspecto; }
+
+/* ===================== construcción de chips (selección múltiple, lote) ===================== */
+function buildMultiChips(containerId, items, selMap, onChange){
+  var box = $(containerId);
+  box.innerHTML = "";
+  items.forEach(function(item){
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.setAttribute("role","checkbox");
+    b.setAttribute("aria-checked","false"); b.textContent = item;
+    b.addEventListener("click", function(){
+      if (selMap[item]) delete selMap[item]; else selMap[item] = true;
+      b.classList.toggle("sel", !!selMap[item]);
+      b.setAttribute("aria-checked", selMap[item] ? "true" : "false");
+      onChange();
+    });
+    box.appendChild(b);
+  });
+}
+function parseExtraList(text){
+  return (text||"").split(",").map(function(s){ return s.trim(); }).filter(Boolean);
+}
+function selectedBatchEmpresas(){
+  var arr = Object.keys(state.batch.empresasSel).filter(function(k){ return state.batch.empresasSel[k]; });
+  return arr.concat(parseExtraList($("batchEmpresaExtra").value));
+}
+function selectedBatchAspectos(){
+  var arr = Object.keys(state.batch.aspectosSel).filter(function(k){ return state.batch.aspectosSel[k]; });
+  return arr.concat(parseExtraList($("batchAspectoExtra").value));
+}
+function batchCombos(){
+  var es = selectedBatchEmpresas(), as = selectedBatchAspectos(), out = [];
+  es.forEach(function(e){ as.forEach(function(a){ out.push({empresa:e, aspecto:a}); }); });
+  return out;
+}
+function updateBatchCount(){
+  var es = selectedBatchEmpresas(), as = selectedBatchAspectos();
+  var el = $("batchCountLine");
+  if (!es.length || !as.length){
+    el.innerHTML = "Selecciona al menos una empresa y un aspecto.";
+  } else {
+    el.innerHTML = "Se generarán <b>" + (es.length*as.length) + "</b> consultas &nbsp;·&nbsp; <b>" + es.length + "</b> empresa(s) × <b>" + as.length + "</b> aspecto(s)";
+  }
+  $("btnRunBatch").disabled = !(es.length && as.length);
+}
+
+/* ===================== UI: proveedor / modelo ===================== */
+function buildProviderPicker(){
+  var box = $("providerPicker"); box.innerHTML = "";
+  Object.keys(PROVIDERS).forEach(function(key){
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = PROVIDERS[key].label;
+    b.setAttribute("role","radio"); b.setAttribute("aria-pressed", key === state.provider ? "true":"false");
+    b.addEventListener("click", function(){
+      state.provider = key;
+      Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c===b ? "true":"false"); });
+      buildModelSelect(); loadRememberedKey(); updateBar(); updateBatchTypeAvailability(); updatePromptCachingNote();
+    });
+    box.appendChild(b);
+  });
+}
+function buildModelSelect(){
+  var sel = $("selModel"); sel.innerHTML = "";
+  PROVIDERS[state.provider].models.forEach(function(m){
+    var o = document.createElement("option"); o.value = m.id; o.textContent = m.label;
+    sel.appendChild(o);
+  });
+  sel.onchange = onModelChange;
+  onModelChange();
+}
+function onModelChange(){
+  var id = $("selModel").value;
+  $("customModelRow").hidden = (id !== "custom");
+  var model = currentModel();
+  var specs = $("modelSpecs");
+  var lines = [];
+  if (state.provider === "openai"){
+    lines.push("<div class=\"warnline\" style=\"color:var(--warn)\">⚠ OpenAI no admite llamadas directas desde el navegador (CORS): esta opción puede fallar salvo que uses tu propio servidor intermedio.</div>");
+  }
+  if (model && model.price){
+    lines.push(
+      "<div>Contexto: <b>" + fmtNum(model.context) + " tok</b> &nbsp;·&nbsp; " +
+      "Máx. salida: <b>" + fmtNum(model.maxOutput) + " tok</b></div>");
+    lines.push(
+      "<div>Precio: <b>$" + model.price.in + "</b>/MTok entrada &nbsp;·&nbsp; <b>$" + model.price.out + "</b>/MTok salida</div>");
+    if (model.cacheMin){
+      lines.push("<div>Mínimo cacheable (prompt caching): <b>" + fmtNum(model.cacheMin) + " tok</b></div>");
+    }
+    if (!$("maxTokens").dataset.userEdited) $("maxTokens").value = Math.min(4096, model.maxOutput);
+  } else {
+    lines.push("<div>Modelo personalizado: indica tú mismo el límite de tokens de salida adecuado.</div>");
+  }
+  specs.innerHTML = lines.join("");
+  updateBar();
+  updatePromptCachingNote();
+}
+function updateBar(){
+  var model = currentModel();
+  $("barProvider").textContent = PROVIDERS[state.provider].label;
+  $("barModel").textContent = model ? model.label : "—";
+  $("dotProvider").className = "dot " + ($("apiKey") && $("apiKey").value ? "ok" : "");
+  $("barCost").textContent = "$" + state.sessionCost.toFixed(4);
+  $("barCache").textContent = cacheEntryCount() + " resultados";
+  $("resultTag").textContent = PROVIDERS[state.provider].label + " · " + (model ? model.label : "—");
+}
+function updatePromptCachingNote(){
+  var model = currentModel();
+  var note = $("promptCachingNote");
+  if (!note) return;
+  if (state.provider !== "anthropic"){
+    note.textContent = "Solo tiene efecto con el proveedor Anthropic; con " + PROVIDERS[state.provider].label + " esta casilla no cambia nada.";
+    return;
+  }
+  var words = state.cache.framework.trim().split(/\s+/).filter(Boolean).length;
+  var estTok = estimateTokens(state.cache.framework);
+  if (model && model.cacheMin){
+    note.textContent = "Marco de análisis actual: ~" + estTok + " tok estimados (mínimo cacheable de " + model.label + ": " + fmtNum(model.cacheMin) + " tok).";
+  } else {
+    note.textContent = "Marco de análisis actual: ~" + estTok + " tok estimados.";
+  }
+}
+
+/* ===================== modo de trabajo ===================== */
+function buildModePicker(){
+  var box = $("modePicker"); box.innerHTML = "";
+  [["individual","Individual"],["batch","Por lotes"]].forEach(function(pair){
+    var b = document.createElement("button");
+    b.type = "button"; b.textContent = pair[1];
+    b.setAttribute("role","radio"); b.setAttribute("aria-pressed", state.mode === pair[0] ? "true":"false");
+    b.addEventListener("click", function(){
+      state.mode = pair[0];
+      Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c===b ? "true":"false"); });
+      applyModeVisibility();
+    });
+    box.appendChild(b);
+  });
+}
+function applyModeVisibility(){
+  var ind = state.mode === "individual";
+  $("panelIndividualSel").hidden = !ind;
+  if (ind){ $("panelPrompt").hidden = !state.improvedPrompt; $("panelResult").hidden = !state.lastResult; $("panelExport").hidden = !state.lastResult; }
+  else { $("panelPrompt").hidden = true; $("panelResult").hidden = true; $("panelExport").hidden = true; }
+  $("panelBatchSel").hidden = ind;
+  $("panelBatchProgress").hidden = ind || !state.batch.items.length;
+  $("panelBatchExport").hidden = ind || !state.batch.lastCombinedMarkdown;
+}
+
+/* ===================== caché de resultados ===================== */
+var CACHE_KEY = "searchlogmodcb_cache_v1";
+function loadCacheMap(){ try{ return JSON.parse(localStorage.getItem(CACHE_KEY) || "{}"); } catch(e){ return {}; } }
+function saveCacheMap(map){ try{ localStorage.setItem(CACHE_KEY, JSON.stringify(map)); } catch(e){} }
+function cacheEntryCount(){ return Object.keys(loadCacheMap()).length; }
+function reportCacheKey(userText){
+  var model = currentModel();
+  var modelId = model ? model.id : "";
+  return "r_" + hashStr(state.provider + "||" + modelId + "||" + hashStr(state.cache.framework) + "||" + userText);
+}
+function getCached(key){
+  if (!state.cache.enabled) return null;
+  var map = loadCacheMap();
+  return map[key] || null;
+}
+function putCache(key, entry){
+  if (!state.cache.enabled) return;
+  var map = loadCacheMap();
+  map[key] = entry;
+  var keys = Object.keys(map);
+  if (keys.length > 200){
+    keys.sort(function(a,b){ return (map[a].ts||0) - (map[b].ts||0); });
+    keys.slice(0, keys.length - 200).forEach(function(k){ delete map[k]; });
+  }
+  saveCacheMap(map);
+  updateCacheUI();
+}
+function clearCacheStore(){
+  try{ localStorage.removeItem(CACHE_KEY); } catch(e){}
+  updateCacheUI();
+  toast("Caché de resultados vaciada.");
+}
+function updateCacheUI(){
+  $("cacheCountLabel").textContent = cacheEntryCount() + " guardados";
+  updateBar();
+}
+
+/* ===================== llamadas a proveedores ===================== */
+function networkErrorMessage(){
+  if (state.provider === "openai"){
+    return "OpenAI ha rechazado la conexión directa desde el navegador (CORS). Su API no admite este tipo de llamada desde una página web sin un servidor intermedio propio; esto no se puede evitar desde aquí. Prueba con Anthropic o Gemini, que sí permiten llamadas directas desde el navegador.";
+  }
+  return "No se ha podido conectar con el proveedor (red o CORS). Comprueba tu conexión a internet y la clave de API.";
+}
+async function doFetch(url, options){
+  try{
+    return await fetch(url, options);
+  } catch(networkErr){
+    throw new Error(networkErrorMessage());
+  }
+}
+async function callAI(systemText, userText, maxTokens){
+  var model = currentModel();
+  var apiKey = $("apiKey").value.trim();
+  if (!apiKey) throw new Error("Falta la clave de API.");
+  if (!model || !model.id || model.id === "") throw new Error("Selecciona o indica un modelo válido.");
+
+  if (state.provider === "anthropic"){
+    var body = { model: model.id, max_tokens: maxTokens, messages:[{role:"user", content: userText}] };
+    if (systemText){
+      var block = { type:"text", text: systemText };
+      if (state.cache.promptCaching) block.cache_control = { type:"ephemeral" };
+      body.system = [block];
+    }
+    var res = await doFetch("https://api.anthropic.com/v1/messages", {
+      method:"POST",
+      headers:{
+        "content-type":"application/json",
+        "x-api-key": apiKey,
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body: JSON.stringify(body)
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || ("Error HTTP " + res.status));
+    var text = (data.content || []).map(function(c){ return c.text || ""; }).join("");
+    var usage = data.usage || {};
+    return {
+      text: text,
+      inputTokens: usage.input_tokens != null ? usage.input_tokens : null,
+      outputTokens: usage.output_tokens != null ? usage.output_tokens : null,
+      cacheWriteTokens: usage.cache_creation_input_tokens != null ? usage.cache_creation_input_tokens : null,
+      cacheReadTokens: usage.cache_read_input_tokens != null ? usage.cache_read_input_tokens : null,
+      truncated: data.stop_reason === "max_tokens"
+    };
+  }
+
+  if (state.provider === "openai"){
+    var messages = [];
+    if (systemText) messages.push({role:"system", content: systemText});
+    messages.push({role:"user", content: userText});
+    var openaiBody = { model: model.id, max_completion_tokens: maxTokens, messages: messages };
+    var res2 = await doFetch("https://api.openai.com/v1/chat/completions", {
+      method:"POST",
+      headers:{ "content-type":"application/json", "authorization":"Bearer " + apiKey },
+      body: JSON.stringify(openaiBody)
+    });
+    var data2 = await res2.json();
+    if (!res2.ok) throw new Error((data2 && data2.error && data2.error.message) || ("Error HTTP " + res2.status));
+    var choice = (data2.choices || [])[0] || {};
+    return {
+      text: (choice.message && choice.message.content) || "",
+      inputTokens: data2.usage ? data2.usage.prompt_tokens : null,
+      outputTokens: data2.usage ? data2.usage.completion_tokens : null,
+      cacheWriteTokens: null, cacheReadTokens: null,
+      truncated: choice.finish_reason === "length"
+    };
+  }
+
+  if (state.provider === "gemini"){
+    var url = "https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model.id) + ":generateContent?key=" + encodeURIComponent(apiKey);
+    var payload = { contents:[{parts:[{text: userText}]}], generationConfig: { maxOutputTokens: maxTokens } };
+    if (systemText) payload.system_instruction = { parts:[{text: systemText}] };
+    var res3 = await doFetch(url, {
+      method:"POST",
+      headers:{ "content-type":"application/json" },
+      body: JSON.stringify(payload)
+    });
+    var data3 = await res3.json();
+    if (!res3.ok) throw new Error((data3 && data3.error && data3.error.message) || ("Error HTTP " + res3.status));
+    var cand = (data3.candidates || [])[0] || {};
+    var parts = (cand.content && cand.content.parts) || [];
+    var text3 = parts.map(function(p){ return p.text || ""; }).join("");
+    var um = data3.usageMetadata || {};
+    return {
+      text: text3,
+      inputTokens: um.promptTokenCount != null ? um.promptTokenCount : null,
+      outputTokens: um.candidatesTokenCount != null ? um.candidatesTokenCount : null,
+      cacheWriteTokens: null, cacheReadTokens: null,
+      truncated: cand.finishReason === "MAX_TOKENS"
+    };
+  }
+
+  throw new Error("Proveedor no reconocido.");
+}
+
+/* ===================== construcción de prompts ===================== */
+function buildBasePromptFor(empresa, aspecto, detalle){
+  var lines = ["Empresa objetivo: " + empresa, "Aspecto logístico: " + aspecto];
+  if (detalle) lines.push("Detalle adicional del usuario: " + detalle);
+  return lines.join("\n");
+}
+function buildBasePrompt(){
+  return buildBasePromptFor(selectedEmpresa(), selectedAspecto(), $("detalle").value.trim());
+}
+function improveSystemText(){
+  return "Eres un analista experto en logística y cadena de suministro de la industria de la moda. " +
+    "A partir de los datos que te proporcione el usuario, redacta en español una única consulta de investigación " +
+    "clara, específica y bien delimitada, que luego se usará para generar un informe. Devuelve solo la consulta " +
+    "mejorada, sin explicaciones ni texto adicional.";
+}
+function reportSystemText(){ return state.cache.framework; }
+
+/* ===================== paso 1: generar/mejorar consulta (individual) ===================== */
+async function onPrepare(){
+  if (!state.empresa) { toast("Elige una empresa."); return; }
+  if (!state.aspecto) { toast("Elige un aspecto logístico."); return; }
+  if (state.empresa === "__other__" && !state.empresaCustom.trim()){ toast("Escribe el nombre de la empresa."); return; }
+  if (state.aspecto === "__other__" && !state.aspectoCustom.trim()){ toast("Describe el aspecto logístico."); return; }
+
+  var base = buildBasePrompt();
+  state.basePrompt = base;
+  var btn = $("btnPrepare"); btn.disabled = true; $("prepareHint").textContent = "Preparando…";
+
+  try{
+    if ($("useImprove").checked){
+      var estIn = estimateTokens(improveSystemText() + base);
+      var r = await callAI(improveSystemText(), base, 600);
+      state.improvedPrompt = r.text.trim();
+      var model = currentModel();
+      var inTok = r.inputTokens != null ? r.inputTokens : estIn;
+      var outTok = r.outputTokens != null ? r.outputTokens : estimateTokens(r.text);
+      var cost = priceFor(model, inTok, outTok);
+      if (cost != null) state.sessionCost += cost;
+      $("promptTag").textContent = "mejorada por IA";
+      $("prepareCostline").innerHTML =
+        "Mejora de consulta — tokens: <b>" + fmtNum(inTok) + "</b> entrada / <b>" + fmtNum(outTok) + "</b> salida" +
+        (r.inputTokens==null ? " (estimado)" : " (real)") +
+        " &nbsp;·&nbsp; coste: <b>" + fmtUSD(cost) + "</b>";
+    } else {
+      state.improvedPrompt = base;
+      $("promptTag").textContent = "consulta directa (sin mejora)";
+      $("prepareCostline").innerHTML = "Mejora desactivada: se ejecutará la consulta base directamente.";
+    }
+    $("finalPrompt").value = state.improvedPrompt;
+    $("panelPrompt").hidden = false;
+    $("panelPrompt").scrollIntoView({behavior:"smooth", block:"start"});
+    $("prepareHint").textContent = "";
+  } catch(err){
+    toast("Error al preparar la consulta: " + err.message);
+    $("prepareHint").textContent = "";
+  } finally {
+    btn.disabled = false; updateBar();
+  }
+}
+async function onRegeneratePrompt(){
+  $("useImprove").checked = true;
+  await onPrepare();
+}
+
+/* ===================== paso 2: ejecutar consulta final (individual) ===================== */
+async function onRun(){
+  var query = $("finalPrompt").value.trim();
+  if (!query){ toast("No hay consulta que ejecutar."); return; }
+  var maxTokens = parseInt($("maxTokens").value, 10) || 4096;
+  var btn = $("btnRun"); btn.disabled = true;
+
+  var key = reportCacheKey(query);
+  var cached = getCached(key);
+  if (cached){
+    state.lastResult = Object.assign({}, cached, {fromCache:true});
+    renderResult();
+    $("panelExport").hidden = false;
+    $("filename").value = sanitizeFilename("searchlogmodcb_" + cached.empresa + "_" + cached.aspecto);
+    $("saveHistHint").textContent = "";
+    toast("Resultado obtenido de la caché, sin llamar a la API.");
+    btn.disabled = false;
+    return;
+  }
+
+  $("runHint").textContent = "Consultando al proveedor…";
+  $("panelResult").hidden = false;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Generando informe…</p>";
+  $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML =
+    "Tokens entrada: <b>0</b> &nbsp;·&nbsp; salida: <b>0</b>" +
+    " &nbsp;·&nbsp; coste de esta consulta: <b>$0.0000</b>" +
+    " &nbsp;·&nbsp; coste acumulado de la sesión: <b>$" + state.sessionCost.toFixed(4) + "</b>";
+
+  try{
+    var r = await callAI(reportSystemText(), query, maxTokens);
+    var model = currentModel();
+    var estIn = estimateTokens(reportSystemText() + query);
+    var inTok = r.inputTokens != null ? r.inputTokens : estIn;
+    var outTok = r.outputTokens != null ? r.outputTokens : estimateTokens(r.text);
+    var cost = (r.cacheWriteTokens || r.cacheReadTokens)
+      ? priceForCached(model, inTok, outTok, r.cacheWriteTokens, r.cacheReadTokens)
+      : priceFor(model, inTok, outTok);
+    if (cost != null) state.sessionCost += cost;
+
+    state.lastResult = {
+      markdown: r.text, inputTokens: inTok, outputTokens: outTok,
+      estimated: (r.inputTokens == null), truncated: !!r.truncated,
+      provider: PROVIDERS[state.provider].label, model: model.label,
+      empresa: selectedEmpresa(), aspecto: selectedAspecto(), cost: cost, ts: Date.now(),
+      cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, fromCache:false
+    };
+    putCache(key, state.lastResult);
+
+    renderResult();
+    $("panelExport").hidden = false;
+    $("filename").value = sanitizeFilename("searchlogmodcb_" + selectedEmpresa() + "_" + selectedAspecto());
+    $("saveHistHint").textContent = "";
+    $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
+  } catch(err){
+    $("reportBody").innerHTML = "<p class=\"empty-report\">Error: " + esc(err.message) + "</p>";
+    toast("Error al ejecutar la consulta: " + err.message);
+  } finally {
+    btn.disabled = false; $("runHint").textContent = ""; updateBar();
+  }
+}
+
+function renderResult(){
+  var r = state.lastResult;
+  var html = (window.DOMPurify && window.marked) ? DOMPurify.sanitize(marked.parse(r.markdown)) : esc(r.markdown);
+  $("reportBody").innerHTML = html || "<p class=\"empty-report\">Sin contenido.</p>";
+  $("resultTag").textContent = r.provider + " · " + r.model;
+  var stamp = $("resultStamp");
+  stamp.hidden = false;
+  if (r.fromCache){
+    stamp.textContent = "⚡ desde caché"; stamp.className = "stamp cache";
+  } else if (r.truncated){
+    stamp.textContent = "⚠ truncado por límite de tokens"; stamp.className = "stamp truncated";
+  } else {
+    stamp.textContent = "informe completo"; stamp.className = "stamp";
+  }
+  var cacheBits = "";
+  if (r.cacheWriteTokens) cacheBits += " &nbsp;·&nbsp; <span class=\"cachehit\">caché Anthropic: " + fmtNum(r.cacheWriteTokens) + " tok escritos</span>";
+  if (r.cacheReadTokens) cacheBits += " &nbsp;·&nbsp; <span class=\"cachehit\">" + fmtNum(r.cacheReadTokens) + " tok leídos de caché</span>";
+  $("resultCostline").innerHTML =
+    "Tokens entrada: <b>" + fmtNum(r.inputTokens) + "</b> &nbsp;·&nbsp; salida: <b>" + fmtNum(r.outputTokens) + "</b>" +
+    (r.estimated ? " (estimados, el proveedor no devolvió recuento)" : " (recuento real del proveedor)") +
+    " &nbsp;·&nbsp; coste de esta consulta: <b>" + fmtUSD(r.cost) + "</b>" +
+    " &nbsp;·&nbsp; coste acumulado de la sesión: <b>$" + state.sessionCost.toFixed(4) + "</b>" +
+    cacheBits;
+  updateBar();
+}
+
+/* ===================== modo por lotes ===================== */
+function buildBatchTypePicker(){
+  var box = $("batchTypePicker"); box.innerHTML = "";
+  var opts = [
+    {id:"cola", title:"Cola en la app", sub:"Llamadas normales, varias a la vez, resultados en segundos/minutos. Funciona con los tres proveedores."},
+    {id:"api", title:"Batch API de Anthropic", sub:"Asíncrona, hasta 50% más barata, sin paso de mejora. Solo con proveedor Anthropic."}
+  ];
+  opts.forEach(function(o){
+    var b = document.createElement("button");
+    b.type = "button"; b.dataset.tipo = o.id;
+    b.innerHTML = "<b>" + esc(o.title) + "</b><span>" + esc(o.sub) + "</span>";
+    b.setAttribute("aria-pressed", state.batch.tipo === o.id ? "true":"false");
+    b.addEventListener("click", function(){
+      if (b.disabled) return;
+      state.batch.tipo = o.id;
+      Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c===b ? "true":"false"); });
+      $("concurrencyRow").hidden = (state.batch.tipo !== "cola");
+    });
+    box.appendChild(b);
+  });
+  updateBatchTypeAvailability();
+}
+function updateBatchTypeAvailability(){
+  var box = $("batchTypePicker");
+  if (!box) return;
+  Array.prototype.forEach.call(box.children, function(c){
+    if (c.dataset.tipo === "api"){
+      c.disabled = state.provider !== "anthropic";
+    }
+  });
+  if (state.batch.tipo === "api" && state.provider !== "anthropic"){
+    state.batch.tipo = "cola";
+    Array.prototype.forEach.call(box.children, function(c){ c.setAttribute("aria-pressed", c.dataset.tipo === "cola" ? "true":"false"); });
+    $("concurrencyRow").hidden = false;
+  }
+}
+
+function renderBatchItems(){
+  var box = $("batchItemsList"); box.innerHTML = "";
+  state.batch.items.forEach(function(item){
+    var row = document.createElement("div"); row.className = "batchrow";
+    var left = document.createElement("div"); left.className = "brleft";
+    left.innerHTML = "<div class=\"brtitle\">" + esc(item.empresa) + " — " + esc(item.aspecto) + "</div>" +
+      "<div class=\"brmeta\">" + (item.error ? esc(item.error) : (item.result ? fmtUSD(item.result.cost) : "")) + "</div>";
+    var pill = document.createElement("span");
+    var map = {pendiente:["pend","Pendiente"], ejecutando:["run","Ejecutando"], hecho:["done","Hecho"], cache:["cachehit","Caché"], error:["err","Error"]};
+    var p = map[item.status] || map.pendiente;
+    pill.className = "pill " + p[0]; pill.textContent = p[1];
+    row.appendChild(left); row.appendChild(pill);
+    box.appendChild(row);
+  });
+}
+function updateBatchProgress(){
+  var items = state.batch.items;
+  var done = items.filter(function(i){ return i.status==="hecho" || i.status==="cache" || i.status==="error"; }).length;
+  var total = items.length;
+  var pct = total ? Math.round(done/total*100) : 0;
+  $("batchProgressFill").style.width = pct + "%";
+  $("batchProgressText").textContent = done + " / " + total;
+  var cost = items.reduce(function(s,i){ return s + (i.result && i.result.cost ? i.result.cost : 0); }, 0);
+  $("batchProgressCost").textContent = "coste del lote: " + fmtUSD(cost);
+  $("batchProgressTag").textContent = state.batch.running ? "en curso" : (done===total && total>0 ? "completado" : "en cola");
+}
+
+async function processQueueItem(item, detalle, useImprove, maxTokens){
+  item.status = "ejecutando"; renderBatchItems();
+  try{
+    var base = buildBasePromptFor(item.empresa, item.aspecto, detalle);
+    var queryText = base;
+    if (useImprove){
+      var ri = await callAI(improveSystemText(), base, 600);
+      queryText = ri.text.trim() || base;
+    }
+    var key = reportCacheKey(queryText);
+    var cached = getCached(key);
+    var result;
+    if (cached){
+      result = Object.assign({}, cached, {fromCache:true});
+      item.status = "cache";
+    } else {
+      var r = await callAI(reportSystemText(), queryText, maxTokens);
+      var model = currentModel();
+      var estIn = estimateTokens(reportSystemText() + queryText);
+      var inTok = r.inputTokens != null ? r.inputTokens : estIn;
+      var outTok = r.outputTokens != null ? r.outputTokens : estimateTokens(r.text);
+      var cost = (r.cacheWriteTokens || r.cacheReadTokens)
+        ? priceForCached(model, inTok, outTok, r.cacheWriteTokens, r.cacheReadTokens)
+        : priceFor(model, inTok, outTok);
+      result = {
+        markdown: r.text, inputTokens: inTok, outputTokens: outTok,
+        estimated: (r.inputTokens == null), truncated: !!r.truncated,
+        provider: PROVIDERS[state.provider].label, model: model.label,
+        empresa: item.empresa, aspecto: item.aspecto, cost: cost, ts: Date.now(),
+        cacheWriteTokens: r.cacheWriteTokens, cacheReadTokens: r.cacheReadTokens, fromCache:false
+      };
+      putCache(key, result);
+      if (cost != null) state.sessionCost += cost;
+      item.status = "hecho";
+    }
+    item.result = result;
+    saveHistory(result);
+  } catch(err){
+    item.status = "error"; item.error = err.message;
+  }
+  renderBatchItems(); updateBatchProgress(); updateBar();
+}
+
+async function runQueueBatch(combos, detalle, useImprove, maxTokens){
+  state.batch.items = combos.map(function(c){ return {empresa:c.empresa, aspecto:c.aspecto, status:"pendiente", result:null, error:null}; });
+  renderBatchItems(); updateBatchProgress();
+  var concurrency = Math.max(1, Math.min(4, parseInt($("batchConcurrency").value,10) || 2));
+  var idx = 0;
+  var items = state.batch.items;
+  function worker(){
+    return (async function(){
+      while (true){
+        var i = idx++;
+        if (i >= items.length) return;
+        await processQueueItem(items[i], detalle, useImprove, maxTokens);
+      }
+    })();
+  }
+  var workers = [];
+  for (var w=0; w<concurrency; w++) workers.push(worker());
+  await Promise.all(workers);
+}
+
+function buildCombinedMarkdown(){
+  var parts = state.batch.items
+    .filter(function(i){ return i.result; })
+    .map(function(i){ return "## " + i.empresa + " — " + i.aspecto + "\n\n" + i.result.markdown; });
+  return parts.join("\n\n---\n\n");
+}
+function buildCombinedMarkdownFromList(list){
+  var parts = (list || []).map(function(i){ return "## " + i.empresa + " — " + i.aspecto + "\n\n" + i.markdown; });
+  return parts.join("\n\n---\n\n");
+}
+
+async function onRunBatch(){
+  var combos = batchCombos();
+  if (!combos.length){ toast("Selecciona al menos una empresa y un aspecto."); return; }
+  if (!$("apiKey").value.trim()){ toast("Falta la clave de API."); return; }
+
+  var detalle = $("batchDetalle").value.trim();
+  var maxTokens = parseInt($("maxTokens").value, 10) || 4096;
+  var useImprove = $("useImprove").checked && state.batch.tipo === "cola";
+
+  $("panelBatchExport").hidden = true;
+  state.batch.running = true;
+  var btn = $("btnRunBatch"); btn.disabled = true; $("batchLaunchHint").textContent = "Lanzando…";
+
+  try{
+    if (state.batch.tipo === "cola"){
+      $("panelBatchProgress").hidden = false;
+      await runQueueBatch(combos, detalle, useImprove, maxTokens);
+      state.batch.lastCombinedMarkdown = buildCombinedMarkdown();
+      state.batch.lastCombinedCost = state.batch.items.reduce(function(s,i){ return s + (i.result && i.result.cost ? i.result.cost : 0); }, 0);
+      $("panelBatchExport").hidden = !state.batch.lastCombinedMarkdown;
+      $("batchFilename").value = sanitizeFilename("searchlogmodcb_lote_" + new Date().toISOString().slice(0,10));
+      toast("Lote completado: " + state.batch.items.length + " consultas.");
+    } else {
+      $("panelBatchProgress").hidden = true;
+      await runApiBatch(combos, detalle, maxTokens);
+    }
+  } catch(err){
+    toast("Error en el lote: " + err.message);
+  } finally {
+    state.batch.running = false; btn.disabled = false; $("batchLaunchHint").textContent = "";
+    updateBatchProgress();
+  }
+}
+
+/* ---------- Batch API real de Anthropic ---------- */
+var PENDING_KEY = "searchlogmodcb_pending_batches_v1";
+function loadPendingBatches(){ try{ return JSON.parse(localStorage.getItem(PENDING_KEY) || "[]"); } catch(e){ return []; } }
+function savePendingBatches(list){ try{ localStorage.setItem(PENDING_KEY, JSON.stringify(list)); } catch(e){} }
+function upsertPendingBatch(record){
+  var list = loadPendingBatches();
+  var idx = -1;
+  list.forEach(function(r,i){ if (r.id === record.id) idx = i; });
+  if (idx >= 0) list[idx] = record; else list.unshift(record);
+  savePendingBatches(list);
+  renderPendingBatches();
+}
+
+async function runApiBatch(combos, detalle, maxTokens){
+  var apiKey = $("apiKey").value.trim();
+  var model = currentModel();
+  var requests = [], meta = {}, skippedFromCache = [];
+
+  combos.forEach(function(c, i){
+    var base = buildBasePromptFor(c.empresa, c.aspecto, detalle);
+    var key = reportCacheKey(base);
+    var cached = getCached(key);
+    if (cached){
+      skippedFromCache.push({empresa:c.empresa, aspecto:c.aspecto, result: Object.assign({}, cached, {fromCache:true})});
+      return;
+    }
+    var customId = "req" + i + "_" + Math.random().toString(36).slice(2,8);
+    var systemBlock = { type:"text", text: reportSystemText() };
+    if (state.cache.promptCaching) systemBlock.cache_control = { type:"ephemeral" };
+    requests.push({
+      custom_id: customId,
+      params: { model: model.id, max_tokens: maxTokens, system:[systemBlock], messages:[{role:"user", content: base}] }
+    });
+    meta[customId] = {empresa:c.empresa, aspecto:c.aspecto, detalle:detalle, key:key};
+  });
+
+  skippedFromCache.forEach(function(s){ saveHistory(s.result); });
+  if (!requests.length){
+    toast("Las " + combos.length + " combinaciones ya estaban en caché; guardadas en el historial, sin crear ningún lote nuevo.");
+    return;
+  }
+
+  var res = await doFetch("https://api.anthropic.com/v1/messages/batches", {
+    method:"POST",
+    headers:{
+      "content-type":"application/json", "x-api-key": apiKey,
+      "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true"
+    },
+    body: JSON.stringify({requests: requests})
+  });
+  var data = await res.json();
+  if (!res.ok){
+    throw new Error(((data && data.error && data.error.message) || ("Error HTTP " + res.status)) +
+      " — si el navegador bloquea esta llamada (CORS), prueba con 'Cola en la app'.");
+  }
+
+  var record = {
+    id: data.id, createdAt: Date.now(), providerLabel: PROVIDERS.anthropic.label,
+    modelId: model.id, modelLabel: model.label, modelPrice: model.price,
+    meta: meta, status: data.processing_status, requestCounts: data.request_counts || null,
+    resultsCollected: [], errors: [], cost: 0
+  };
+  upsertPendingBatch(record);
+  $("panelPendingBatches").hidden = false;
+  var cacheNote = skippedFromCache.length ? (" (" + skippedFromCache.length + " más ya estaban en caché y se han guardado directamente)") : "";
+  toast("Lote enviado a Anthropic: " + requests.length + " consultas" + cacheNote + ", id " + data.id + ". Comprobando el estado cada 30 s.");
+  startPolling(record.id);
+}
+
+function startPolling(batchId){
+  if (pollingTimers[batchId]) return;
+  pollingTimers[batchId] = setInterval(function(){ checkBatchStatus(batchId); }, 30000);
+  checkBatchStatus(batchId);
+}
+function stopPolling(batchId){
+  if (pollingTimers[batchId]){ clearInterval(pollingTimers[batchId]); delete pollingTimers[batchId]; }
+}
+async function checkBatchStatus(batchId){
+  var apiKey = $("apiKey").value.trim();
+  if (!apiKey){ toast("Introduce la clave de Anthropic para comprobar el lote " + batchId + "."); return; }
+  var list = loadPendingBatches();
+  var record = null; list.forEach(function(r){ if (r.id===batchId) record = r; });
+  if (!record) return;
+  try{
+    var res = await doFetch("https://api.anthropic.com/v1/messages/batches/" + batchId, {
+      headers:{ "x-api-key": apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" }
+    });
+    var data = await res.json();
+    if (!res.ok) throw new Error((data && data.error && data.error.message) || ("Error HTTP " + res.status));
+    record.status = data.processing_status;
+    record.requestCounts = data.request_counts || record.requestCounts;
+    upsertPendingBatch(record);
+    if (data.processing_status === "ended"){
+      stopPolling(batchId);
+      await fetchBatchResults(record, data.results_url);
+    }
+  } catch(err){
+    toast("Error al comprobar el lote " + batchId + ": " + err.message);
+  }
+}
+async function fetchBatchResults(record, resultsUrl){
+  if (!resultsUrl){ toast("El lote " + record.id + " ha terminado pero no tiene resultados disponibles."); return; }
+  var apiKey = $("apiKey").value.trim();
+  try{
+    var res = await doFetch(resultsUrl, {
+      headers:{ "x-api-key": apiKey, "anthropic-version":"2023-06-01", "anthropic-dangerous-direct-browser-access":"true" }
+    });
+    var text = await res.text();
+    var lines = text.split("\n").filter(Boolean);
+    var model = { price: record.modelPrice, label: record.modelLabel };
+    lines.forEach(function(line){
+      var obj; try{ obj = JSON.parse(line); } catch(e){ return; }
+      var m = record.meta[obj.custom_id];
+      if (!m) return;
+      if (obj.result && obj.result.type === "succeeded"){
+        var msg = obj.result.message;
+        var txt = (msg.content || []).map(function(c){ return c.text || ""; }).join("");
+        var inTok = msg.usage ? msg.usage.input_tokens : null;
+        var outTok = msg.usage ? msg.usage.output_tokens : null;
+        var cost = priceForBatchApi(model, inTok || 0, outTok || 0);
+        var entry = {
+          markdown: txt, inputTokens: inTok, outputTokens: outTok, estimated:false,
+          truncated: msg.stop_reason === "max_tokens", provider: record.providerLabel + " · lote",
+          model: record.modelLabel, empresa: m.empresa, aspecto: m.aspecto, cost: cost, ts: Date.now(), fromCache:false
+        };
+        saveHistory(entry);
+        putCache(m.key, entry);
+        record.resultsCollected.push(entry);
+        record.cost += (cost || 0);
+      } else {
+        record.errors.push({empresa: m.empresa, aspecto: m.aspecto, type: obj.result ? obj.result.type : "desconocido"});
+      }
+    });
+    record.status = "completado";
+    upsertPendingBatch(record);
+    toast("Lote " + record.id + " completado: " + record.resultsCollected.length + " informes, " + record.errors.length + " errores.");
+  } catch(err){
+    toast("Error al descargar resultados del lote " + record.id + ": " + err.message);
+  }
+}
+
+function renderPendingBatches(){
+  var list = loadPendingBatches();
+  var box = $("pendingBatchesList");
+  $("panelPendingBatches").hidden = !list.length;
+  if (!list.length){ box.innerHTML = "<p class=\"pendinglist-empty\">Sin lotes pendientes.</p>"; return; }
+  box.innerHTML = "";
+  list.forEach(function(r){
+    var card = document.createElement("div"); card.className = "pendingbatch";
+    var n = Object.keys(r.meta || {}).length;
+    var statusLabel = r.status === "ended" ? "terminado, descargando…" : r.status === "completado" ? "completado" : (r.status || "en proceso");
+    var countsLine = "";
+    if (r.requestCounts && r.status !== "completado"){
+      var rc = r.requestCounts;
+      countsLine = " · procesando: " + fmtNum(rc.processing) + " &nbsp;·&nbsp; hechas: " + fmtNum(rc.succeeded) +
+        " &nbsp;·&nbsp; con error: " + fmtNum(rc.errored);
+    }
+    card.innerHTML =
+      "<div class=\"pbhead\"><span class=\"pbid\">" + esc(r.id) + "</span>" +
+      "<span class=\"pill " + (r.status==="completado" ? "done" : "run") + "\">" + esc(statusLabel) + "</span></div>" +
+      "<div class=\"pbmeta\">" + esc(r.modelLabel) + " · " + n + " consultas · creado " + new Date(r.createdAt).toLocaleString("es-ES") +
+      (r.status==="completado" ? (" · " + r.resultsCollected.length + " informes, " + r.errors.length + " errores, coste " + fmtUSD(r.cost)) : countsLine) + "</div>";
+    var btnrow = document.createElement("div"); btnrow.className = "btnrow";
+    if (r.status !== "completado"){
+      var btnCheck = document.createElement("button");
+      btnCheck.type = "button"; btnCheck.className = "btn subtle small"; btnCheck.textContent = "Comprobar estado";
+      btnCheck.addEventListener("click", function(){ checkBatchStatus(r.id); });
+      btnrow.appendChild(btnCheck);
+    } else if (r.resultsCollected.length){
+      var baseName = "searchlogmodcb_lote_" + r.id;
+      var btnMd = document.createElement("button");
+      btnMd.type = "button"; btnMd.className = "btn amber small"; btnMd.textContent = "⬇ .md combinado";
+      btnMd.addEventListener("click", function(){ downloadMdText(buildCombinedMarkdownFromList(r.resultsCollected), baseName); });
+      var btnTxt = document.createElement("button");
+      btnTxt.type = "button"; btnTxt.className = "btn subtle small"; btnTxt.textContent = "⬇ .txt combinado";
+      btnTxt.addEventListener("click", function(){ downloadTxtText(buildCombinedMarkdownFromList(r.resultsCollected), baseName); });
+      var btnDoc = document.createElement("button");
+      btnDoc.type = "button"; btnDoc.className = "btn subtle small"; btnDoc.textContent = "⬇ .docx combinado";
+      btnDoc.addEventListener("click", function(){ downloadDocText(buildCombinedMarkdownFromList(r.resultsCollected), baseName, "Lote SearchLogModCB"); });
+      btnrow.appendChild(btnMd); btnrow.appendChild(btnTxt); btnrow.appendChild(btnDoc);
+    }
+    var btnRemove = document.createElement("button");
+    btnRemove.type = "button"; btnRemove.className = "btn ghost small"; btnRemove.textContent = "Quitar de la lista";
+    btnRemove.addEventListener("click", function(){
+      stopPolling(r.id);
+      savePendingBatches(loadPendingBatches().filter(function(x){ return x.id !== r.id; }));
+      renderPendingBatches();
+    });
+    btnrow.appendChild(btnRemove);
+    card.appendChild(btnrow);
+    box.appendChild(card);
+  });
+}
+
+/* ===================== exportación ===================== */
+function markdownToPlainText(md){
+  return md
+    .replace(/```[\s\S]*?```/g, function(m){ return m.replace(/```/g,""); })
+    .replace(/^#{1,6}\s*/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1").replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`([^`]+)`/g, "$1")
+    .replace(/^\s*[-*+]\s+/gm, "• ")
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, "$1 ($2)")
+    .trim();
+}
+var _downloadsCap = undefined;
+async function getDownloadsCapability(){
+  if (_downloadsCap !== undefined) return _downloadsCap;
+  try{
+    if (window.claude && typeof window.claude.use === "function"){
+      _downloadsCap = await window.claude.use("downloads");
+    } else {
+      _downloadsCap = null;
+    }
+  } catch(e){ _downloadsCap = null; }
+  return _downloadsCap;
+}
+async function triggerDownload(blob, filename){
+  var cap = await getDownloadsCapability();
+  if (cap){
+    try{
+      var res = await cap.save({filename: filename, data: blob});
+      toast((res.status === "saved" ? "Guardado: " : "Entregado: ") + filename);
+      return;
+    } catch(err){
+      if (err && err.code === "declined") return;
+      if (err && err.code === "too_large"){ toast("El fichero supera el límite de guardado."); return; }
+    }
+  }
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement("a");
+  a.href = url; a.download = filename; document.body.appendChild(a); a.click();
+  document.body.removeChild(a); setTimeout(function(){ URL.revokeObjectURL(url); }, 4000);
+  toast("Descargando " + filename);
+}
+async function downloadMdText(markdown, baseName){
+  await triggerDownload(new Blob([markdown], {type:"text/markdown;charset=utf-8"}), sanitizeFilename(baseName) + ".md");
+}
+async function downloadTxtText(markdown, baseName){
+  await triggerDownload(new Blob([markdownToPlainText(markdown)], {type:"text/plain;charset=utf-8"}), sanitizeFilename(baseName) + ".txt");
+}
+/* ---------- parser Markdown → bloques (para la exportación a Word) ---------- */
+function parseMarkdownBlocks(markdown){
+  var lineas = (markdown || "").replace(/\r\n/g, "\n").split("\n");
+  var bloques = [];
+  var i = 0;
+  function esSeparadorTabla(linea){ return /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*:?-{3,}:?\s*\|?\s*$/.test(linea); }
+  function dividirFilaTabla(linea){
+    var l = linea.trim();
+    if (l.indexOf("|") === 0) l = l.slice(1);
+    if (l.charAt(l.length - 1) === "|") l = l.slice(0, -1);
+    return l.split("|").map(function(c){ return c.trim(); });
+  }
+  while (i < lineas.length){
+    var linea = lineas[i];
+    if (linea.trim() === ""){ i++; continue; }
+    if (/^\s*```/.test(linea)){
+      var codigoLineas = []; i++;
+      while (i < lineas.length && !/^\s*```/.test(lineas[i])){ codigoLineas.push(lineas[i]); i++; }
+      i++;
+      bloques.push({tipo:"code", texto: codigoLineas.join("\n")});
+      continue;
+    }
+    if (/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(linea)){ bloques.push({tipo:"hr"}); i++; continue; }
+    var mHead = linea.match(/^(#{1,6})\s+(.*)$/);
+    if (mHead){ bloques.push({tipo:"heading", nivel: mHead[1].length, texto: mHead[2].trim()}); i++; continue; }
+    if (linea.indexOf("|") !== -1 && i + 1 < lineas.length && esSeparadorTabla(lineas[i + 1])){
+      var cabecera = dividirFilaTabla(linea); i += 2;
+      var filas = [];
+      while (i < lineas.length && lineas[i].indexOf("|") !== -1 && lineas[i].trim() !== ""){ filas.push(dividirFilaTabla(lineas[i])); i++; }
+      bloques.push({tipo:"table", cabecera: cabecera, filas: filas});
+      continue;
+    }
+    if (/^\s*>\s?/.test(linea)){
+      var citaLineas = [];
+      while (i < lineas.length && /^\s*>\s?/.test(lineas[i])){ citaLineas.push(lineas[i].replace(/^\s*>\s?/, "")); i++; }
+      bloques.push({tipo:"blockquote", texto: citaLineas.join(" ")});
+      continue;
+    }
+    if (/^\s*[-*+]\s+/.test(linea)){
+      var items = [];
+      while (i < lineas.length && /^\s*[-*+]\s+/.test(lineas[i])){ items.push(lineas[i].replace(/^\s*[-*+]\s+/, "")); i++; }
+      bloques.push({tipo:"ul", items: items});
+      continue;
+    }
+    if (/^\s*\d+\.\s+/.test(linea)){
+      var itemsOl = [];
+      while (i < lineas.length && /^\s*\d+\.\s+/.test(lineas[i])){
+        var mItem = lineas[i].match(/^\s*(\d+)\.\s+(.*)$/);
+        itemsOl.push({numero: parseInt(mItem[1], 10), texto: mItem[2]}); i++;
+      }
+      bloques.push({tipo:"ol", items: itemsOl});
+      continue;
+    }
+    var parrafoLineas = [];
+    while (i < lineas.length && lineas[i].trim() !== "" &&
+      !/^\s*```/.test(lineas[i]) && !/^(#{1,6})\s+/.test(lineas[i]) &&
+      !/^\s*>\s?/.test(lineas[i]) && !/^\s*[-*+]\s+/.test(lineas[i]) &&
+      !/^\s*\d+\.\s+/.test(lineas[i]) && !/^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(lineas[i])){
+      parrafoLineas.push(lineas[i]); i++;
+    }
+    bloques.push({tipo:"paragraph", texto: parrafoLineas.join(" ")});
+  }
+  return bloques;
+}
+function tokenizeInline(texto){
+  var tokens = [];
+  var re = /(\*\*\*(.+?)\*\*\*)|(\*\*(.+?)\*\*)|(__(.+?)__)|(\*(.+?)\*)|(_(.+?)_)|(`(.+?)`)|(\[(.+?)\]\((.+?)\))/g;
+  var ultimoIndice = 0, m;
+  while ((m = re.exec(texto)) !== null){
+    if (m.index > ultimoIndice) tokens.push({tipo:"text", texto: texto.slice(ultimoIndice, m.index)});
+    if (m[1] !== undefined) tokens.push({tipo:"boldItalic", texto: m[2]});
+    else if (m[3] !== undefined) tokens.push({tipo:"bold", texto: m[4]});
+    else if (m[5] !== undefined) tokens.push({tipo:"bold", texto: m[6]});
+    else if (m[7] !== undefined) tokens.push({tipo:"italic", texto: m[8]});
+    else if (m[9] !== undefined) tokens.push({tipo:"italic", texto: m[10]});
+    else if (m[11] !== undefined) tokens.push({tipo:"code", texto: m[12]});
+    else if (m[13] !== undefined) tokens.push({tipo:"link", texto: m[14], url: m[15]});
+    ultimoIndice = re.lastIndex;
+  }
+  if (ultimoIndice < texto.length) tokens.push({tipo:"text", texto: texto.slice(ultimoIndice)});
+  return tokens;
+}
+async function validateDocxPackage(blob){
+  var buffer = await blob.arrayBuffer();
+  var bytes = new Uint8Array(buffer);
+  var firmaValida = bytes.length > 4 && bytes[0] === 0x50 && bytes[1] === 0x4B;
+  if (!firmaValida || bytes.length < 500) throw new Error("El documento Word generado no es un paquete válido.");
+}
+async function buildDocxBlob(markdown, titulo){
+  var Document = docx.Document, Packer = docx.Packer, Paragraph = docx.Paragraph, TextRun = docx.TextRun,
+      HeadingLevel = docx.HeadingLevel, ExternalHyperlink = docx.ExternalHyperlink,
+      Table = docx.Table, TableRow = docx.TableRow, TableCell = docx.TableCell, WidthType = docx.WidthType,
+      BorderStyle = docx.BorderStyle, Footer = docx.Footer, PageNumber = docx.PageNumber, AlignmentType = docx.AlignmentType;
+
+  var bloques = parseMarkdownBlocks(markdown);
+  var nivelesEncabezado = {
+    1: HeadingLevel.HEADING_1, 2: HeadingLevel.HEADING_2, 3: HeadingLevel.HEADING_3,
+    4: HeadingLevel.HEADING_4, 5: HeadingLevel.HEADING_5, 6: HeadingLevel.HEADING_6
+  };
+  function construirHijosDeTexto(texto){
+    return tokenizeInline(texto).map(function(token){
+      if (token.tipo === "link") return new ExternalHyperlink({ link: token.url, children:[new TextRun({text: token.texto, color:"2D3B6B", underline:{}})] });
+      var opciones = { text: token.texto };
+      if (token.tipo === "bold") opciones.bold = true;
+      if (token.tipo === "italic") opciones.italics = true;
+      if (token.tipo === "boldItalic"){ opciones.bold = true; opciones.italics = true; }
+      if (token.tipo === "code"){ opciones.font = "Consolas"; opciones.size = 20; opciones.shading = {fill:"F0EEE4"}; }
+      return new TextRun(opciones);
+    });
+  }
+  var parrafosDocx = [];
+  bloques.forEach(function(bloque){
+    if (bloque.tipo === "heading"){
+      parrafosDocx.push(new Paragraph({ heading: nivelesEncabezado[bloque.nivel] || HeadingLevel.HEADING_4, children: construirHijosDeTexto(bloque.texto), spacing:{before:240, after:120} }));
+    } else if (bloque.tipo === "paragraph"){
+      parrafosDocx.push(new Paragraph({ children: construirHijosDeTexto(bloque.texto), spacing:{after:160} }));
+    } else if (bloque.tipo === "ul"){
+      bloque.items.forEach(function(item){ parrafosDocx.push(new Paragraph({ bullet:{level:0}, children: construirHijosDeTexto(item), spacing:{after:80} })); });
+    } else if (bloque.tipo === "ol"){
+      bloque.items.forEach(function(item){ parrafosDocx.push(new Paragraph({ numbering:{reference:"lista-numerada-searchlogmodcb", level:0}, children: construirHijosDeTexto(item.texto), spacing:{after:80} })); });
+    } else if (bloque.tipo === "blockquote"){
+      parrafosDocx.push(new Paragraph({ indent:{left:480}, border:{left:{color:"C97A2B", space:8, style:BorderStyle.SINGLE, size:12}}, children: construirHijosDeTexto(bloque.texto), spacing:{after:160} }));
+    } else if (bloque.tipo === "code"){
+      bloque.texto.split("\n").forEach(function(linea){
+        parrafosDocx.push(new Paragraph({ children:[new TextRun({text: linea || " ", font:"Consolas", size:18})], shading:{fill:"F0EEE4"}, spacing:{after:0} }));
+      });
+      parrafosDocx.push(new Paragraph({ text:"", spacing:{after:240} }));
+    } else if (bloque.tipo === "hr"){
+      parrafosDocx.push(new Paragraph({ border:{bottom:{color:"D8DDD0", space:1, style:BorderStyle.SINGLE, size:6}}, spacing:{after:200} }));
+    } else if (bloque.tipo === "table"){
+      var filaCabecera = new TableRow({ children: bloque.cabecera.map(function(texto){ return new TableCell({ shading:{fill:"E3E8DD"}, children:[new Paragraph({children:[new TextRun({text:texto, bold:true})]})] }); }) });
+      var filasDatos = bloque.filas.map(function(fila){ return new TableRow({ children: fila.map(function(texto){ return new TableCell({ children:[new Paragraph({children: construirHijosDeTexto(texto)})] }); }) }); });
+      parrafosDocx.push(new Table({ width:{size:100, type: WidthType.PERCENTAGE}, rows:[filaCabecera].concat(filasDatos) }));
+      parrafosDocx.push(new Paragraph({ text:"", spacing:{after:240} }));
+    }
+  });
+
+  var documento = new Document({
+    creator: "SearchLogModCB",
+    title: titulo || "Informe generado por SearchLogModCB",
+    description: "Documento generado automáticamente por la aplicación SearchLogModCB.",
+    styles: { default: { document: { run: { font: "Calibri", size: 22 } } } },
+    numbering: { config: [{ reference:"lista-numerada-searchlogmodcb", levels:[{level:0, format:"decimal", text:"%1.", alignment:"start"}] }] },
+    sections: [{
+      properties: {},
+      footers: { default: new Footer({ children:[ new Paragraph({ alignment: AlignmentType.RIGHT, children:[ new TextRun({children:["Página ", PageNumber.CURRENT, " de ", PageNumber.TOTAL_PAGES], size:18, color:"6b7a63"}) ] }) ] }) },
+      children: parrafosDocx
+    }]
+  });
+
+  var blob = await Packer.toBlob(documento);
+  await validateDocxPackage(blob);
+  return blob;
+}
+async function downloadDocText(markdown, baseName, titulo){
+  if (!window.docx){ toast("No se ha podido cargar la librería de generación de Word."); return; }
+  try{
+    var blob = await buildDocxBlob(markdown, titulo);
+    await triggerDownload(blob, sanitizeFilename(baseName) + ".docx");
+  } catch(err){
+    toast("Error al generar el Word: " + err.message);
+  }
+}
+function copyResult(){
+  if (!state.lastResult) return;
+  var text = state.lastResult.markdown;
+  if (navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(text).then(function(){ toast("Informe copiado."); })
+      .catch(function(){ fallbackCopy(text); });
+  } else { fallbackCopy(text); }
+}
+function fallbackCopy(text){
+  var ta = document.createElement("textarea"); ta.value = text; ta.style.position="fixed"; ta.style.opacity="0";
+  document.body.appendChild(ta); ta.select();
+  try{ document.execCommand("copy"); toast("Informe copiado."); } catch(e){ toast("No se pudo copiar."); }
+  document.body.removeChild(ta);
+}
+
+/* ===================== historial ===================== */
+var HIST_KEY = "searchlogmodcb_history_v1";
+function loadHistory(){
+  try{ return JSON.parse(localStorage.getItem(HIST_KEY) || "[]"); } catch(e){ return []; }
+}
+var selectedHistIds = {};
+function histId(item){ return item.id || String(item.ts); }
+function saveHistory(entry){
+  try{
+    var h = loadHistory();
+    h.unshift({
+      id: String(entry.ts) + "_" + Math.random().toString(36).slice(2, 8),
+      ts: entry.ts, empresa: entry.empresa, aspecto: entry.aspecto, provider: entry.provider, model: entry.model,
+      inputTokens: entry.inputTokens, outputTokens: entry.outputTokens, cost: entry.cost, markdown: entry.markdown,
+      fromCache: !!entry.fromCache
+    });
+    h = h.slice(0, 60);
+    localStorage.setItem(HIST_KEY, JSON.stringify(h));
+    renderHistory();
+  } catch(e){ /* almacenamiento no disponible: se ignora */ }
+}
+function renderHistory(){
+  var h = loadHistory();
+  var box = $("histList");
+  if (!h.length){ box.innerHTML = "<p class=\"histempty\">Sin consultas todavía.</p>"; return; }
+  box.innerHTML = "";
+  h.forEach(function(item){
+    var id = histId(item);
+    var row = document.createElement("div"); row.className = "histitem";
+
+    var cb = document.createElement("input");
+    cb.type = "checkbox"; cb.checked = !!selectedHistIds[id];
+    cb.addEventListener("click", function(e){ e.stopPropagation(); });
+    cb.addEventListener("change", function(){
+      if (cb.checked) selectedHistIds[id] = true; else delete selectedHistIds[id];
+    });
+
+    var left = document.createElement("div"); left.className = "histleft";
+    left.innerHTML = "<div>" + esc(item.empresa) + " — " + esc(item.aspecto) + (item.fromCache ? " <span style=\"color:var(--cache)\">⚡</span>" : "") + "</div>" +
+      "<div class=\"meta\">" + esc(item.provider) + " · " + esc(item.model) + " · " + new Date(item.ts).toLocaleString("es-ES") + "</div>";
+    left.addEventListener("click", function(){
+      state.mode = "individual";
+      buildModePicker();
+      state.lastResult = item;
+      applyModeVisibility();
+      $("panelResult").hidden = false; $("panelExport").hidden = false;
+      renderResult();
+      $("filename").value = sanitizeFilename("searchlogmodcb_" + item.empresa + "_" + item.aspecto);
+      $("panelResult").scrollIntoView({behavior:"smooth", block:"start"});
+    });
+
+    var right = document.createElement("div"); right.className = "meta";
+    right.textContent = fmtUSD(item.cost);
+
+    row.appendChild(cb); row.appendChild(left); row.appendChild(right);
+    box.appendChild(row);
+  });
+}
+function deleteSelectedHistory(){
+  var ids = Object.keys(selectedHistIds);
+  if (!ids.length){ toast("No has seleccionado ningún elemento del historial."); return; }
+  try{
+    var h = loadHistory().filter(function(item){ return !selectedHistIds[histId(item)]; });
+    localStorage.setItem(HIST_KEY, JSON.stringify(h));
+  } catch(e){}
+  selectedHistIds = {};
+  renderHistory();
+  toast(ids.length === 1 ? "Elemento eliminado del historial." : ids.length + " elementos eliminados del historial.");
+}
+function clearHistory(){
+  try{ localStorage.removeItem(HIST_KEY); } catch(e){}
+  selectedHistIds = {};
+  renderHistory(); toast("Historial vaciado.");
+}
+function onSaveHistory(){
+  if (!state.lastResult){ toast("No hay ningún informe que guardar."); return; }
+  saveHistory(state.lastResult);
+  $("saveHistHint").textContent = "Guardado en el historial.";
+  toast("Guardado en el historial.");
+}
+
+/* ===================== borrar campos ===================== */
+function clearDetalle(){ $("detalle").value = ""; toast("Detalle adicional borrado."); }
+function clearFinalPrompt(){ $("finalPrompt").value = ""; toast("Consulta borrada."); }
+function clearReport(){
+  state.lastResult = null;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Aún no se ha ejecutado ninguna consulta.</p>";
+  $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML = "";
+  $("saveHistHint").textContent = "";
+  $("panelExport").hidden = true;
+  updateBar();
+  toast("Informe borrado.");
+}
+function clearAllFields(){
+  $("detalle").value = "";
+  $("finalPrompt").value = "";
+  $("panelPrompt").hidden = true;
+  state.lastResult = null;
+  $("reportBody").innerHTML = "<p class=\"empty-report\">Aún no se ha ejecutado ninguna consulta.</p>";
+  $("resultStamp").hidden = true;
+  $("resultCostline").innerHTML = "";
+  $("saveHistHint").textContent = "";
+  $("panelExport").hidden = true;
+  $("panelResult").hidden = true;
+  updateBar();
+  toast("Se ha borrado todo el contenido.");
+}
+
+/* ===================== clave recordada ===================== */
+var KEY_STORE = "searchlogmodcb_key_";
+function hasStoredKey(){
+  try{ return !!localStorage.getItem(KEY_STORE + state.provider); } catch(e){ return false; }
+}
+function updateKeyStatus(){
+  var el = $("keyStatus");
+  if (hasStoredKey()){
+    el.textContent = "✅ Hay una clave guardada para este proveedor.";
+    el.className = "keystatus hint saved";
+  } else {
+    el.textContent = "Sin guardar: esta clave solo se usará en esta sesión salvo que pulses \"Guardar clave\".";
+    el.className = "keystatus hint";
+  }
+}
+function loadRememberedKey(){
+  var input = $("apiKey");
+  input.type = "password"; $("btnToggleKey").textContent = "Mostrar";
+  try{
+    var v = localStorage.getItem(KEY_STORE + state.provider);
+    input.value = v || "";
+  } catch(e){ input.value = ""; }
+  updateKeyStatus();
+}
+function saveApiKey(){
+  var v = $("apiKey").value;
+  if (!v){ toast("No hay ninguna clave que guardar."); return; }
+  try{ localStorage.setItem(KEY_STORE + state.provider, v); } catch(e){}
+  updateKeyStatus();
+  toast("Clave guardada.");
+}
+function toggleApiKeyVisibility(){
+  var input = $("apiKey");
+  var btn = $("btnToggleKey");
+  if (input.type === "password"){ input.type = "text"; btn.textContent = "Ocultar"; }
+  else { input.type = "password"; btn.textContent = "Mostrar"; }
+}
+function clearApiKey(){
+  $("apiKey").value = "";
+  try{ localStorage.removeItem(KEY_STORE + state.provider); } catch(e){}
+  updateKeyStatus();
+  updateBar();
+  toast("Clave eliminada.");
+}
+
+/* ===================== wiring ===================== */
+function init(){
+  buildProviderPicker();
+  buildModePicker();
+  buildModelSelect();
+  buildChips("chipsEmpresa", "otherEmpresa", EMPRESAS, "empresa", "empresaCustom", "Otra empresa…");
+  buildChips("chipsAspecto", "otherAspecto", ASPECTOS, "aspecto", "aspectoCustom", "Otro aspecto…");
+  buildMultiChips("chipsBatchEmpresa", EMPRESAS, state.batch.empresasSel, updateBatchCount);
+  buildMultiChips("chipsBatchAspecto", ASPECTOS, state.batch.aspectosSel, updateBatchCount);
+  buildBatchTypePicker();
+  loadRememberedKey();
+  renderHistory();
+  renderPendingBatches();
+  $("lastMod").textContent = nowStamp();
+  $("framework").value = state.cache.framework;
+  updateCacheUI();
+  updatePromptCachingNote();
+  applyModeVisibility();
+
+  $("maxTokens").addEventListener("input", function(){ this.dataset.userEdited = "1"; });
+  $("customModel").addEventListener("input", updateBar);
+  $("apiKey").addEventListener("input", function(){ updateBar(); });
+  $("btnSaveKey").addEventListener("click", saveApiKey);
+  $("btnToggleKey").addEventListener("click", toggleApiKeyVisibility);
+  $("btnClearKey").addEventListener("click", clearApiKey);
+
+  $("cacheResultsEnabled").addEventListener("change", function(){ state.cache.enabled = this.checked; });
+  $("promptCachingEnabled").addEventListener("change", function(){ state.cache.promptCaching = this.checked; });
+  $("btnClearCache").addEventListener("click", clearCacheStore);
+  $("framework").addEventListener("input", function(){ state.cache.framework = this.value; updatePromptCachingNote(); });
+  $("btnResetFramework").addEventListener("click", function(){
+    state.cache.framework = DEFAULT_FRAMEWORK; $("framework").value = DEFAULT_FRAMEWORK;
+    updatePromptCachingNote(); toast("Marco de análisis restaurado.");
+  });
+
+  $("btnPrepare").addEventListener("click", onPrepare);
+  $("btnRegeneratePrompt").addEventListener("click", onRegeneratePrompt);
+  $("btnRun").addEventListener("click", onRun);
+  $("btnDlMd").addEventListener("click", function(){ if (state.lastResult) downloadMdText(state.lastResult.markdown, $("filename").value); });
+  $("btnDlTxt").addEventListener("click", function(){ if (state.lastResult) downloadTxtText(state.lastResult.markdown, $("filename").value); });
+  $("btnDlDoc").addEventListener("click", function(){ if (state.lastResult) downloadDocText(state.lastResult.markdown, $("filename").value, "Informe SearchLogModCB"); });
+  $("btnCopy").addEventListener("click", copyResult);
+  $("btnClearHist").addEventListener("click", clearHistory);
+  $("btnDeleteSelectedHist").addEventListener("click", deleteSelectedHistory);
+  $("btnSaveHistory").addEventListener("click", onSaveHistory);
+  $("btnClearDetalle").addEventListener("click", clearDetalle);
+  $("btnClearPrompt").addEventListener("click", clearFinalPrompt);
+  $("btnClearReport").addEventListener("click", clearReport);
+  $("btnClearAll").addEventListener("click", clearAllFields);
+
+  $("batchEmpresaExtra").addEventListener("input", updateBatchCount);
+  $("batchAspectoExtra").addEventListener("input", updateBatchCount);
+  $("btnRunBatch").addEventListener("click", onRunBatch);
+  $("btnBatchDlMd").addEventListener("click", function(){ downloadMdText(state.batch.lastCombinedMarkdown, $("batchFilename").value); });
+  $("btnBatchDlTxt").addEventListener("click", function(){ downloadTxtText(state.batch.lastCombinedMarkdown, $("batchFilename").value); });
+  $("btnBatchDlDoc").addEventListener("click", function(){ downloadDocText(state.batch.lastCombinedMarkdown, $("batchFilename").value, "Lote SearchLogModCB"); });
+  $("btnRefreshPending").addEventListener("click", function(){
+    loadPendingBatches().forEach(function(r){ if (r.status !== "completado") checkBatchStatus(r.id); });
+  });
+
+  updateBatchCount();
+  updateBar();
+}
+
+if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+else init();
+
+})();
+</script>
+</body>
+</html>
